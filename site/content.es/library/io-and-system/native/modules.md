@@ -2,7 +2,7 @@
 title: Módulos nativos
 weight: 6
 description: Llama a código de C escrito para Agentica con tipos de Agentica, y un resultado completo en una sola llamada.
-source_hash: "5d54dae99ec5"
+source_hash: "f391d53ddeff"
 ---
 
 Un módulo nativo es código de C escrito contra la API de C de la VM, la cabecera `agentica_native.h`. Un bloque `extern module "NAME"` declara sus funciones con tipos de Agentica, y el programa las llama como cualquier `def`. Una llamada puede recibir y devolver listas, mapas, opcionales, resultados y las estructuras y enums propios del programa, como todas las filas de una consulta, donde un [bloque `extern`](/library/io-and-system/native/) necesita una llamada por cada valor de C.
@@ -75,9 +75,7 @@ extern module "backend"
   def add(a: Buf, b: Buf) -> Result[Buf]
 end
 
-def ops() -> Ops[Buf]
-  Ops(make: &make, add: &add)
-end
+def ops() -> Ops[Buf] = Ops(make: &make, add: &add)
 ```
 
 Las funciones nativas del backend siguen recibiendo y devolviendo su propio recurso, aquí `Buf`. `Ops[Buf]` las guarda como valores `Fn` normales, y `plus` las llama para cualquier `H`. Una función nativa que recibe o devuelve `Tensor[Buf]`, recibe una estructura con un campo `Buf` o nombra el recurso de otro bloque sigue siendo `CHECK-NATIVE-TYPE`.

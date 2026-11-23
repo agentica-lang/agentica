@@ -74,9 +74,7 @@ extern module "backend"
   def add(a: Buf, b: Buf) -> Result[Buf]
 end
 
-def ops() -> Ops[Buf]
-  Ops(make: &make, add: &add)
-end
+def ops() -> Ops[Buf] = Ops(make: &make, add: &add)
 ```
 
 The native functions of the backend keep taking and returning its own resource, here `Buf`. `Ops[Buf]` holds them as plain `Fn` values, and `plus` calls them for any `H`. A native function that takes or returns `Tensor[Buf]`, takes a struct with a `Buf` field, or names the resource of another block is still `CHECK-NATIVE-TYPE`.
