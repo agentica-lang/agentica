@@ -343,13 +343,13 @@ end
 
 def brace_help(form: String) -> String = "blocks have no braces: write \"#{form}\" ... \"end\""
 
-# The help for a `{` that ends a head or a guard condition. After a name it may be the block of a call, which a head
-# takes only inside parentheses (a condition takes a `do` block after a method name too).
+# The help for a `{` that ends a head or a guard condition. After a name it may be the block of a plain name, which a
+# head takes only inside parentheses (a method call takes it anywhere, a condition takes a `do` block after one too).
 def head_brace_help(e: Base.Env, pos: Int, form: String) -> String
   return brace_help(form) if pos == 0 or e.tokens[pos - 1].kind != "name"
 
   call = e.tokens[pos - 1].lexeme
-  "write \"#{form}\" ... \"end\"; a call in the head takes a block in braces only in parentheses: (#{call} { ... })"
+  "write \"#{form}\" ... \"end\"; a plain name in a head takes a brace block only in parentheses: (#{call} { ... })"
 end
 
 # The newline that ends the head of a def, if, case, while or for. A `{` here gets the help that blocks have no braces.
@@ -753,10 +753,9 @@ def bare_block_name?(e: Base.Env, target: Ast.Expr) -> Bool
 end
 
 # Whether a `{ ... }` block may follow a target: a call written without arguments (`recv.name`, `name`,
-# `Alias.name`), outside an if condition. A call with parentheses takes only a `do` block.
+# `Alias.name`). In a head (if, elsif, guard, while, for, case) a method call takes it, since no head has braces of
+# its own, but a plain name does not. A call with parentheses takes only a `do` block.
 def brace_target?(e: Base.Env, target: Ast.Expr) -> Bool
-  return false if !e.allow_blocks or !e.bare_blocks
-
   case target
     Ast.Expr.FieldAccess(_) -> true
     Ast.Expr.Call(call) -> !call.parenthesized and !call.piped and call.args.size == 0

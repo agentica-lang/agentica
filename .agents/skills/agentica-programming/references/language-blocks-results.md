@@ -13,8 +13,9 @@ A block is a function written at the call site as the last argument: `xs.map do
   `Util.start do`. `{ |x| ... }` follows only a name with no arguments:
   `xs.map { |x| x * 2 }`; with arguments, use `do`. A bare name without a block
   is never a call. Keep `()` after `|>` and for a plain-name call in an `if` or
-  guard condition (`if ready() do |x| ... end`); a block in braces goes in a
-  condition or head only inside parentheses: `if (xs.any? { |x| x > 0 })`.
+  guard condition (`if ready() do |x| ... end`); a plain name takes a block in
+  a head only inside parentheses. A method call takes its `{ }` block in any
+  head: `if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }`.
   The last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never
   `do || ... end`.
 - Nothing chains after the `end` of a `do` block: `.name`, `[i]` or `|>` right
@@ -34,8 +35,8 @@ A block is a function written at the call site as the last argument: `xs.map do
   `Result[R]` and may use `try`; in the block of any `Lazy` method `try` always
   works (`lazy.md`).
 - `case`, `while` and `for` headers may end with an optional `do`; that `do` is
-  never a block. A call with a block in such a header is wrapped: `case (xs.map
-  do |x| x end) do`.
+  never a block. A call with a `do` block in such a header is wrapped: `case
+  (xs.map do |x| x end) do`; one with a `{ }` block is not.
 - Blocks capture values when created; later outer changes do not affect them. A
   block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): use
   `map`, `reduce` or a `for` loop. Block parameters cannot reuse visible names.

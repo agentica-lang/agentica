@@ -288,9 +288,9 @@ class TestSpecParser:
                    "PARSE-UNEXPECTED-TOKEN", (12, 12, 12, 14)),
             Reject(blocks + main_of("  return if ready do |x| x > 0 end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (12, 19, 12, 21)),
-            Reject(blocks + main_of("  xs = [1]\n  if xs.any? { |x| x > 0 }\n    puts(1)\n  end\n"),
-                   "PARSE-UNEXPECTED-TOKEN", (13, 14, 13, 15)),
-            Reject(blocks + main_of("  xs = [1]\n  return if xs.any? { |x| x > 0 }\n"),
+            Reject(blocks + main_of("  if ready { |x| x > 0 }\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (12, 12, 12, 13)),
+            Reject(blocks + main_of("  xs = [1]\n  for y in xs.map() { |x| x }\n    puts(y)\n  end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 21, 13, 22)),
             Reject(blocks + main_of("  xs = [1]\n  _ys = xs.map() { |x| x }\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 18, 13, 19)),
@@ -311,8 +311,17 @@ class TestSpecParser:
             # A case arm guard is a condition too.
             Reject(blocks + main_of("  case 1\n    1 if ready do |v| v > 0 end -> puts(1)\n    _ -> puts(2)\n  end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 16, 13, 18)),
-            Reject(blocks + main_of("  xs = [1]\n  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(1)\n"
-                                    "    _ -> puts(2)\n  end\n"), "PARSE-UNEXPECTED-TOKEN", (14, 18, 14, 19)),
+        ])
+        # A method call takes a `{ ... }` block in the head of an if, an elsif, a guard, a while, a for or a case arm
+        # guard: no head has braces of its own.
+        self.check_output([
+            Output(blocks + main_of("  xs = [1, 3]\n  if xs.any? { |x| x > 5 } or xs.empty?\n    puts(\"if\")\n"
+                                    "  elsif xs.all? { |x| x > 0 }\n    puts(\"elsif\")\n  end\n"
+                                    "  for _ in [1, 2]\n    puts(\"guard\")\n    break if xs.any? { |x| x > 2 }\n  end\n"
+                                    "  while xs.empty? or xs.any? { |x| x > 100 }\n    puts(\"never\")\n  end\n"
+                                    "  for y in xs.sort_by { |x| 0 - x }\n    puts(y)\n  end\n"
+                                    "  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(\"arm\")\n    _ -> puts(2)\n  end\n"),
+                   ["elsif", "guard", "3", "1", "arm"]),
         ])
         # Inside parentheses a head takes any block.
         self.check_output([

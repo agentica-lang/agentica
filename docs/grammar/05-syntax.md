@@ -485,10 +485,14 @@ without `(`, and its body is a lambda's: one line or several, up to the `}`;
 a call with parentheses takes a `do` block. The `()` stays after `|>`
 (`PARSE-PIPE-TARGET` without it), for `lambda`, `proc` and `loop`, and for a
 function called by its plain name in an `if`, `elsif`, guard or case arm guard
-condition: there `ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a
-mistake for the end of the line), and no call takes a `{ ... }` block. Inside
+condition: there `ready do` and `ready { ... }` are `PARSE-UNEXPECTED-TOKEN`
+(the `do` or `{` reads as a mistake for the end of the line). A method call
+without `(` takes a `{ ... }` block in the head of an `if`, `elsif`, a guard,
+a `while`, a `for` or a `case`, since no head has braces of its own:
+`if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }`. The `do` block
+of a call in a `while`, `for` or `case` head needs parentheses. Inside
 parentheses, brackets, a map literal or `#{...}`, a condition or a `while`,
-`for` or `case` head takes any block: `if (xs.any? { |x| x > 0 })`.
+`for` or `case` head takes any block: `if (xs.any? do |x| x > 0 end)`.
 A lambda, `->(x) { x + 1 }`, is a block written as a value; inside a call's
 parentheses, in the place of the block, it is that block:
 `xs.map(->(x) { x * 2 })`. One without parameters has no parentheses

@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 26:2:8-27:2:9 "expected a newline after the condition, found \"{\"" "write \"if cond\" ... \"end\"; a call in the head takes a block in braces only in parentheses: (x { ... })"
+ERROR PARSE-UNEXPECTED-TOKEN 26:2:8-27:2:9 "expected a newline after the condition, found \"{\"" "write \"if cond\" ... \"end\"; a plain name in a head takes a brace block only in parentheses: (x { ... })"
