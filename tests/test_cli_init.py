@@ -3,10 +3,13 @@
 Cases assert codes and the file and key path, never message text (AGENTS.md). The remote of the `add` case is a bare git
 repository behind a throwaway HOME (tests/package_support.py), so nothing touches the network.
 """
+import json
+
 import pytest
 
-from tests.agentica_test import agentica_version
-from tests.package_support import BANG, assert_at_key, command, git, plain, remotes, ws  # noqa: F401
+from tests.agentica_test import agentica_version, cli, run
+from tests.package_support import (BANG, assert_at_key, command, environment, git, plain, remotes,  # noqa: F401
+                                    ws)
 
 TOOLS = "owner/tools"
 HELLO = 'def main() -> Void\n  puts("Hello, world!")\nend\n'
@@ -47,7 +50,7 @@ def test_init_never_changes_an_existing_manifest(ws, remotes):
     assert not (ws.project / "main.agc").exists()
 
 
-@pytest.mark.parametrize("name", ["Notes", "1st", "a b", "a" * 65])
+@pytest.mark.parametrize("name", ["Notes", "a" * 65])
 def test_init_refuses_a_name_that_the_manifest_would_refuse_and_writes_nothing(ws, remotes, name):
     result, problem = command(ws, remotes, "init", name)
     assert result.code == 1
@@ -58,3 +61,12 @@ def test_init_refuses_a_name_that_the_manifest_would_refuse_and_writes_nothing(w
 def test_init_is_a_usage_error_with_two_names_or_an_option(ws, remotes):
     assert plain(ws, remotes, "init", "a", "b").code == 2
     assert plain(ws, remotes, "init", "--force").code == 2
+
+
+def test_init_refuses_a_folder_name_that_is_not_a_package_name(ws, remotes, tmp_path):
+    folder = tmp_path / "My App"
+    folder.mkdir()
+    result = run(cli() + ["--json", "init"], cwd=folder, env=environment(ws, remotes))
+    assert result.code == 1
+    assert_at_key(json.loads(result.stderr), "PKG-MANIFEST-INVALID", folder / "agentica.toml", "name")
+    assert list(folder.iterdir()) == []

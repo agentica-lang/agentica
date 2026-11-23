@@ -9,6 +9,7 @@ import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import GitSource from "../packages/git_source"
+import Manifest from "../packages/manifest"
 import Project from "../packages/project"
 import CliProject from "cli_project"
 import Reply from "cli_reply"
@@ -50,6 +51,8 @@ def start(settings: Env.Settings, dir: String, words: List[String]) -> Result[St
     return error(Failure.fail_key(manifest, "name", "PKG-MANIFEST-INVALID", "not a package name", help))
   end
 
+  text = "name = \"#{name}\"\nagentica = \"#{settings.version}\"\n"
+  try Manifest.parse(manifest, text)
   lines: List[String] = []
   main = Paths.join(dir, MAIN_FILE)
   if !settings.workspace.file_exists.call(main)
@@ -57,7 +60,7 @@ def start(settings: Env.Settings, dir: String, words: List[String]) -> Result[St
     lines = lines.push("created #{MAIN_FILE}")
   end
 
-  try save(manifest, "name = \"#{name}\"\nagentica = \"#{settings.version}\"\n")
+  try save(manifest, text)
   lines = lines.push("created #{Project.MANIFEST_FILE}")
   ok("#{lines.join("\n")}\n")
 end

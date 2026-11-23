@@ -193,9 +193,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `PKG-MANIFEST-EXISTS`: `agentica init` found an `agentica.toml` in the working
   folder and wrote nothing.
 - `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT`,
-  `PKG-SOURCE-INVALID`, `PKG-WRITE`: `agentica add` or `update` stopped before
-  it wrote anything (except `PKG-WRITE`): the name is a dependency already
-  (change its pin in `agentica.toml`, then `update NAME`); the source of `add`
+  `PKG-SOURCE-INVALID`, `PKG-WRITE`: `agentica add`, `update` or `init` stopped
+  before it wrote anything (except `PKG-WRITE`): the name is a dependency
+  already (change its pin in `agentica.toml`, then `update NAME`); the source of `add`
   is neither `https://host/owner/repo` nor `OWNER/REPO`; `update NAME` names
   no dependency; the manifest layout cannot take the one-line edit (write the
   line by hand); or a file cannot be written (`deps/` too).
