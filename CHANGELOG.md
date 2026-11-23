@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-23
+
 ### Added
 
 - Native API 1.5: a native module function marked `AN_FRESH` makes resources that do not come from its arguments, so a `Native.arena` that returns one keeps it alone (#1932).
@@ -1776,7 +1778,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.36.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.37.0...HEAD
+[0.37.0]: https://github.com/agentica-lang/agentica/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/agentica-lang/agentica/compare/0.35.1...0.36.0
 [0.35.1]: https://github.com/agentica-lang/agentica/compare/0.35.0...0.35.1
 [0.35.0]: https://github.com/agentica-lang/agentica/compare/0.34.2...0.35.0
