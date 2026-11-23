@@ -78,7 +78,7 @@ The bytes of a regular file in chunks of `size` bytes (1 to 16777216), the last 
 
 ### ch.lazy
 
-The values of a channel until it is closed and drained. Each wait for a value obeys `timeout_ms`, and a timeout ends the terminal with `error("channel: timed out")`. After a [close with a reason](/library/concurrency/channel/#channelclose), the values left come first, then the reason ends the terminal as an error. A negative timeout is `RUNTIME-INVALID-DURATION` at the argument; `ch.lazy(0)` takes only what is already there. A channel cannot be read twice: a second terminal goes on with the values the first did not take (`ok([])` once it is drained), and a value a terminal took is gone, even when a later step dropped it. `take`, `first` and `find` take no value they do not need; `take_while` consumes the first value its block rejects.
+The values of a channel until it is closed and drained. Each wait for a value obeys `timeout_ms`, and a timeout ends the terminal with `error("channel: timed out")`. After a [close with a reason](/library/concurrency/channel/#channelclose), the values left come first, then the reason ends the terminal as an error. A negative timeout is `RUNTIME-INVALID-DURATION` at the argument; `ch.lazy(0)` takes only what is already there. A channel cannot be read twice: a second terminal goes on with the values the first did not take (`ok([])` once it is drained, or the reason after a close with one), and a value a terminal took is gone, even when a later step dropped it. `take`, `first` and `find` take no value they do not need; `take_while` consumes the first value its block rejects.
 
 ```agentica
 def produce(ch: Channel[Int]) -> Void

@@ -107,7 +107,7 @@ static bool failed(agc_value result, const char *text) {
 
 static bool ended(agc_value result, agc_value reason) {
   const agc_result *r = agc_as_result(&vm, result);
-  return !r->ok && r->value.as.p == reason.as.p;
+  return !r->ok && agc_is(r->value, AGC_T_STRUCT) && r->value.as.p == reason.as.p;
 }
 
 static agc_task *ready_head(void) { return agc_test_ready_head(vm.rt->runq); }

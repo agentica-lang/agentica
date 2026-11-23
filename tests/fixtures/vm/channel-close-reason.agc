@@ -34,7 +34,7 @@ def main() -> Void
   close_with(ch, "reset by peer")
   close_with(ch, "second")
   ch.close
-  show_send("parked sender", Task.await(sender))
+  show_send("waiting sender", Task.await(sender))
   show_send("send", ch.send(3, 0))
   show_send("address send", ch.address.send(3, 0))
   puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
@@ -47,7 +47,7 @@ def main() -> Void
   receiver = Task.spawn(&wait_recv, waiting)
   Task.sleep(10)
   close_with(waiting, "producer gave up")
-  show("parked receiver", Task.await(receiver))
+  show("waiting receiver", Task.await(receiver))
 
   plain: Channel[Int] = Channel.new(1)
   plain.close
