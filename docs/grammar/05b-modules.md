@@ -629,6 +629,15 @@ import Sqlite from "pkg/sqlite/db"
   is unset or relative; `XDG_CACHE_HOME` and `HOME` are not read). A declared
   package that is not in `deps/` is `CHECK-IMPORT-PACKAGE`, whose help says to
   run `agentica install`.
+- `agentica init [NAME]` starts a project in the working folder: it writes
+  `agentica.toml` with `name` (NAME, else the name of the folder) and
+  `agentica` (the running version), and a `main.agc` that prints `Hello,
+  world!` when the folder has none. The name is checked as the manifest
+  checks it (`PKG-MANIFEST-INVALID` at `name`, nothing written); a folder that
+  has an `agentica.toml` is `PKG-MANIFEST-EXISTS` and nothing changes. More
+  than one word, or an option, is a usage error (exit code 2). `main.agc` is
+  written first, then the manifest; a file that cannot be written is
+  `PKG-WRITE`.
 - `agentica install` fills the cache from the lock, writes `deps/` (below) and
   never writes the lock. It
   takes no argument; the project is the nearest `agentica.toml` going up from

@@ -57,6 +57,7 @@ USAGE = [
   "       agentica [--ai|--json] refs <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] refs --stdin <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] install",
+  "       agentica [--ai|--json] init [NAME]",
   [
     "       agentica [--ai|--json] add NAME URL|OWNER/REPO --tag TAG|--ref COMMIT [--subdir DIR|--workspace] ",
     "[--group test]",
@@ -114,6 +115,9 @@ SUMMARY = [
   "  agentica install                        fetch the packages of agentica.lock with git (a package already in",
   "                                          the package cache is not fetched) and write them to deps/NAME/;",
   "                                          the lock is never changed",
+  "  agentica init [NAME]                    start a project in the working folder: write agentica.toml (NAME,",
+  "                                          default the folder name, and the running version) and, when there is",
+  "                                          none, main.agc; an existing agentica.toml is never changed",
   "  agentica add NAME URL|OWNER/REPO --tag TAG|--ref COMMIT [--subdir DIR|--workspace] [--group test]",
   "                                          add a dependency to agentica.toml, fetch it with git, write",
   "                                          agentica.lock and deps/ (the other lines of agentica.toml stay);",
