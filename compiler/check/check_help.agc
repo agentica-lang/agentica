@@ -56,9 +56,18 @@ def conversion(expected: Types.Type, actual: Types.Type) -> String
     return "this is #{Types.to_text(actual)}; wrap it with some(...) for #{Types.to_text(expected)}"
   end
 
-  # The builtin Ref and a type of the root file named Ref print alike.
+  # The builtin Ref and a struct or enum named Ref print alike: the root file's own type, or a module's.
   if Types.to_text(expected) == "Ref" and Types.to_text(actual) == "Ref"
-    return "the Ref of Ref.new is the builtin token; in this file, Ref names the file's own type Ref"
+    declared = expected
+    if Types.is?(expected, "Opaque")
+      declared = actual
+    end
+
+    if Types.name(declared) == "Ref"
+      return "the Ref of Ref.new is the builtin token; in this file, Ref names the file's own type Ref"
+    end
+
+    return "two types print as Ref: the builtin token of Ref.new and a struct or enum named Ref of another module"
   end
 
   # A PEM path where a context goes, as in the TLS forms before contexts (19a): a client or a server one.
