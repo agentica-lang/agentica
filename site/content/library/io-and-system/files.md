@@ -304,15 +304,14 @@ Moves a read handle to `offset` bytes from the start of the file, so the next `r
 ```agentica {mode="check"}
 def main() -> Void
   input = File.open("data.bin", "read", 1000).unwrap!
-  _ = File.seek(input, 2, 1000)
+  File.seek(input, 2, 1000).unwrap!
   puts(File.read_bytes(input, 16, 1000).unwrap!.to_a)
 end
 ```
 
 - An offset past the end is fine: the next `read_bytes` gives empty bytes, as at the end of the file.
 - A negative offset stops the program with `RUNTIME-INDEX-OUT-OF-RANGE` at the offset.
-- Only a handle opened with `"read"` can seek; a write, append or `create_private` handle gives `error("filesystem: only a handle open for reading can seek")`. A pipe, FIFO or terminal gives `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
-- The seek drops what the handle had read ahead, so the next read always starts at `offset`.
+- Only a handle opened with `"read"` can seek; any other handle gives `error("filesystem: file handle is not open for reading")`. A pipe, FIFO or terminal gives `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
 
 ## Dir.list
 

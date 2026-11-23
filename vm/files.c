@@ -1977,10 +1977,15 @@ static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value 
   return NULL;
 }
 
+/* The state of an open read handle once the task has the handle's lock; NULL with the call's result in *failure. */
+static file_state *read_state(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *failure) {
+  if (blocked(vm, handle, timeout, failure)) return NULL;
+  return usable(vm, handle, true, failure);
+}
+
 static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout) {
   agc_value failure;
-  if (blocked(vm, handle, &timeout, &failure)) return failure;
-  file_state *st = usable(vm, handle, true, &failure);
+  file_state *st = read_state(vm, handle, &timeout, &failure);
   if (!st) return failure;
   op *o = call_op(vm, kind, st);
   o->count = count;
@@ -2021,8 +2026,7 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
-  if (blocked(vm, args[0], &timeout, &failure)) return failure;
-  file_state *st = usable(vm, args[0], true, &failure);
+  file_state *st = read_state(vm, args[0], &timeout, &failure);
   if (!st) return failure;
   line_scan found = scan_line(st, 0, LIMIT + 1, LIMIT, false);
   if (found.kind == LINE_FOUND) {
@@ -2110,9 +2114,8 @@ static agc_value builtin_seek(agc_vm *vm, agc_value *args, uint32_t span) {
   if (offset < 0) agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "offset must not be negative", span + 2);
   int64_t timeout = agc_as_int(vm, args[2]);
   agc_value failure;
-  file_state *st = held_state(vm, args[0], &timeout, &failure);
+  file_state *st = read_state(vm, args[0], &timeout, &failure);
   if (!st) return failure;
-  if (!st->readable) return error_of(vm, AGC_KIND_IO_FAILED, "filesystem: only a handle open for reading can seek");
   if (st->poller) return error_of(vm, AGC_KIND_IO_FAILED, not_seekable);
   if (agc_fs_seek(st->fd, offset) != 0)
     return errno == ESPIPE ? error_of(vm, AGC_KIND_IO_FAILED, not_seekable)

@@ -64,10 +64,10 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF
   before any line, or invalid UTF-8, is an error.
 - `File.seek(handle, offset)` moves a read handle to `offset` bytes from the
-  start; the next read starts there (read-ahead is dropped). Past the end, the
-  next `read_bytes` gives empty bytes. A negative offset halts
-  (`RUNTIME-INDEX-OUT-OF-RANGE` at the offset); a write, append or
-  `create_private` handle, a pipe, FIFO or terminal is an error Result.
+  start; the next read starts there. Past the end, the next `read_bytes`
+  gives empty bytes. A negative offset halts (`RUNTIME-INDEX-OUT-OF-RANGE` at
+  the offset); a handle not open for reading, a pipe, FIFO or terminal is an
+  error Result.
 - `File.stat` follows symlinks and returns `File.Info(kind: String, size_bytes:
   Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`;
   directory sizes are zero; `mode` is the permission bits with setuid, setgid

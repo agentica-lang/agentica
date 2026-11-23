@@ -1,6 +1,6 @@
 /*
  * Filesystem primitives shared through libuv.
- * Requests execute synchronously on the existing I/O workers.
+ * Requests execute synchronously on the calling thread: mostly an I/O worker, the scheduler for a seek.
  * Platform adapter; no VM state or scheduling.
  */
 #ifdef __APPLE__

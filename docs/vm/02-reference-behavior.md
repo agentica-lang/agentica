@@ -296,6 +296,10 @@ Every failure is an error value. The checks run in this order:
 - `File.read_text` refuses a file over 1 MiB by its size and decodes strictly.
   `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF.
   `File.read_bytes` reads to `max_bytes` or EOF.
+- `File.seek` is `lseek(SEEK_SET)` on a read handle, with no pool job; it drops
+  the read buffer. A negative offset is `RUNTIME-INDEX-OUT-OF-RANGE` at the
+  offset; a pipe, FIFO or terminal is `filesystem: cannot seek a pipe, FIFO or
+  terminal`. Past the end, `File.read_bytes` gives empty bytes.
 - `File.sha256` streams a whole regular file in 64 KiB chunks (no 1 MiB cap);
   the `fstat` of the open descriptor decides regular, anything else is
   `filesystem: path does not refer to a regular file`. A cancel or a timeout
