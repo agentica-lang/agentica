@@ -55,6 +55,10 @@ end
   type rows such as `{"Summary", AN_STRUCT, "count: Int, mean: Float"}`. Each
   getter returns `false` for another type; terms last until the C function
   returns. A short function is thread-safe and never blocks or sleeps.
+- `AN_FRESH` added to a row's mode (`AN_SHORT | AN_FRESH`, API 1.5): the
+  resources the function makes do not come from its resource arguments (a
+  tensor that owns its data), so a `Native.arena` that keeps one keeps it
+  alone. The `.agc` declaration does not change.
 - A resource row is `{"Db", sizeof(db_state), db_free}`; `an_resource_new`
   makes one and gives its zeroed state, `an_get_resource` gives the state of a
   resource argument. A dirty function's getters give `false` for terms it

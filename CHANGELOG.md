@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Native API 1.5: a native module function marked `AN_FRESH` makes resources that do not come from its arguments, so a `Native.arena` that returns one keeps it alone (#1932).
 - `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
 
 ## [0.36.0] - 2026-11-23

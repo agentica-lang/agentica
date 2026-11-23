@@ -361,12 +361,13 @@ struct agc_ffi_call;
    it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
    and `free` is NULL. NULL for the others.
    `up` is what a resource of an extern function comes from, the resource or owned buffer that the call which made it
-   held (a database under its statement), less any that another of those comes from; `ups` (`up_count` entries, GC
-   memory) holds them instead when there were two or more, and `up` is then NULL. A call that holds the resource holds
-   what it comes from that is still open, one level up. A resource closed while held (`carries`) holds its own in
-   turn until its free, so a close of one of them during a compute call on the resource frees it at the end of that
-   call. A link that points at a freed resource with at most one parent of its own is moved to that parent when it is
-   read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
+   held (a database under its statement), less any that another of those comes from, and none for a function of a
+   native module marked AN_FRESH; `ups` (`up_count` entries, GC memory) holds them instead when there were two or
+   more, and `up` is then NULL. A call that holds the resource holds what it comes from that is still open, one level
+   up. A resource closed while held (`carries`) holds its own in turn until its free, so a close of one of them
+   during a compute call on the resource frees it at the end of that call. A link that points at a freed resource
+   with at most one parent of its own is moved to that parent when it is read, so a chain keeps no freed links.
+   `seen` marks a resource while a call's arguments are sorted out
    (agc_ffi_cache.walk). A resource of a native module (vm/native_module.c) has `row` set to its row of the module's
    resource table (an_resource_type): `pointer` is its malloc'd state, which agc_native_free_state frees, and `free`
    is NULL. NULL, 0 and false for the others. Changes under rt->sync, except `calls`: the fast calls

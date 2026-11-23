@@ -2,7 +2,7 @@
 title: Tipos y recursos
 weight: 1
 description: Los tipos de C de un bloque extern, funciones variádicas, lectura de memoria que devuelve C, búferes propios y memoria tipada, recursos que son propietarios de un puntero de C y arenas que los cierran, parámetros out, llamadas a través de punteros a función de C, callbacks que llama C, y estructuras de C pasadas por valor o por puntero.
-source_hash: "9070fa95191b"
+source_hash: "cd64cf5ead72"
 ---
 
 ## Tipos {#types}
@@ -248,7 +248,7 @@ def main() -> Void
 end
 ```
 
-- Lo que sale del bloque es lo que retiene su valor, en sus campos de estructura, payloads de enum, `Result`, elementos de `List` y valores de `Map` (el recorrido de `Task.spawn_owning`). Un recurso retenido también retiene los recursos de los que viene, hasta arriba (una sentencia retiene su base de datos), y una vista retenida retiene su búfer. Un recurso que solo captura una función o lambda devuelta se cierra.
+- Lo que sale del bloque es lo que retiene su valor, en sus campos de estructura, payloads de enum, `Result`, elementos de `List` y valores de `Map` (el recorrido de `Task.spawn_owning`). Un recurso retenido también retiene los recursos de los que viene, hasta arriba (una sentencia retiene su base de datos), y una vista retenida retiene su búfer. Un recurso que creó una función de un módulo nativo marcada `AN_FRESH` no viene de nada, así que no retiene nada más ([módulos nativos](/library/io-and-system/native/modules/)). Un recurso que solo captura una función o lambda devuelta se cierra.
 - El resto se cierra del más nuevo al más antiguo, en orden inverso a la apertura, mediante `Native.close`: una llamada nativa en marcha que retiene uno lo mantiene hasta que la llamada devuelve, y usarlo después falla con `RUNTIME-NATIVE-CLOSED`.
 - Una arena dentro de otra le da lo que retiene a la exterior, que lo cierra al final de la suya salvo que su valor también lo retenga.
 - Un `try` que falla en el bloque devuelve su error desde el bloque, y la arena cierra todo lo que el error no retiene. Un error de runtime o una cancelación terminan la tarea, y el final de la tarea cierra lo que posee, del más nuevo al más antiguo.

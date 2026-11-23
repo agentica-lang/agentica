@@ -1,9 +1,10 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.4: short and dirty calls of
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.5: short and dirty calls of
  * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1), the module's resources
- * (1.2), an_blocking, for C libraries that switch stacks (1.3), and errors with a kind and details (1.4). The VM half
+ * (1.2), an_blocking, for C libraries that switch stacks (1.3), errors with a kind and details (1.4), and functions
+ * whose resources do not come from their arguments (AN_FRESH, 1.5). The VM half
  * is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
@@ -20,7 +21,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 4
+#define AN_API_MINOR 5
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -64,8 +65,11 @@ typedef an_term (*an_fn)(an_env *env, int argc, const an_term *argv);
    constructors make (a String, Bytes, List, Map, some, ok, error, struct, variant with a payload or resource) is kept
    apart and becomes a value once it returns, so a getter gives false for it. Keep the C data of a resource that the
    call makes in its state, which an_resource_new gives. A task cancelled during a dirty call does not stop it: it runs
-   to its end and its result is dropped. */
-enum { AN_SHORT = 0, AN_DIRTY = 1 };
+   to its end and its result is dropped. AN_FRESH, or'd with either mode (API 1.5), says that the resources a call makes
+   do not come from its resource arguments, as a tensor that owns its data: a Native.arena that keeps one then keeps it
+   alone, not every argument that led to it. Without it a resource made by a call keeps the call's resource arguments
+   alive in an arena. A running call holds its arguments either way. */
+enum { AN_SHORT = 0, AN_DIRTY = 1, AN_FRESH = 2 };
 
 /* A row of the module's function table. NAME is the Agentica name (`autocommit?` included), SIGNATURE its canonical
    Agentica type, "(Int, String) -> List[Int]": parameters in parentheses separated by ", ", then " -> " and the

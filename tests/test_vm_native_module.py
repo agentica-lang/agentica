@@ -336,6 +336,52 @@ def test_an_arena_closes_the_resources_of_a_module(tmp_path, demo):
     assert result.stderr == "freed 20\nfreed 2\nfreed 1\nfreed 10\nfreed 30\n"
 
 
+FRESH = """extern module "LIBRARY"
+  resource Blob
+  def blob() -> Blob
+  def mix(blob: Blob) -> Blob
+  def mix_fresh(blob: Blob) -> Blob
+  compute def dirty_mix_fresh(blob: Blob) -> Blob
+  def first(blob: Blob) -> Int
+  def blobs() -> Int
+end
+
+def chain(fresh: Bool) -> Blob
+  if fresh
+    return dirty_mix_fresh(mix_fresh(mix_fresh(blob())))
+  end
+  return mix(mix(mix(blob())))
+end
+
+def once(fresh: Bool) -> Int
+  kept = Native.arena do chain(fresh) end
+  n = first(kept)
+  Native.close(kept)
+  return n
+end
+
+"""
+
+
+# #1932: an arena that returns the Blob of a function marked AN_FRESH, short or compute, keeps that Blob alone, so a
+# loop of such arenas frees every 4 MiB intermediate. Without the flag the Blob keeps the ones it was made from, all the
+# way up, and each call leaves three of them open until the task ends.
+@NATIVE_CALLS
+def test_an_arena_keeps_only_the_result_of_a_fresh_function(tmp_path, demo):
+    body = """  for _ in 0...8
+    puts(once(true))
+  end
+  puts("fresh #{blobs()}")
+  for _ in 0...8
+    once(false)
+  end
+  puts("mixed #{blobs()}")
+"""
+    result = run_main(tmp_path, demo, body, "", FRESH)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "3\n" * 8 + "fresh 0\nmixed 24\n"
+
+
 # The profile (AGENTICA_VM_TRACE=profile) has a line per function of a module that ran: its calls, the time in C and
 # the mode.
 @NATIVE_CALLS
