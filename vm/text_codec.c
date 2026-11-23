@@ -252,7 +252,6 @@ static agc_value builtin_scrub(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(s);
 }
 
-/* bytes.incomplete_utf8_length: the bytes at the end that start a character the chunk cuts short. */
 static agc_value builtin_incomplete_utf8_length(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   size_t len;
