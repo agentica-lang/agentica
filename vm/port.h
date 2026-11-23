@@ -895,9 +895,10 @@ bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t);
 /* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */
 #define AGC_CHANNEL_BAD_TIMEOUT "channel timeout must be nonnegative"
 /* One receive from c, as Channel.recv does, for a stepper (Lazy over a channel). VALUE puts the
-   value in *out; CLOSED means closed and drained; TIMED_OUT means the wait for this value passed timeout_ms; WAIT
-   means the task parks (a retry park), and the stepper calls this again with the same c and timeout when it wakes. */
-typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_TIMED_OUT, AGC_RECV_WAIT } agc_recv_status;
+   value in *out; CLOSED means closed and drained; FAILED is CLOSED for a channel closed with a reason, whose failed
+   Result it puts in *out; TIMED_OUT means the wait for this value passed timeout_ms; WAIT means the task parks (a
+   retry park), and the stepper calls this again with the same c and timeout when it wakes. */
+typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_FAILED, AGC_RECV_TIMED_OUT, AGC_RECV_WAIT } agc_recv_status;
 agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_ms, agc_value *out);
 
 /* Time.monotonic_ms without a read of the clock source (vm/timers.c): where the system has a coarse monotonic clock

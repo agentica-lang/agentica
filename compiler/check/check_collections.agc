@@ -623,8 +623,9 @@ def check_channel_recv(cx: State.Cx, st: State.St, site: State.Site) -> Result[S
   ok(State.Out(st: timeout.st, type: T.Type.Result(T.item(target.type))))
 end
 
-# A builtin whose one argument is a target of a shape (a Task[R] or a Channel[T] of any item type), checked by
-# `argument`; the call has the type of its row (Task.cancel, Channel.close, Channel.closed?).
+# A builtin whose first argument is a target of a shape (a Task[R] or a Channel[T] of any item type), checked by
+# `argument`, and whose other argument, if any, has a plain type (the Error of Channel.close); the call has the type
+# of its row (Task.cancel, Channel.close, Channel.closed?).
 def check_target(
   cx: State.Cx,
   st: State.St,
@@ -632,7 +633,10 @@ def check_target(
   argument: Fn[State.Cx, State.St, State.Site, Result[State.Out]],
 ) -> Result[State.Out]
   target = try argument.call(cx, st, site)
-  ok(State.Out(st: target.st, type: site.selected.result))
+  return ok(State.Out(st: target.st, type: site.selected.result)) if site.args.length == 1
+
+  other = try State.expr(cx, target.st, site.args[1], site.selected.parameters[1].type)
+  ok(State.Out(st: other.st, type: site.selected.result))
 end
 
 # System.Profile.measure(label) do ... end, Native.memory_pointer(size) do |buf| ... end and Native.from_string(text)

@@ -1,0 +1,24 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 401,
+  "stdout": [
+    "waiting sender: net.closed reset by peer",
+    "send: net.closed reset by peer",
+    "address send: net.closed reset by peer",
+    "closed? true, empty? false",
+    "recv: 1",
+    "recv: 2",
+    "recv: net.closed reset by peer some(104)",
+    "recv again: net.closed reset by peer some(104)",
+    "waiting receiver: net.closed producer gave up some(104)",
+    "plain then reason: channel.closed channel: closed none",
+    "same error: true, location kept: true",
+    "each 10",
+    "each 20",
+    "error(\"cut short\", kind: \"net.closed\", code: 104)",
+    "error(\"cut short\", kind: \"net.closed\", code: 104)",
+    ""
+  ],
+  "stderr": []
+}

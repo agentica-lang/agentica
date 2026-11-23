@@ -206,6 +206,7 @@ Channel.new(capacity: Int) -> Channel[T]
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 Channel.close(channel: Channel[T]) -> Void
+Channel.close(channel: Channel[T], error: Error) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
 Channel.empty?(channel: Channel[T]) -> Bool
 Channel.lazy(channel: Channel[T], timeout_ms: Int) -> Lazy[T]   # lazy.md
@@ -232,6 +233,12 @@ closed, drained one) and `error("channel: timed out")`. Values sent before
 `close` are still received after it. Every call has a timeout: 0 tries once, a
 negative value is `RUNTIME-INVALID-DURATION`, and there is no wait-forever
 value.
+
+`ch.close(e)` closes with a reason, an `Error`: senders, and receivers once the
+values left are taken, get `error(e)` in place of the closed error, and
+`ch.lazy` ends with it. A producer passes its failure on with
+`case run(ch) ... error(e) -> ch.close(e)`. A second close, with a reason or
+without, does nothing.
 
 `ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
 drained (`lazy.md`): `jobs.lazy(5000).select { |n| n > 0 }.reduce(0) do |s,

@@ -593,7 +593,7 @@ static const char *module_problem(const an_module *m, char *error, size_t size) 
     return "the module's function table is not valid";
   for (uint32_t k = 0; k < m->function_count; k++) {
     const an_function *row = &m->functions[k];
-    if (!row->name || !row->signature || !row->fn || (row->flags & ~(unsigned)AN_DIRTY)) {
+    if (!row->name || !row->signature || !row->fn || (row->flags & ~(unsigned)(AN_DIRTY | AN_FRESH))) {
       snprintf(error, size, "row %u of the module's function table is not valid", (unsigned)k);
       return error;
     }
@@ -1198,6 +1198,9 @@ static agc_value error_value(agc_vm *vm, const error_parts *p, size_t n) {
 
 static agc_value text_of(agc_vm *vm, const staged *s) { return agc_string_value(text_string(vm, s->data, s->n)); }
 
+/* How many of the HOLDS resource arguments of a call of FN a resource it makes comes from: none for AN_FRESH. */
+static uint32_t origin_count(const agc_native_fn *fn, uint32_t holds) { return fn->row->flags & AN_FRESH ? 0 : holds; }
+
 /* The value of node S of D, the nodes below it BUILT. A resource gets its value and leaves the node. */
 static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const agc_value *built) {
   const agc_value *items = s->data;
@@ -1238,7 +1241,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
     const an_resource_type *row = &d->fn->resource_rows[s->id];
     void *state = s->data;
     s->data = NULL;
-    return agc_ffi_module_resource(vm, row, row->name, state, d->held, d->holds);
+    return agc_ffi_module_resource(vm, row, row->name, state, d->held, origin_count(d->fn, d->holds));
   }
   }
 }
@@ -1934,7 +1937,7 @@ static void *api_resource_new(an_env *env, uint32_t type, an_term *out) {
     return state;
   }
   agc_charge_bytes(env->vm, sizeof(agc_c_resource));
-  *out = term_of(agc_ffi_module_resource(env->vm, row, row->name, state, env->held, env->holds));
+  *out = term_of(agc_ffi_module_resource(env->vm, row, row->name, state, env->held, origin_count(fn, env->holds)));
   return state;
 }
 

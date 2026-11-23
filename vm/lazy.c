@@ -494,6 +494,9 @@ static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc
     switch (lazy_receive(vm, source, &run->item)) {
       case AGC_RECV_VALUE: return NEXT_ITEM;
       case AGC_RECV_CLOSED: return NEXT_NONE;
+      case AGC_RECV_FAILED:
+        *call = lazy_end(run->item);
+        return NEXT_STEP;
       case AGC_RECV_TIMED_OUT:
         *call = lazy_end(lazy_error(vm, AGC_KIND_CHANNEL_TIMEOUT, "channel: timed out"));
         return NEXT_STEP;

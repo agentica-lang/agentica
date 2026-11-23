@@ -2,7 +2,7 @@
 title: TCP, TLS y HTTP
 weight: 4
 description: Búsquedas DNS, sockets TCP y TLS, y el cliente y el servidor HTTP/1.1 de std/http.
-source_hash: "cad380d4cf1a"
+source_hash: "98be03d83fd2"
 ---
 
 Las funciones de red devuelven un `Result` y reciben los tiempos de espera en milisegundos.
@@ -858,6 +858,7 @@ Para un cuerpo que no está listo cuando el handler devuelve: eventos, tokens ta
 - Una ruta que responde con un texto o un archivo usa `body: HTTP.whole(data)`, un canal cerrado que guarda esos `Bytes` (`"text".bytes` para un texto). El servidor envía entonces `Content-Length`, como en una respuesta completa. Hace lo mismo con cualquier cuerpo que ya esté cerrado cuando la aplicación devuelve.
 - El servidor lee la conexión durante todo el flujo. Cuando la entrada del cliente termina (se marchó, o solo cerró a medias su lado de envío) o falla un envío, el servidor cierra el canal, así que el próximo `send` del productor devuelve `error("channel: closed")` y se detiene. Un productor que envía raramente también puede mirar `body.closed?`. El cuerpo se corta entonces sin su último trozo, así que el cliente ve un cuerpo incompleto, no uno terminado. Solo el cierre del canal por el productor termina el cuerpo limpiamente.
 - El productor debe cerrar el canal en todos los caminos. Un productor que nunca lo cierra retiene el flujo hasta que el cliente se va: no tiene duración máxima.
+- Un productor que falla cierra con su error, `body.close(e)` ([un cierre con razón](/library/concurrency/channel/#channelclose)): los fragmentos que envió aún salen, y después el cuerpo se corta sin su último trozo, así que el cliente ve un cuerpo incompleto.
 - Los bytes que el cliente envía durante el flujo (una solicitud en pipelining) se descartan, y la conexión se cierra cuando termina el flujo; el servidor sigue vigilando, así que un cliente que se va después también se detecta.
 - Un canal acotado (`Channel.new(8)`) es la contrapresión: un cliente que lee despacio hace esperar al servidor, y así espera el `send` del productor.
 - Un productor lento no es un error. La espera del siguiente fragmento no tiene límite de tiempo, e `idle_timeout_ms` cuenta solo entre solicitudes, desde el final de un flujo. `request_timeout_ms` acota el envío de cada fragmento (y de un cuerpo entero enviado con `Content-Length`): un cliente que deja de leer durante ese tiempo es cortado, y el canal se cierra.
