@@ -1,0 +1,26 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INDEX-OUT-OF-RANGE",
+  "steps": 126,
+  "stdout": [
+    "ok()",
+    "error(\"filesystem: only a handle open for reading can seek\", kind: \"io.failed\")",
+    "ok()",
+    "ok(\"zero\")",
+    "ok()",
+    "ok(\"two\")",
+    "ok()",
+    "ok(<Bytes 4 7a65726f>)",
+    "ok()",
+    "ok(<Bytes 0>)",
+    "ok()",
+    "ok(<Bytes 0>)",
+    "error(\"filesystem: end of file\", kind: \"io.eof\")",
+    "ok()",
+    "ok(\"one\")",
+    "ok()",
+    "error(\"filesystem: file handle is closed\", kind: \"io.closed\")",
+    ""
+  ],
+  "stderr": []
+}

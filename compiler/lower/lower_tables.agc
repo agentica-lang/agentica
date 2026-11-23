@@ -35,7 +35,7 @@ VM_BUILTINS = Set.new([
   "JSON.null?", "JSON.get", "JSON.at", "JSON.string", "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list",
   "JSON.decode", "JSON.schema", "JSON.node", "File.open", "File.read_bytes.bytes", "File.read_line", "File.write",
   "File.write_bytes.bytes", "File.flush", "File.close", "File.each_line", "File.read_text", "File.sha256.bytes",
-  "File.replace", "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock",
+  "File.replace", "File.seek", "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock",
   "Zlib.deflate.bytes", "Zlib.inflate.bytes", "Zlib.gzip.bytes", "Zlib.gunzip.bytes", "Zlib.crc32.bytes", "Dir.list",
   "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename",
   "ATS.new", "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.clear", "ATS.add", "ATS.push",

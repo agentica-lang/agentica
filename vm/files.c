@@ -151,6 +151,7 @@ static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
 static const char refused_windows_path[] = "filesystem: refusing to remove an unsafe Windows path";
 #endif
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
+static const char not_seekable[] = "filesystem: cannot seek a pipe, FIFO or terminal";
 
 static void put(text *t, const char *data, size_t len) {
   if (agc_size_add(t->len, len) > t->cap) {
@@ -2101,6 +2102,26 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   return close_handle(vm, r, args[0], timeout);
 }
 
+/* File.seek: the next read starts at offset. The read buffer holds bytes of the old position, so it goes. A seek never
+   waits on a file, so it runs here under the handle's lock, with no job, as File.read_line's buffered line does. */
+static agc_value builtin_seek(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  int64_t offset = agc_as_int(vm, args[1]);
+  if (offset < 0) agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "offset must not be negative", span + 2);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  agc_value failure;
+  file_state *st = held_state(vm, args[0], &timeout, &failure);
+  if (!st) return failure;
+  if (!st->readable) return error_of(vm, AGC_KIND_IO_FAILED, "filesystem: only a handle open for reading can seek");
+  if (st->poller) return error_of(vm, AGC_KIND_IO_FAILED, not_seekable);
+  if (agc_fs_seek(st->fd, offset) != 0)
+    return errno == ESPIPE ? error_of(vm, AGC_KIND_IO_FAILED, not_seekable)
+                           : agc_system_error(vm, AGC_FAMILY_IO, "filesystem: cannot seek the file", errno);
+  st->start = st->end = st->scan = 0;
+  st->eof = false;
+  return ok_void();
+}
+
 static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
   agc_value failure;
@@ -2599,6 +2620,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.sha256.bytes", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.seek", 3, builtin_seek, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

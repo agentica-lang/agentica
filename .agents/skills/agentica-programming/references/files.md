@@ -11,6 +11,7 @@ File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Resul
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) do |f| ... end -> Result[T]
 File.read_bytes(handle: File.Handle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
 File.read_line(handle: File.Handle, timeout_ms: Int = 30000) -> Result[String]
+File.seek(handle: File.Handle, offset: Int, timeout_ms: Int = 30000) -> Result[Void]
 File.write(handle: File.Handle, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.write_bytes(handle: File.Handle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 File.flush(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void]
@@ -62,6 +63,11 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   file, then `Path.rename` it into place.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF
   before any line, or invalid UTF-8, is an error.
+- `File.seek(handle, offset)` moves a read handle to `offset` bytes from the
+  start; the next read starts there (read-ahead is dropped). Past the end, the
+  next `read_bytes` gives empty bytes. A negative offset halts
+  (`RUNTIME-INDEX-OUT-OF-RANGE` at the offset); a write, append or
+  `create_private` handle, a pipe, FIFO or terminal is an error Result.
 - `File.stat` follows symlinks and returns `File.Info(kind: String, size_bytes:
   Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`;
   directory sizes are zero; `mode` is the permission bits with setuid, setgid
