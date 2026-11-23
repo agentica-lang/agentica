@@ -35,6 +35,12 @@ end
 - A resource belongs to the task that made it and is freed once: at
   `Native.close`, at the task's end or at the end of the run; a call holding
   it delays the free to its end. A closed one is `RUNTIME-NATIVE-CLOSED`.
+- A handle in data that crosses packages: the data package defines generic
+  `struct Tensor[H]` and `struct Ops[H]` (`Fn` fields), no native code; the
+  backend declares the block with `resource Buf` and builds `Ops[Buf]` from
+  `&its_functions`. The backend's functions keep taking its own resource;
+  `Tensor[Buf]` or another block's resource in a signature is
+  `CHECK-NATIVE-TYPE`.
 - The first call binds the function: the module's table must have the same
   canonical signature, mode and type shapes, else `RUNTIME-NATIVE-SIGNATURE`;
   a library that does not load is `RUNTIME-NATIVE-LOAD`. A `compute def` runs

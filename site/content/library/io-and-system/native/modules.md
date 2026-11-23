@@ -46,6 +46,41 @@ end
 
 The first call of a function of the block opens the library, as an `extern` block does, and calls its `agentica_native_init` once per run. A library that does not open, has no entry point, or was built for another major version of the API (or a newer minor one) fails that call with `RUNTIME-NATIVE-LOAD`. Then the VM looks the function up by name in the module's table. It must have the same signature, the same mode, and each struct or enum with the same name, fields or variants and types; otherwise the call fails with `RUNTIME-NATIVE-SIGNATURE`. A signature is written canonically: aliases expanded, user types by their bare names, `", "` between parameters and type arguments, then `" -> "` and the result, as in `(List[Float]) -> Optional[Summary]`. A struct's shape is `"count: Int, mean: Float"`, an enum's `"Empty | Number(Float) | Text(String)"`, in declared order.
 
+## A handle in generic data
+
+A resource belongs to the block that declares it, so a package that owns a data type, such as a tensor, cannot name the resource of a backend that lives in another package. It does not have to: make the type and the table of operations generic over the handle, and let the backend fill the table in. The package of the data has no native code, and the backend imports it, so there is no import cycle. The checker accepts this across packages, and `Native.close`, `Native.arena` and `RUNTIME-NATIVE-CLOSED` work on a handle held in the data as on any other.
+
+```agentica {mode="check"}
+# In the package that owns the data: no native code, so no import cycle.
+struct Tensor[H]
+  handle: H
+  shape: List[Int]
+end
+
+struct Ops[H]
+  make: Fn[Int, Result[H]]
+  add: Fn[H, H, Result[H]]
+end
+
+def plus[H](ops: Ops[H], a: Tensor[H], b: Tensor[H]) -> Result[Tensor[H]]
+  handle = try ops.add(a.handle, b.handle)
+  ok(Tensor(handle: handle, shape: a.shape))
+end
+
+# In the backend: the block declares the resource and fills the table with its own functions.
+extern module "backend"
+  resource Buf
+  def make(n: Int) -> Result[Buf]
+  def add(a: Buf, b: Buf) -> Result[Buf]
+end
+
+def ops() -> Ops[Buf]
+  Ops(make: &make, add: &add)
+end
+```
+
+The native functions of the backend keep taking and returning its own resource, here `Buf`. `Ops[Buf]` holds them as plain `Fn` values, and `plus` calls them for any `H`. A native function that takes or returns `Tensor[Buf]`, takes a struct with a `Buf` field, or names the resource of another block is still `CHECK-NATIVE-TYPE`.
+
 ## The C side
 
 The [native-gen](https://www.agentica-lang.com/packages/native-gen/) package makes a C header from the block: typed prototypes, argument checks and the function and type tables. The C file then holds plain C functions. This section is the API under it.
