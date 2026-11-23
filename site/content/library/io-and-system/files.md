@@ -293,6 +293,26 @@ end
 [0, 1, 255]
 ```
 
+## File.seek
+
+```signature
+File.seek(handle: File.Handle, offset: Int, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Moves a read handle to `offset` bytes from the start of the file, so the next `read_bytes` or `read_line` starts there. Use it to read one part of a large file, such as one tensor of a checkpoint, without reading what comes before.
+
+```agentica {mode="check"}
+def main() -> Void
+  input = File.open("data.bin", "read", 1000).unwrap!
+  File.seek(input, 2, 1000).unwrap!
+  puts(File.read_bytes(input, 16, 1000).unwrap!.to_a)
+end
+```
+
+- An offset past the end is fine: the next `read_bytes` gives empty bytes, as at the end of the file.
+- A negative offset stops the program with `RUNTIME-INDEX-OUT-OF-RANGE` at the offset.
+- Only a handle opened with `"read"` can seek; any other handle gives `error("filesystem: file handle is not open for reading")`. A pipe, FIFO or terminal gives `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
+
 ## Dir.list
 
 ```signature

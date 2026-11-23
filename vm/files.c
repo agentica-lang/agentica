@@ -151,6 +151,7 @@ static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
 static const char refused_windows_path[] = "filesystem: refusing to remove an unsafe Windows path";
 #endif
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
+static const char not_seekable[] = "filesystem: cannot seek a pipe, FIFO or terminal";
 
 static void put(text *t, const char *data, size_t len) {
   if (agc_size_add(t->len, len) > t->cap) {
@@ -1976,10 +1977,15 @@ static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value 
   return NULL;
 }
 
+/* The state of an open read handle once the task has the handle's lock; NULL with the call's result in *failure. */
+static file_state *read_state(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *failure) {
+  if (blocked(vm, handle, timeout, failure)) return NULL;
+  return usable(vm, handle, true, failure);
+}
+
 static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout) {
   agc_value failure;
-  if (blocked(vm, handle, &timeout, &failure)) return failure;
-  file_state *st = usable(vm, handle, true, &failure);
+  file_state *st = read_state(vm, handle, &timeout, &failure);
   if (!st) return failure;
   op *o = call_op(vm, kind, st);
   o->count = count;
@@ -2020,8 +2026,7 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
-  if (blocked(vm, args[0], &timeout, &failure)) return failure;
-  file_state *st = usable(vm, args[0], true, &failure);
+  file_state *st = read_state(vm, args[0], &timeout, &failure);
   if (!st) return failure;
   line_scan found = scan_line(st, 0, LIMIT + 1, LIMIT, false);
   if (found.kind == LINE_FOUND) {
@@ -2099,6 +2104,25 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   if (r->closing) return agc_is(r->context, AGC_T_RESULT) ? r->context : ok_void();
   if (!r->native) return ok_void();
   return close_handle(vm, r, args[0], timeout);
+}
+
+/* File.seek: the next read starts at offset. The read buffer holds bytes of the old position, so it goes. A seek never
+   waits on a file, so it runs here under the handle's lock, with no job, as File.read_line's buffered line does. */
+static agc_value builtin_seek(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  int64_t offset = agc_as_int(vm, args[1]);
+  if (offset < 0) agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "offset must not be negative", span + 2);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  agc_value failure;
+  file_state *st = read_state(vm, args[0], &timeout, &failure);
+  if (!st) return failure;
+  if (st->poller) return error_of(vm, AGC_KIND_IO_FAILED, not_seekable);
+  if (agc_fs_seek(st->fd, offset) != 0)
+    return errno == ESPIPE ? error_of(vm, AGC_KIND_IO_FAILED, not_seekable)
+                           : agc_system_error(vm, AGC_FAMILY_IO, "filesystem: cannot seek the file", errno);
+  st->start = st->end = st->scan = 0;
+  st->eof = false;
+  return ok_void();
 }
 
 static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -2599,6 +2623,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.sha256.bytes", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.seek", 3, builtin_seek, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

@@ -98,6 +98,8 @@ Order and rules: `docs/vm/10-io-scheduler.md` §10.2.2, "End of run", and
 - `File.read_line` returns a whole line that the read buffer already holds
   with no job; only an incomplete line, a line over `LIMIT` and the end of the
   file start the job (one `CHUNK` read fills the buffer for many lines).
+- `File.seek` runs `lseek` (`_lseeki64` on Windows) on the scheduler under the
+  handle lock, with no job, for regular files and non-polled devices only.
 - The waiting rule. `probe` runs after an `O_NONBLOCK` open (`fstat` plus an
   `epoll_ctl` probe). Regular files, block devices, and devices epoll refuses
   with `EPERM` go to the pool, set blocking. Other probe errors, or a failed

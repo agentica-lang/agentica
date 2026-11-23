@@ -42,6 +42,8 @@ int agc_fs_close(int fd);
 void agc_fs_blocking(int fd);
 int64_t agc_fs_read(int fd, void *data, size_t size);
 int64_t agc_fs_write(int fd, const void *data, size_t size);
+/* Moves the file position of FD to OFFSET bytes from the start: 0, or -1 with errno (ESPIPE for a pipe). */
+int agc_fs_seek(int fd, int64_t offset);
 int agc_fs_stat(const char *path, agc_fs_info *info, bool follow);
 int agc_fs_fstat(int fd, agc_fs_info *info);
 int agc_fs_mkdir(const char *path, bool private);
