@@ -312,7 +312,7 @@ end
 
 - Un offset después del final es válido: la siguiente `read_bytes` devuelve bytes vacíos, como al final del archivo.
 - Un offset negativo detiene el programa con `RUNTIME-INDEX-OUT-OF-RANGE` en el offset.
-- Solo un handle abierto con `"read"` puede hacer seek; un handle de escritura, de `"append"` o de `"create_private"` devuelve `error("filesystem: only a handle open for reading can seek")`. Una tubería, un FIFO o una terminal devuelve `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
+- Solo un handle abierto con `"read"` puede hacer seek; un handle de escritura, de append o de `create_private` devuelve `error("filesystem: only a handle open for reading can seek")`. Una tubería, un FIFO o una terminal devuelve `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
 - El seek descarta lo que el handle había leído por adelantado, así que la siguiente lectura siempre empieza en `offset`.
 
 ## Dir.list {#dirlist}
