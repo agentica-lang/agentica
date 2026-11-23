@@ -323,7 +323,9 @@ section says how the scheduler and the loop keep them.
   buffer, the capacity, a closed flag, and two FIFOs of waiting receivers and
   senders linked through `wait_next`. The ring starts with at most 8 slots and
   doubles up to the capacity (one turn-cost unit per slot copied), so
-  `Channel.new(1048576)` allocates little. A call that must wait parks with
+  `Channel.new(1048576)` allocates little. `Channel.new` with no capacity has
+  the capacity `SIZE_MAX`: its ring doubles as values arrive, never shrinks,
+  and a send to it never waits. A call that must wait parks with
   retry on a task timer whose clock starts late (`agc_task_park_within`, §16.9
   "Timers"). There is no job, so no `io` trace line; the `sched` trace shows
   `timer_arm` when the clock starts and `timer_fire`. A waiter wakes only with a

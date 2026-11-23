@@ -1,6 +1,6 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth, turn cost, wrap-around,
- * capacity and waiter order, a close with a reason, a monitor's notice past the capacity, abandoned channels,
+ * capacity and waiter order, an unbounded channel, a close with a reason, a monitor's notice past the capacity, abandoned channels,
  * HttpWire.awaited? and watch, wait clocks, and addresses (one per channel, a send that waits, closed, another run, a
  * freed channel). All of it again in a shared VM, where the channel and timer locks are real.
  */
@@ -15,7 +15,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-enum { NEW, SEND, RECV, CLOSE, CLOSE_REASON, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, WATCH, COUNT };
+enum { NEW, NEW_UNBOUNDED, SEND, RECV, CLOSE, CLOSE_REASON, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, WATCH, COUNT };
 
 static agc_vm vm;
 static agc_task *main_task;
@@ -147,6 +147,30 @@ static void test_ring(void) {
   assert(failed(send(main_task, one, 2, 0), "channel: timed out"));
   assert(got(recv(main_task, one, 0), 1));
   assert(main_task->turn_cost == start + 8 + 16);
+}
+
+/* An unbounded channel: sends with timeout 0 never wait, the ring doubles from 8 slots (each copy charged), wraps
+   around, and takes a value given back by a cancelled receiver when it is full. */
+static void test_unbounded(void) {
+  agc_value ch = now(main_task, NEW_UNBOUNDED, NULL);
+  int64_t start = main_task->turn_cost;
+  for (int64_t k = 1; k <= 1000; k++) assert(sent(send(main_task, ch, k, 0)));
+  assert(main_task->turn_cost == start + 8 + 16 + 32 + 64 + 128 + 256 + 512);
+  for (int64_t k = 1; k <= 990; k++) assert(got(recv(main_task, ch, 0), k));
+  for (int64_t k = 1001; k <= 2000; k++) assert(sent(send(main_task, ch, k, 0)));
+  for (int64_t k = 991; k <= 2000; k++) assert(got(recv(main_task, ch, 0), k));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+
+  agc_value full = now(main_task, NEW_UNBOUNDED, NULL);
+  agc_task *a = agc_test_task();
+  wait_recv(a, full, 5000);
+  for (int64_t k = 1; k <= 9; k++) assert(sent(send(main_task, full, k, 0)));
+  agc_task_cancel(&vm, a);
+  assert(!ready_head());
+  for (int64_t k = 1; k <= 9; k++) assert(got(recv(main_task, full, 0), k));
+  close_channel(full);
+  assert(failed(send(main_task, full, 10, 0), "channel: closed"));
+  assert(failed(recv(main_task, full, 0), "channel: closed"));
 }
 
 static void test_receiver_order(void) {
@@ -815,6 +839,7 @@ static void test_address_gone(void) {
 
 static void all(void) {
   test_ring();
+  test_unbounded();
   test_receiver_order();
   test_sender_order();
   test_cancelled_receiver();
@@ -853,10 +878,10 @@ int main(void) {
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   main_task = vm.task;
-  static const char *names[COUNT] = {"Channel.new",     "Channel.send",    "Channel.recv",    "Channel.close",
+  static const char *names[COUNT] = {"Channel.new",     "Channel.new",     "Channel.send",    "Channel.recv",    "Channel.close",
                                      "Channel.close",   "Channel.closed?", "Channel.empty?", "Channel.address",
                                      "Address.send",    "HttpWire.awaited?", "HttpWire.watch"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 2, 1, 1, 1, 3, 1, 1};
+  static const uint32_t arities[COUNT] = {1, 0, 3, 2, 1, 2, 1, 1, 1, 3, 1, 1};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);

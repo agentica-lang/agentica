@@ -83,7 +83,21 @@ ROWS: List[Model.Builtin] = [
     implementation: "Channel.new",
     effects: [],
     description: "Create a channel that holds 1 to 1048576 values; needs an expected Channel[T] type; VM only.",
-    alternatives: [],
+    alternatives: [
+      Model.Builtin(
+        name: "Channel.new",
+        parameters: [],
+        result: Types.Type.Channel(Types.Type.Var("T")),
+        rule: Model.Rule.ChannelNew,
+        implementation: "Channel.new",
+        effects: [],
+        description: (
+          "Create an unbounded channel: a send never waits, and the values held grow with a slow receiver; " +
+          "needs an expected Channel[T] type; VM only."
+        ),
+        alternatives: [],
+      ),
+    ],
   ),
   Model.Builtin(
     name: "Channel.recv",

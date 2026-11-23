@@ -92,8 +92,9 @@ builtin Channel.empty? forms=1
   Channel.empty?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.empty?" effects=[] desc="True when no value is left to receive; after closed?, it says the channel is drained; VM only."
 builtin Channel.lazy forms=1
   Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
-builtin Channel.new forms=1
+builtin Channel.new forms=2
   Channel.new(capacity: Int) -> Channel[T] shape=(Int) -> Channel(Var(T)) rule=ChannelNew impl="Channel.new" effects=[] desc="Create a channel that holds 1 to 1048576 values; needs an expected Channel[T] type; VM only."
+  Channel.new() -> Channel[T] shape=() -> Channel(Var(T)) rule=ChannelNew impl="Channel.new" effects=[] desc="Create an unbounded channel: a send never waits, and the values held grow with a slow receiver; needs an expected Channel[T] type; VM only."
 builtin Channel.recv forms=1
   Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T] shape=(Channel(Var(T)), Int) -> Result(Var(T)) rule=ChannelRecv impl="Channel.recv" effects=["concurrency"] desc="Take the oldest value; wait up to timeout_ms; error(\"channel: closed\") once closed and empty, error(\"channel: timed out\"); VM only."
 builtin Channel.send forms=1

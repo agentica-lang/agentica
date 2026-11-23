@@ -550,9 +550,13 @@ def check_ats_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State
   ok(State.Out(st: current, type: CheckTypes.substitute(site.selected.result, found)))
 end
 
-# Channel.new needs the channel type from its context.
+# Channel.new and Channel.new(capacity) need the channel type from their context.
 def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  capacity = try State.expr(cx, st, site.args[0], T.Type.Int)
+  capacity = State.Out(st: st, type: T.Type.Int)
+  if site.args.length == 1
+    capacity = try State.expr(cx, st, site.args[0], T.Type.Int)
+  end
+
   span = site.node.span
   if T.unknown?(site.expected)
     return error(

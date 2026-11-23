@@ -49,8 +49,11 @@ The multicore model (threads, queues and ownership) is in §16
   to each builtin.
 - **Channels.** A channel's ring and waiter lists change under the channel's
   lock (§16.9, "Channel and timer locks"), never held across a park. Ring
-  growth copies the slots under the lock: an accepted exception, bounded by the
-  capacity and charged as turn cost. The lock orders the write of a value before its read on another
+  growth allocates and copies the slots under the lock: an accepted exception,
+  bounded by the capacity (an unbounded channel doubles, so a value is copied
+  about once on average) and charged as turn cost. The allocation raises
+  nothing (out of memory ends the process), and a collection it starts takes no
+  channel lock. The lock orders the write of a value before its read on another
   scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"), a
   second waker beside the wake or hand-on: the state CAS lets one win, and what
   the loser leaves is passed on (§10.2.2, Channel waits). Each task also writes

@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 125109,
+  "stdout": [
+    "sent without a receiver: 5000",
+    "sum 12502500, empty? true",
+    "recv on empty: channel.timeout channel: timed out",
+    "hello world",
+    "late: channel: closed",
+    "bounded third: channel: timed out",
+    ""
+  ],
+  "stderr": []
+}
