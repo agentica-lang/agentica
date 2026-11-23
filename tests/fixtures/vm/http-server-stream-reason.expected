@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1934,
+  "stdout": [
+    "-- closed with a reason before the handler returns",
+    "HTTP/1.1 200 OK | Transfer-Encoding: chunked",
+    "1 a",
+    "error(\"network: end of input\", kind: \"net.eof\")",
+    "-- closed with a reason during the stream",
+    "HTTP/1.1 200 OK | Transfer-Encoding: chunked",
+    "3 one",
+    "error(\"network: end of input\", kind: \"net.eof\")",
+    "ok()",
+    ""
+  ],
+  "stderr": []
+}

@@ -1,6 +1,6 @@
 /*
  * Filesystem primitives shared through libuv.
- * Requests execute synchronously on the existing I/O workers.
+ * Requests execute synchronously on the calling thread: mostly an I/O worker, the scheduler for a seek.
  * Platform adapter; no VM state or scheduling.
  */
 #ifdef __APPLE__
@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
-#ifndef _WIN32
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -137,6 +139,18 @@ int64_t agc_fs_write(int fd, const void *data, size_t size) {
   int result = uv_fs_write(NULL, &req, fd, &buffer, 1, -1, NULL);
   uv_fs_req_cleanup(&req);
   return os_result(result);
+}
+
+int agc_fs_seek(int fd, int64_t offset) {
+#ifdef _WIN32
+  return _lseeki64(fd, offset, SEEK_SET) < 0 ? -1 : 0;
+#else
+  if ((int64_t)(off_t)offset != offset) {
+    errno = EINVAL;
+    return -1;
+  }
+  return lseek(fd, (off_t)offset, SEEK_SET) < 0 ? -1 : 0;
+#endif
 }
 
 int agc_fs_stat(const char *path, agc_fs_info *info, bool follow) {

@@ -221,6 +221,7 @@ Tres variables no tienen flag. `AGENTICA_GC_HEAP` (predeterminado `32M`: bytes, 
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | responden por el texto de la entrada estándar, como si `FILE` lo contuviera |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | buscan en ese texto como un archivo más, el primero |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | responden aunque algunas funciones no comprueben, a partir de las que sí lo hacen y del enlazado: el JSON tiene `"partial": true` y `diagnostics`, y el código de salida es 0. `refs` lo acepta para una posición sin PATH. `outline` acepta la opción y la ignora |
+| `init [NAME]` | empieza un proyecto en la carpeta de trabajo: escribe `agentica.toml` y, si no existe, `main.agc`; ver [Paquetes](/tour/modules/#packages) |
 | `install`, `add NAME URL --tag TAG` (o `OWNER/REPO` para una URL de GitHub, `--ref COMMIT`, `--subdir DIR` o `--workspace`, `--group test`), `update [NAME]` | mantienen `deps/` y `agentica.lock`; ver [Paquetes](/tour/modules/#packages) |
 | `native source NAME` | imprime la clave de origen del módulo nativo NAME del proyecto (su tabla `build` y los archivos de `native/`), la API nativa del binario y la URL de cada destino de su tabla `prebuilt`; con `--json`, un objeto con `source`, `api` y `urls` |
 | `compile FILE -o OUT` | escribe bytecode de la VM |

@@ -169,9 +169,9 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
  * end does and declines what is not its case, so a command missing here only costs time. The list is
  * CliRun.COMMANDS (compiler/app/cli_run.agc; tests/test_bytecode_cache.py compares the two). */
 static bool may_run_a_file(int count, char **words) {
-  static const char *const commands[] = {"test",   "help",    "doc",     "fmt",    "lint", "install", "add",
-                                         "update", "native",  "outline", "type-at", "symbol", "refs", "run",
-                                         "check",  "compile", "repl"};
+  static const char *const commands[] = {"test",   "help",    "doc",     "fmt",    "lint", "install", "init",
+                                         "add",    "update",  "native",  "outline", "type-at", "symbol", "refs",
+                                         "run",    "check",   "compile", "repl"};
   for (int k = 0; k < count; k++) {
     const char *word = words[k];
     if (strcmp(word, "--no-cache") == 0 || strcmp(word, "--dump") == 0 || strcmp(word, "--dump-ir") == 0)

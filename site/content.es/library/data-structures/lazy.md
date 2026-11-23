@@ -2,7 +2,7 @@
 title: Lazy
 weight: 6
 description: Pipelines perezosos sobre listas, rangos, fuentes sin fin, archivos y canales, que un método final ejecuta un elemento a la vez, con try en los bloques y un método final que escribe un archivo.
-source_hash: "3b2185abcf55"
+source_hash: "42d50a64a896"
 ---
 
 Un `Lazy[T]` es una receta: una fuente y los pasos después de ella. Crearlo no hace ningún trabajo. Un método final (`to_a`, `first`, `each`, `reduce`, `find`, `write_lines`, `write_bytes`) lo ejecuta, y pide un elemento a la vez a la fuente y lo pasa por cada paso, así que ningún paso crea una lista con todos los elementos. Un paso devuelve un `Lazy` nuevo; el anterior no cambia, y cada método final vuelve a ejecutar la fuente desde el principio (un canal, que no se puede leer dos veces, sigue donde se detuvo el último método final).
@@ -79,7 +79,7 @@ Los bytes de un archivo regular en trozos de `size` bytes (de 1 a 16777216), el 
 
 ### ch.lazy {#chlazy}
 
-Los valores de un canal hasta que se cierra y se vacía. Cada espera de un valor respeta `timeout_ms`, y un tiempo de espera termina el método final con `error("channel: timed out")`. Un tiempo negativo es `RUNTIME-INVALID-DURATION` en el argumento; `ch.lazy(0)` toma solo lo que ya está ahí. Un canal no se puede leer dos veces: un segundo método final sigue con los valores que el primero no tomó (`ok([])` cuando ya está vacío), y un valor que un método final tomó ya no está, aunque un paso posterior lo haya descartado. `take`, `first` y `find` no toman ningún valor que no necesiten; `take_while` consume el primer valor que rechaza su bloque.
+Los valores de un canal hasta que se cierra y se vacía. Cada espera de un valor respeta `timeout_ms`, y un tiempo de espera termina el método final con `error("channel: timed out")`. Tras un [cierre con razón](/library/concurrency/channel/#channelclose), primero llegan los valores que quedan y después la razón termina el método final como un error. Un tiempo negativo es `RUNTIME-INVALID-DURATION` en el argumento; `ch.lazy(0)` toma solo lo que ya está ahí. Un canal no se puede leer dos veces: un segundo método final sigue con los valores que el primero no tomó (`ok([])` cuando ya está vacío, o la razón tras un cierre con razón), y un valor que un método final tomó ya no está, aunque un paso posterior lo haya descartado. `take`, `first` y `find` no toman ningún valor que no necesiten; `take_while` consume el primer valor que rechaza su bloque.
 
 ```agentica
 def produce(ch: Channel[Int]) -> Void

@@ -3509,7 +3509,8 @@ def invalid_stream(
 end
 
 # What the body channel holds without waiting. It has ended when the receive fails because the channel is closed and
-# empty, which the receive itself says, so a producer that sends and closes meanwhile loses nothing.
+# empty, which the receive itself says, so a producer that sends and closes meanwhile loses nothing. A close with a
+# reason is not an end: the stream starts, and pump cuts it.
 def take_ready(body: Channel[Bytes]) -> Ready
   pieces: List[Bytes] = []
   ended = false
@@ -3517,8 +3518,8 @@ def take_ready(body: Channel[Bytes]) -> Ready
   while more
     case body.recv(0)
       ok(piece) -> pieces = List.append(pieces, piece)
-      error(message) ->
-        ended = "#{message}" == CHANNEL_CLOSED
+      error(e) ->
+        ended = e.kind == "channel.closed"
         more = false
     end
   end
@@ -3629,10 +3630,10 @@ end
 # deadline of its own: a slow producer is not an error, and the client leaving, the producer closing or the server
 # closing all wake it. A piece gets `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT
 # when the body was cut: a send failed (the channel is closed for the producer), the watcher saw the client leave
-# (left has a value), or a body with a length ended short or a piece would pass it. Only a producer's close ends the
-# body, or its length when it has one. STREAM_EARLY when the client sent bytes during the stream (sent has a value,
-# read before the last chunk or the last byte of a body with a length goes out: after it the client may send its next
-# request), STREAM_DONE otherwise.
+# (left has a value), the producer closed with a reason, or a body with a length ended short or a piece would pass
+# it. Only a producer's close ends the body, or its length when it has one. STREAM_EARLY when the client sent bytes
+# during the stream (sent has a value, read before the last chunk or the last byte of a body with a length goes out:
+# after it the client may send its next request), STREAM_DONE otherwise.
 def pump(
   socket: TCP.Socket,
   body: Channel[Bytes],
@@ -3684,7 +3685,10 @@ def pump(
             body.close
             return STREAM_CUT
         end
-      error(message) -> break if "#{message}" == CHANNEL_CLOSED
+      error(e) ->
+        break if e.kind == "channel.closed"
+        # A close with a reason cuts the body; a timeout waits again.
+        return STREAM_CUT if e.kind != "channel.timeout"
     end
   end
   return STREAM_CUT if length != UNSIZED and count != length

@@ -41,6 +41,9 @@ struct agc_channel {
   /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
      it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
   bool closed, abandoned, read_only;
+  /* The Error of Channel.close(channel, error), void for a plain close: what senders and, once the values are taken,
+     receivers get in place of the closed error. Set once, with `closed`. */
+  agc_value reason;
   /* The task that HttpWire.watch bound to the channel before its first value (agc_channel_watch): a cancel of a
      parked receiver cancels it, and the first value sent clears it. */
   agc_task *watcher;
@@ -61,6 +64,11 @@ static agc_value gone_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_
 
 /* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
 static agc_value closed_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_CLOSED, "channel: closed"); }
+
+/* The error of a closed channel: its reason (read under its lock), else the closed error. */
+static agc_value closed_result(agc_vm *vm, agc_value reason) {
+  return agc_is(reason, AGC_T_VOID) ? closed_error(vm) : agc_result_value(false, reason);
+}
 
 static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_TIMEOUT, "channel: timed out"); }
 
@@ -271,10 +279,11 @@ static status send_locked(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeo
 static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
   lock(vm, c);
   status s = send_locked(vm, c, v, timeout);
+  agc_value reason = c->reason;
   unlock(vm, c);
   switch (s) {
     case DONE: return ok_void();
-    case CLOSED: return closed_error(vm);
+    case CLOSED: return closed_result(vm, reason);
     case TIMED_OUT: return timed_out_error(vm);
     case READ_ONLY: return read_only_error(vm);
     case WAIT:
@@ -350,14 +359,19 @@ static status receive_locked(agc_vm *vm, agc_channel *c, int64_t timeout, agc_va
   return s;
 }
 
-/* The receive of Channel.recv and of a Lazy over a channel (port.h). */
+/* The receive of Channel.recv and of a Lazy over a channel (port.h). A close with a reason is AGC_RECV_FAILED, with
+   the reason's failed Result in *out. */
 agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
   lock(vm, c);
   status s = receive_locked(vm, c, timeout, out);
+  agc_value reason = c->reason;
   unlock(vm, c);
   switch (s) {
     case DONE: return AGC_RECV_VALUE;
-    case CLOSED: return AGC_RECV_CLOSED;
+    case CLOSED:
+      if (agc_is(reason, AGC_T_VOID)) return AGC_RECV_CLOSED;
+      *out = agc_result_value(false, reason);
+      return AGC_RECV_FAILED;
     case TIMED_OUT: return AGC_RECV_TIMED_OUT;
     default: break;
   }
@@ -373,6 +387,7 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   switch (agc_channel_receive(vm, c, timeout, &v)) {
     case AGC_RECV_VALUE: return agc_result_value(true, v);
     case AGC_RECV_CLOSED: return closed_error(vm);
+    case AGC_RECV_FAILED: return v;
     case AGC_RECV_TIMED_OUT: return timed_out_error(vm);
     case AGC_RECV_WAIT: break;
   }
@@ -397,12 +412,14 @@ static void unsubscribe(agc_vm *vm, agc_channel *c) {
   agc_io_signals_set(vm, subscribed(vm));
 }
 
-/* With rt->sync held, as the registry entry and the signal list need. */
-static void shut(agc_vm *vm, agc_channel *c) {
+/* With rt->sync held, as the registry entry and the signal list need. REASON is an Error, or void for a plain close;
+   a second close keeps the first one's. */
+static void shut(agc_vm *vm, agc_channel *c, agc_value reason) {
   lock(vm, c);
   bool was_closed = c->closed;
   if (!was_closed) {
     c->closed = true;
+    c->reason = reason;
     c->reserved_slots = 0;
     wake_all(vm, &c->senders, &c->senders_tail);
     drained(vm, c);
@@ -418,12 +435,21 @@ static void shut(agc_vm *vm, agc_channel *c) {
 
 static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
   (void)ender;
-  shut(vm, agc_as_channel(vm, r->context));
+  shut(vm, agc_as_channel(vm, r->context), agc_void());
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  shut(vm, agc_as_channel(vm, args[0]));
+  shut(vm, agc_as_channel(vm, args[0]), agc_void());
+  return agc_void();
+}
+
+/* Channel.close(channel, error): the reason must be the program's Error record, which a hostile file may not pass. */
+static agc_value builtin_close_reason(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_channel *c = agc_as_channel(vm, args[0]);
+  if (!agc_is_error(vm, args[1])) agc_wrong_tag(vm);
+  shut(vm, c, args[1]);
   return agc_void();
 }
 
@@ -617,6 +643,7 @@ const agc_builtin agc_channel_builtins[] = {
   {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Channel.close", 2, builtin_close_reason, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},

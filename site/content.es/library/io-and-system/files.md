@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "24cdefeb4598"
+source_hash: "b52482a3be62"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -293,6 +293,26 @@ end
 ```text
 [0, 1, 255]
 ```
+
+## File.seek {#fileseek}
+
+```signature
+File.seek(handle: File.Handle, offset: Int, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Mueve un handle de lectura a `offset` bytes desde el inicio del archivo, así que la siguiente `read_bytes` o `read_line` empieza ahí. Úsalo para leer una parte de un archivo grande, como un tensor de un checkpoint, sin leer lo que va antes.
+
+```agentica {mode="check"}
+def main() -> Void
+  input = File.open("data.bin", "read", 1000).unwrap!
+  File.seek(input, 2, 1000).unwrap!
+  puts(File.read_bytes(input, 16, 1000).unwrap!.to_a)
+end
+```
+
+- Un offset después del final es válido: la siguiente `read_bytes` devuelve bytes vacíos, como al final del archivo.
+- Un offset negativo detiene el programa con `RUNTIME-INDEX-OUT-OF-RANGE` en el offset.
+- Solo un handle abierto con `"read"` puede hacer seek; cualquier otro handle devuelve `error("filesystem: file handle is not open for reading")`. Una tubería, un FIFO o una terminal devuelve `error("filesystem: cannot seek a pipe, FIFO or terminal")`.
 
 ## Dir.list {#dirlist}
 

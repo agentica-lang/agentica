@@ -4355,6 +4355,52 @@
     },
     {
       "program": [
+        "def fail() -> Result[Void] = error(\"cut\", kind: \"net.closed\")",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  case fail()",
+        "    ok(_) -> ch.close",
+        "    error(e) -> Channel.close(ch, e)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def fail() -> Result[Void] = error(\"cut\", kind: \"net.closed\")",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.close(\"cut\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [5, 12],
+      "covers": "\"cut\""
+    },
+    {
+      "program": [
+        "def fail() -> Result[Void] = error(\"cut\", kind: \"net.closed\")",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.close(fail())",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [5, 12],
+      "covers": "fail()"
+    },
+    {
+      "program": [
         "struct Box",
         "  inbox: Channel[Int]",
         "end",
