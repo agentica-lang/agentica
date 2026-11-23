@@ -356,7 +356,10 @@ section says how the scheduler and the loop keep them.
     then get the closed error. `closed?` is the close flag, true at once even
     with values left, so a producer sees the close between sends. `empty?` is
     true when the ring is empty and nothing is reserved; after a close the two
-    together stay true.
+    together stay true. `close(channel, error)` keeps the `Error` in the
+    channel, beside the ring, so it needs no slot; the closed error of a send,
+    of a `recv` and of `ch.lazy` is then `error(error)`. Only the first close
+    sets it.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
     (`agc_channel_claim`); §14.5 has the rules. Mid-FIFO removal is O(n), as for
     the lock FIFO. A waiter whose timer fired before any wake still takes a

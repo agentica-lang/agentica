@@ -47,7 +47,7 @@ Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 
 Adds the value at the back and gives `ok()`. When full, the task waits for room, a close or `timeout_ms`. The value is not added on:
 
-- `error("channel: closed")`, or `error("channel: timed out")`.
+- `error("channel: closed")`, the reason of a [close with a reason](#channelclose), or `error("channel: timed out")`.
 
 `timeout_ms` is 0 or more; `0` tries once and never waits. A negative value is `RUNTIME-INVALID-DURATION`. Nothing waits forever.
 
@@ -74,7 +74,7 @@ Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 
 Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting, and so are waiting senders, with no barging: a sent value goes straight to the first waiting receiver. A waiter that leaves before it runs, because it was cancelled or its timeout came first, passes what it was given to the next waiter. A receiver that was given a value returns it even if its deadline passes before it runs. No value is lost or added twice. Errors:
 
-- `error("channel: closed")` once closed and every value was taken, or `error("channel: timed out")`.
+- `error("channel: closed")` once closed and every value was taken (the reason, for a [close with a reason](#channelclose)), or `error("channel: timed out")`.
 
 ```agentica
 def main() -> Void
@@ -97,9 +97,12 @@ channel: timed out
 
 ```signature
 Channel.close(channel: Channel[T]) -> Void
+Channel.close(channel: Channel[T], error: Error) -> Void
 ```
 
-Closing again does nothing. Waiting senders get the closed error, and so do woken senders that have not run yet. Receivers get the values left, then the closed error.
+Closing again does nothing, with a reason or without: the first close stays. Waiting senders get the closed error, and so do woken senders that have not run yet. Receivers get the values left, then the closed error.
+
+With an [`Error`](/library/errors/error/), senders get `error(error)`, with that same `Error`, in place of `error("channel: closed")`, and so do receivers once the values left are taken: the receiver learns why the stream ended. The error is kept apart from the values, so a full channel can be closed with it. [`ch.lazy`](/library/data-structures/lazy/#chlazy) gives the values left, then ends the terminal with it.
 
 - The sending side should close on every path, receivers should not. If nobody closes it, a receive loop never ends.
 - An owned channel also closes when its owner ends ([A producer that owns the channel](#a-producer-that-owns-the-channel)).
@@ -119,6 +122,48 @@ end
 channel: closed
 1
 channel: closed
+```
+
+A producer that fails passes its error on:
+
+```agentica
+def fetch(n: Int) -> Result[Int]
+  return error("connection reset", kind: "net.closed") if n == 3
+
+  ok(n * 10)
+end
+
+def send_all(jobs: Channel[Int]) -> Result[Void]
+  for n in 1..5
+    try jobs.send(try fetch(n), 1000)
+  end
+
+  ok()
+end
+
+def produce(jobs: Channel[Int]) -> Void
+  case send_all(jobs)
+    ok(_) -> jobs.close
+    error(e) -> jobs.close(e)
+  end
+end
+
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(4)
+  Task.spawn(&produce, jobs)
+  puts(jobs.recv(1000).unwrap!)
+  puts(jobs.recv(1000).unwrap!)
+  case jobs.recv(1000)
+    ok(n) -> puts(n)
+    error(e) -> puts("#{e.kind}: #{e.message}")
+  end
+end
+```
+
+```output
+10
+20
+net.closed: connection reset
 ```
 
 ## Channel.closed?

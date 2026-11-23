@@ -83,8 +83,9 @@ builtin Bytes.scrub forms=1
   Bytes.scrub(bytes: Bytes, replacement: String = "\u{FFFD}") -> String shape=(Bytes, String = "\u{FFFD}") -> String rule=Plain impl="Bytes.scrub" effects=[] desc="Read UTF-8, with the replacement for each invalid or cut sequence; never fails."
 builtin Channel.address forms=1
   Channel.address(channel: Channel[T]) -> Address[T] shape=(Channel(Var(T))) -> Address(Var(T)) rule=ChannelAddress impl="Channel.address" effects=[] desc="A send-only reference to the channel, which is data and does not keep the channel alive; VM only."
-builtin Channel.close forms=1
+builtin Channel.close forms=2
   Channel.close(channel: Channel[T]) -> Void shape=(Channel(Var(T))) -> Void rule=ChannelTarget impl="Channel.close" effects=["concurrency"] desc="Close a channel idempotently; waiting tasks wake, and received values still drain; VM only."
+  Channel.close(channel: Channel[T], error: Error) -> Void shape=(Channel(Var(T)), Struct(Error)) -> Void rule=ChannelTarget impl="Channel.close" effects=["concurrency"] desc="Close a channel with a reason: senders, and receivers once the values are taken, get error(error) in place of the closed error; a second close keeps the first; VM only."
 builtin Channel.closed? forms=1
   Channel.closed?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.closed?" effects=[] desc="True once the channel is closed, even with values still buffered; VM only."
 builtin Channel.empty? forms=1
