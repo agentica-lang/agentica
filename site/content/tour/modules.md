@@ -323,7 +323,7 @@ Import a package by its local name, then a path inside the package, without `.ag
 import Sqlite from "pkg/sqlite/db"
 ```
 
-`agentica init [NAME]` starts a project in the working folder: it writes `agentica.toml` with the name (default: the folder name) and the running version as `agentica`, and a `main.agc` that prints `Hello, world!` when there is none. A folder that has an `agentica.toml` is `PKG-MANIFEST-EXISTS` and nothing changes; a name that is not a package name is `PKG-MANIFEST-INVALID`.
+`agentica init [NAME]` starts a project in the working folder, with an `agentica.toml` and a `main.agc` that prints `Hello, world!`. It never changes an existing manifest.
 
 A manifest that declares dependencies needs an `agentica.lock` beside it, with the exact commit and a hash of every package. A build never downloads anything: it reads each package from `deps/<name>/` and checks its hash. Three commands keep `deps/` and the lock, through the system `git`:
 

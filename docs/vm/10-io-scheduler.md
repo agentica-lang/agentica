@@ -350,18 +350,13 @@ section says how the scheduler and the loop keep them.
     order. So the ring may hold more than the capacity, by at most one value per
     handed-back reservation. Senders wait while `count + reserved slots >=
     capacity`. No value is lost.
-  - **Close.** `close` marks the channel, revokes the reserved send slots (their
-    `send` returns the closed error and the value is not added), and wakes all
-    senders. Receivers keep getting the values left. A `recv` on a closed
-    channel with an empty ring, but a value reserved for a woken receiver,
-    waits. The receiver that takes the last reservation wakes the others, which
-    then get the closed error. `closed?` is the close flag, true at once even
-    with values left, so a producer sees the close between sends. `empty?` is
-    true when the ring is empty and nothing is reserved; after a close the two
-    together stay true. `close(channel, error)` keeps the `Error` in the
-    channel, beside the ring, so it needs no slot; the closed error of a send,
-    of a `recv` and of `ch.lazy` is then `error(error)`. Only the first close
-    sets it.
+  - **Close.** `close` marks the channel, revokes the reserved send slots
+    (their `send` returns the closed error and the value is not added), and
+    wakes all senders. A `recv` on a closed channel with an empty ring, but a
+    value reserved for a woken receiver, waits. The receiver that takes the
+    last reservation wakes the others, which then get the closed error.
+    `close(channel, error)` keeps the `Error` in the channel, beside the ring,
+    so it needs no slot. Only the first close sets it.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
     (`agc_channel_claim`); §14.5 has the rules. Mid-FIFO removal is O(n), as for
     the lock FIFO. A waiter whose timer fired before any wake still takes a

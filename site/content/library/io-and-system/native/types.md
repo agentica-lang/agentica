@@ -247,7 +247,7 @@ def main() -> Void
 end
 ```
 
-- What leaves the block is what its value holds, in its struct fields, enum payloads, `Result`, `List` items and `Map` values (the walk of `Task.spawn_owning`). A kept resource also keeps the resources it comes from, all the way up (a statement keeps its database), and a kept view keeps its buffer. A resource that a function of a native module marked `AN_FRESH` made comes from nothing, so it keeps nothing else ([native modules](/library/io-and-system/native/modules/)). A resource that only a returned function or lambda captures is closed.
+- What leaves the block is what its value holds, in its struct fields, enum payloads, `Result`, `List` items and `Map` values (the walk of `Task.spawn_owning`). A kept resource also keeps the resources it comes from, all the way up (a statement keeps its database), and a kept view keeps its buffer. A resource that only a returned function or lambda captures is closed.
 - The rest closes newest first, the reverse of opening, through `Native.close`: a running native call that holds one keeps it until the call returns, and using one later fails with `RUNTIME-NATIVE-CLOSED`.
 - An arena inside another gives what it keeps to the outer one, which closes it at its own end unless its value holds it too.
 - A `try` that fails in the block returns its error from the block, and the arena closes everything the error does not hold. A runtime error or a cancel ends the task, and the end of the task closes what it owns, newest first.
