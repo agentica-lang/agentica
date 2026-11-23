@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Channel.close(channel, error)` closes with a reason: senders, and receivers once the values left are taken, get that error in place of `error("channel: closed")` (#1790).
 - `Channel.new` with no capacity makes an unbounded channel, as Ruby's `Queue.new`: a send to it never waits (#1933).
 - `File.seek(handle, offset)` moves a read handle to a byte offset, so a program can read one part of a large file (#1927).
+- `Ref.new()` returns a `Ref`, a token unique in the run that equals only itself, like Erlang's `make_ref()`: a `Map` key or `Set` element, sorted by `sort` and `sort_by` in the order the Refs were made (#1923).
 
 ## [0.36.0] - 2026-11-23
 

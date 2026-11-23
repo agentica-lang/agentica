@@ -219,6 +219,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_ATS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<ATS>");
   if (agc_is(v, AGC_T_ADDRESS))
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Address %" PRIu64 ">", agc_address_id(vm, v));
+  if (agc_is(v, AGC_T_REF)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Ref %" PRIu64 ">", agc_as_ref(vm, v));
   if (agc_is(v, AGC_T_MUTEX)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Native.Mutex>");
   if (agc_is(v, AGC_T_BUILDER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Bytes.Builder>");
   if (agc_is(v, AGC_T_C_POINTER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<C.Pointer>");

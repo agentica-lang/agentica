@@ -15,6 +15,10 @@ REEXPORTED_TYPES: Map[String, String] = {
   "LogRegistry.Level": "Logger.Level",
 }
 
+## The linked name of the builtin type Ref (Ref.new). Ref is not reserved, and the names of the root file keep no
+## prefix, so the linker gives the builtin a name that no file can declare, as it does to the names of other files.
+REF_TYPE = "@Ref"
+
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (TCP.Socket, Process,
 ## Test.Case, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
@@ -265,6 +269,7 @@ end
 ## messages leave it out.
 def display_name(name: String) -> String
   return name if not name.start_with?("@")
+  return "Ref" if name == REF_TYPE
 
   digits_end = 1
   while digits_end < name.length and digit?(name.at(digits_end))

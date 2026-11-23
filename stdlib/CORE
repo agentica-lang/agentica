@@ -42,6 +42,7 @@ catalog/builtins_path.agc
 catalog/builtins_process.agc
 catalog/builtins_random.agc
 catalog/builtins_range.agc
+catalog/builtins_ref.agc
 catalog/builtins_regexengine.agc
 catalog/builtins_result.agc
 catalog/builtins_rows.agc

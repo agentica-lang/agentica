@@ -2,12 +2,12 @@
 title: Mapas
 weight: 9
 description: Literales de mapa, lectura de claves, añadir y quitar pares clave-valor.
-source_hash: "d815d08d4cda"
+source_hash: "39a627680462"
 ---
 
 ## Crear un mapa {#make-a-map}
 
-Un mapa asocia claves con valores. Las claves son `Int`, `String` o `Bytes`. Todas las claves tienen un solo tipo, y todos los valores tienen un solo tipo: `Map[K, V]`. Un mapa mantiene el orden en que se añadieron las claves.
+Un mapa asocia claves con valores. Las claves son `Int`, `String`, `Bytes` o `Ref`. Todas las claves tienen un solo tipo, y todos los valores tienen un solo tipo: `Map[K, V]`. Un mapa mantiene el orden en que se añadieron las claves.
 
 ```agentica
 def main() -> Void

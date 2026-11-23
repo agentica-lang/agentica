@@ -85,8 +85,8 @@ static agc_value key_of(const entry *e) { return load(&e->key_tag, &e->key); }
 
 static agc_value value_of(const entry *e) { return load(&e->value_tag, &e->value); }
 
-/* The entry of key, or NULL; *at, unless NULL, gets its slot. Keys are Int, String or Bytes (agc_key_hash lets no
-   other tag in). Typed code never mixes them in one table; forged bytecode may, and keys of different tags are never
+/* The entry of key, or NULL; *at, unless NULL, gets its slot. Keys are Int, String, Bytes or Ref (agc_key_hash lets
+   no other tag in). Typed code never mixes them in one table; forged bytecode may, and keys of different tags are never
    the same. A reader without the lock may run it while a writer changes b. A slot only goes from EMPTY to an entry to
    DEAD, so a slot the probe saw taken stays taken, and at most `cap` of them ever are: the probe meets an EMPTY slot
    within one turn of the index. The entry is filled before its slot points at it, and a delete changes only the

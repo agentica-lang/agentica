@@ -44,7 +44,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_GLOBAL_FAILED 1
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF
 } agc_tag;
 
 typedef struct {
@@ -761,6 +761,15 @@ static inline agc_value agc_int(int64_t i) {
   return v;
 }
 
+/* A Ref (Ref.new): the number of its run counter (agc_runtime.next_ref), so two Refs are equal when their numbers are
+   and a later one sorts after an earlier one. No builtin turns a number into a Ref. */
+static inline agc_value agc_ref(uint64_t id) {
+  agc_value v;
+  v.tag = AGC_T_REF;
+  v.as.i = (int64_t)id;
+  return v;
+}
+
 static inline agc_value agc_float(double f) {
   agc_value v;
   v.tag = AGC_T_FLOAT;
@@ -841,6 +850,16 @@ static inline bool agc_as_bool(agc_vm *vm, agc_value v) {
 static inline int64_t agc_as_int(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_INT) agc_wrong_tag(vm);
   return v.as.i;
+}
+
+static inline uint64_t agc_as_ref(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_REF) agc_wrong_tag(vm);
+  return (uint64_t)v.as.i;
+}
+
+/* A tag of a Map key or a Set element. */
+static inline bool agc_key_tag(agc_value v) {
+  return v.tag == AGC_T_INT || v.tag == AGC_T_STRING || v.tag == AGC_T_BYTES || v.tag == AGC_T_REF;
 }
 
 static inline double agc_as_float(agc_vm *vm, agc_value v) {

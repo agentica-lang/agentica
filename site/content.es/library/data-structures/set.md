@@ -1,11 +1,11 @@
 ---
 title: Conjunto
 weight: 3
-description: Funciones de Set[T], una colección de valores Int, String o Bytes distintos. Cada una es también un método de los conjuntos.
-source_hash: "f8df25ac1ffb"
+description: Funciones de Set[T], una colección de valores Int, String, Bytes o Ref distintos. Cada una es también un método de los conjuntos.
+source_hash: "35681db86e59"
 ---
 
-Un conjunto guarda cada valor una sola vez, en el orden en que se añadió por primera vez. Los elementos son `Int`, `String` o `Bytes`, como las claves de un mapa. Los conjuntos son inmutables.
+Un conjunto guarda cada valor una sola vez, en el orden en que se añadió por primera vez. Los elementos son `Int`, `String`, `Bytes` o `Ref`, como las claves de un mapa. Los conjuntos son inmutables.
 
 - `for` recorre un conjunto en orden. Un conjunto se imprime como `Set[1, 2]`.
 - `a == b` es verdadero cuando los dos conjuntos tienen los mismos elementos, en cualquier orden.
@@ -35,7 +35,7 @@ Set["b", "a"]
 Set.new(items: List[T]) -> Set[T]
 ```
 
-Crea un conjunto a partir de una lista. Un elemento repetido se descarta, y el primero conserva su lugar. `T` debe ser `Int`, `String` o `Bytes`; si no, `CHECK-SET-ELEMENT-TYPE`. Una lista vacía necesita un tipo esperado, como `[]` y `{}`: sin él, `CHECK-EMPTY-SET-TYPE`.
+Crea un conjunto a partir de una lista. Un elemento repetido se descarta, y el primero conserva su lugar. `T` debe ser `Int`, `String`, `Bytes` o `Ref`; si no, `CHECK-SET-ELEMENT-TYPE`. Una lista vacía necesita un tipo esperado, como `[]` y `{}`: sin él, `CHECK-EMPTY-SET-TYPE`.
 
 ```agentica
 def main() -> Void

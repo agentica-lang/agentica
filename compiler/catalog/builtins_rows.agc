@@ -33,6 +33,7 @@ import {ROWS as PATH_ROWS} from "builtins_path"
 import {ROWS as PROCESS_ROWS} from "builtins_process"
 import {ROWS as RANDOM_ROWS} from "builtins_random"
 import {ROWS as RANGE_ROWS} from "builtins_range"
+import {ROWS as REF_ROWS} from "builtins_ref"
 import {ROWS as REGEXENGINE_ROWS} from "builtins_regexengine"
 import {ROWS as RESULT_ROWS} from "builtins_result"
 import {ROWS as SET_ROWS} from "builtins_set"
@@ -77,6 +78,7 @@ BUILTIN_ROWS: List[Model.Builtin] = (
     .concat(PROCESS_ROWS)
     .concat(RANDOM_ROWS)
     .concat(RANGE_ROWS)
+    .concat(REF_ROWS)
     .concat(REGEXENGINE_ROWS)
     .concat(RESULT_ROWS)
     .concat(SET_ROWS)

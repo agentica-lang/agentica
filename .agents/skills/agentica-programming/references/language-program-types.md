@@ -80,8 +80,8 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `Bool`: `true` / `false` only. `String`: Unicode text. `Nil`: the value `nil`.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
-  keeps insertion order, `K` is `Int`, `String` or `Bytes`. `Set[T]`: distinct,
-  immutable, first-insertion order, `T` is `Int`, `String` or `Bytes`
+  keeps insertion order, `K` is `Int`, `String`, `Bytes` or `Ref`. `Set[T]`:
+  distinct, immutable, first-insertion order, `T` is a key type
   (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, `==` in any order, not
   JSON-encodable.
 - `Bytes`: immutable byte string (`references/bytes.md`); `Bytes` is a reserved
@@ -99,6 +99,9 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `TCP.Listener`, `HTTP.Client`, `HTTP.Server`, `Codec[T]` (`json.md`).
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
+- `Ref`: a token from `Ref.new()`, unique in the run: data with `==` and
+  text, a map key, sorted by creation, no JSON (`builtins.md`). Not reserved:
+  a file's own type `Ref` wins in that file.
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`), `JSON.Field[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
   `TaskExit` (`Ok`, `Crashed`, `Cancelled`; `tasks.md`). `std/logger` exports

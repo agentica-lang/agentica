@@ -177,6 +177,78 @@ def test_sha256_in_eight_tasks_on_four_schedulers_matches_hashlib(tmp_path):
     assert [json.loads(line) for line in result.stdout.splitlines()] == expected
 
 
+# Ref.new adds to one atomic counter from every scheduler. Eight tasks make Refs at once, and a relay of eight tasks
+# passes a Ref on through channels, each making a new one after it gets the last. The checks are Python's, on the
+# printed Refs: all differ, each task's grow, a relay's new Ref sorts after the one it got, and main's last Ref, made
+# after every task ended, after all of them.
+REF_TASKS = """\
+struct Link
+  from: Channel[Ref]
+  to: Channel[Ref]
+end
+
+def maker(k: Int) -> Int
+  for _ in 0...300
+    puts("made #{k} #{Ref.new()}")
+  end
+
+  k
+end
+
+def stage(link: Link) -> Result[Void]
+  got = try link.from.recv(10000)
+  made = Ref.new()
+  puts("relay #{got} #{made}")
+  link.to.send(made, 10000)
+end
+
+def main() -> Void
+  makers = (1..8).to_a.map do |k| Task.spawn(&maker, k) end
+  channels: List[Channel[Ref]] = (0..8).to_a.map do |_| Channel.new(1) end
+  stages = (0...8).to_a.map do |i| Task.spawn(&stage, Link(from: channels[i], to: channels[i + 1])) end
+  _ = channels[0].send(Ref.new(), 10000)
+  for t in stages
+    _ = Task.await(t)
+  end
+
+  for t in makers
+    _ = Task.await(t)
+  end
+
+  puts("last #{Ref.new()}")
+end
+"""
+
+
+def ref_numbers(line):
+    return [int(n) for n in re.findall(r"<Ref (\d+)>", line)]
+
+
+@RACE
+def test_refs_made_on_four_schedulers_differ_and_follow_creation(tmp_path, repeats):
+    bytecode = program(tmp_path, "refs", REF_TASKS)
+    for _ in range(repeats):
+        result = vm(bytecode)
+        assert (result.code, result.stderr) == (0, "")
+        lines = result.stdout.splitlines()
+        made = {}
+        relays = []
+        for line in lines:
+            words = line.split(" ", 2)
+            if words[0] == "made":
+                made.setdefault(words[1], []).extend(ref_numbers(line))
+            elif words[0] == "relay":
+                relays.append(ref_numbers(line))
+        assert sorted(made) == [str(k) for k in range(1, 9)]
+        assert all(len(refs) == 300 and refs == sorted(set(refs)) for refs in made.values())
+        assert len(relays) == 8 and all(got < new for got, new in relays)
+        assert sorted(new for _, new in relays) == [new for _, new in sorted(relays)]
+        everything = [n for refs in made.values() for n in refs] + [new for _, new in relays]
+        assert len(set(everything)) == len(everything) == 8 * 300 + 8
+        (last,) = ref_numbers(lines[-1])
+        assert lines[-1].startswith("last ") and last > max(everything)
+
+
 # Cipher and CMAC run without the shared lock (vm/crypto.c), so eight tasks encrypt, decrypt and MAC 64 KiB each at
 # once, which fills OpenSSL's fetch caches from several schedulers (vm/tools/tsan.supp names their wrappers). Each
 # task's answer must equal the same work done again in one task after the parallel run.

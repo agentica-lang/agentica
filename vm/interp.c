@@ -76,6 +76,7 @@
     (dst) = agc_fn_value(f_);                                                        \
   } while (0)
 
+/* SORT_INT also sorts Refs, by their numbers (below 2^63, so in the Int order). */
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
@@ -270,6 +271,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
     rt->chars[c] = agc_make_string(&ch, 1, 1);
   }
   atomic_init(&rt->next_task_id, 1);
+  atomic_init(&rt->next_ref, 0);
   rt->runq = agc_runq_new();
   rt->sync = agc_lock_new("sync");
   rt->out.lock = agc_lock_new("stdout");
@@ -659,7 +661,7 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
   for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
     entries[k].item = carry ? agc_value_word(key) : k;
     if (kind == SORT_INT)
-      entries[k].key = int_order(agc_as_int(vm, key));
+      entries[k].key = int_order(agc_is(key, AGC_T_REF) ? (int64_t)agc_as_ref(vm, key) : agc_as_int(vm, key));
     else if (kind == SORT_FLOAT)
       entries[k].key = float_order(agc_as_float(vm, key));
     else
@@ -1856,7 +1858,7 @@ __attribute__((noinline, cold)) _Noreturn void agc_no_match(agc_vm *vm, agc_valu
 agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count) {
   for (size_t k = 0; k < count; k++) {
     agc_value key = pairs[2 * k];
-    if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_STRING) && !agc_is(key, AGC_T_BYTES)) return AGC_STATUS_WRONG_TAG;
+    if (!agc_key_tag(key)) return AGC_STATUS_WRONG_TAG;
   }
   OP_MAP(*dst, vm, pairs, 0, count);
   return AGC_STATUS_OK;
@@ -1904,8 +1906,7 @@ void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_b
 }
 
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
-  if (!agc_is(*map, AGC_T_MAP) || !(agc_is(*key, AGC_T_INT) || agc_is(*key, AGC_T_STRING) || agc_is(*key, AGC_T_BYTES)))
-    return AGC_STATUS_WRONG_TAG;
+  if (!agc_is(*map, AGC_T_MAP) || !agc_key_tag(*key)) return AGC_STATUS_WRONG_TAG;
   agc_value found;
   if (!OP_MAP_GET(vm, *map, *key, found)) return AGC_STATUS_KEY_NOT_FOUND;
   *dst = found;

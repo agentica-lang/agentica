@@ -5,14 +5,15 @@ description: Lists, maps, sets, queues, heaps, ranges, bytes, lazy pipelines and
 ---
 
 - [List](/library/data-structures/list/): values of one type, in order. Walk, sort, map, select.
-- [Map](/library/data-structures/map/): find a value by key (`Int`, `String` or `Bytes`), in insertion order. Lookups and counters.
-- [Set](/library/data-structures/set/): each `Int`, `String` or `Bytes` once, in first-added order. Duplicates and membership.
+- [Map](/library/data-structures/map/): find a value by key (`Int`, `String`, `Bytes` or `Ref`), in insertion order. Lookups and counters.
+- [Set](/library/data-structures/set/): each `Int`, `String`, `Bytes` or `Ref` once, in first-added order. Duplicates and membership.
 - [Queue](/library/data-structures/queue/) (`std/queue`): first in, first out, of strings.
 - [Heap](/library/data-structures/heap/) (`std/heap`): a priority queue of any type; `pop` gives the first value in your order.
 - [Range](/library/data-structures/range/): `0...n` counts without a list. Use it in `for`.
 - [Bytes](/library/data-structures/bytes/): a compact immutable byte string, for digests, file contents and wire formats. Slice, join, compare.
 - [Lazy](/library/data-structures/lazy/): a recipe of steps over a list, a range or an endless source, run one item at a time.
 - [Optional](/library/data-structures/optional/): `some(value)` or `none`, for a value that may be missing.
+- [Ref](/library/data-structures/ref/): a token unique in the run, to give a value an identity.
 - [Structs](/tour/structs/) and [enums](/tour/enums-and-case/): fixed named fields, or named cases.
 
 All values are immutable. New to these? Read the tour pages [Lists](/tour/lists/) and [Maps](/tour/maps/) first.

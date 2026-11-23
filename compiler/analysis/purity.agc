@@ -99,7 +99,7 @@ SHARED_STATE: Map[String, String] = {
   "ATS.to_map": "concurrency", "Channel.closed?": "concurrency", "Channel.empty?": "concurrency",
   "Channel.lazy": "concurrency", "HttpWire.awaited?": "concurrency", "File.foreach": "filesystem",
   "File.chunks": "filesystem", "System.Profile.steps": "clock", "__lazy_file": "filesystem",
-  "__lazy_chunks": "filesystem", "__lazy_channel": "concurrency",
+  "__lazy_chunks": "filesystem", "__lazy_channel": "concurrency", "Ref.new": "concurrency",
 }
 
 # What one function does itself: its reasons (with no chain) and the functions of the program it calls, in order.
