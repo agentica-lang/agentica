@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
+
 ## [0.36.0] - 2026-11-23
 
 ### Added

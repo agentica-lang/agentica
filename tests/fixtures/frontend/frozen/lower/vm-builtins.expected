@@ -190,6 +190,11 @@ Map.keys
 Map.put
 Map.size
 Map.values
+Math.cos
+Math.exp
+Math.log
+Math.log10
+Math.sin
 Math.sqrt
 Native.Mutex.synchronize
 Native.address
