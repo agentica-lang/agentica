@@ -128,9 +128,10 @@ new version and its release link opens the release.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
-- The Nix flake on `site/content/getting-started.md` has the new `version`
-  and its four `hash` values (`nix store prefetch-file --json <archive URL>`,
-  field `hash`); if not, a docs PR.
+- The Nix flake on `site/content/getting-started.md` and its Spanish page has
+  the new `version` and its four `hash` values; if not, a docs PR. A `hash` is
+  `sha256-` and the base64 of the archive's SHA-256 bytes: without `nix`,
+  `echo HEX | xxd -r -p | base64` with HEX from `SHA256SUMS`.
 - Report the release URL, the archives, the notes and anything skipped.
 
 ## 6. Patch releases
