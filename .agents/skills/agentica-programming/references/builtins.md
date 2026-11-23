@@ -275,7 +275,7 @@ optional.to_result(message: String) -> Result[T]         # ok(x), or error(messa
 ## Ref
 
 ```text
-Ref.make() -> Ref                                        # a token unique in the run, equal only to itself
+Ref.new() -> Ref                                         # a token unique in the run, equal only to itself
 ```
 
 - A `Ref` gives a value an identity (a graph node id): a struct field, a

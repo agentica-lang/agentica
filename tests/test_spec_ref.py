@@ -1,4 +1,4 @@
-"""Ref (`Ref.make`) through the product CLI: what a Ref may be used for, the rules and their diagnostic codes and spans.
+"""Ref (`Ref.new`) through the product CLI: what a Ref may be used for, the rules and their diagnostic codes and spans.
 
 A rule case is `(program, code, covered text)`: the code of the diagnostic and the source text its range covers.
 A program that must check clean has no code.
@@ -14,12 +14,14 @@ def main(*lines: str) -> str:
     return "def main() -> Void\n" + "".join("  %s\n" % line for line in lines) + "end\n\n"
 
 
-REF = "r = Ref.make()"
+REF = "r = Ref.new()"
 
 RULES = {
+    "a constant may hold a Ref": (
+        "ROOT: Ref = Ref.new()\n\n" + main("puts(ROOT)"), None, None),
     "a Ref is data": (
         "struct Node\n  id: Ref\nend\n\nenum Tag\n  Of(Ref)\nend\n\n"
-        + main(REF, "puts(r == Ref.make())", "puts(r)", "puts(r.inspect)", 'puts("#{r}")',
+        + main(REF, "puts(r == Ref.new())", "puts(r)", "puts(r.inspect)", 'puts("#{r}")',
                "IO.inspect(Node(id: r))", "IO.inspect(Tag.Of(r))", "ch: Channel[Ref] = Channel.new(1)",
                "_ = ch.send(r, 10)"), None, None),
     "a Ref is a map key, a set element and a table key": (
@@ -30,25 +32,31 @@ RULES = {
         "struct Node\n  id: Ref\nend\n\n"
         + main(REF, "puts([r].sort == [r])", "puts([Node(id: r)].sort_by { |n| n.id }.size)"), None, None),
     "a Ref has no <": (main(REF, "puts(r < r)"), "CHECK-TYPE-MISMATCH", "<"),
-    "a Ref is no Int": (main("n: Int = Ref.make()"), "CHECK-TYPE-MISMATCH", "Ref.make()"),
+    "a Ref is no Int": (main("n: Int = Ref.new()"), "CHECK-TYPE-MISMATCH", "Ref.new()"),
     "a Ref has no arithmetic": (main(REF, "puts(r + 1)"), "CHECK-TYPE-MISMATCH", "+"),
     "a Ref cannot be encoded": (main(REF, "puts(JSON.encode([r]))"), "CHECK-NOT-ENCODABLE", "[r]"),
-    "Ref.make takes nothing": (main("r = Ref.make(1)"), "CHECK-ARITY", "Ref.make(1)"),
+    "Ref.new takes nothing": (main("r = Ref.new(1)"), "CHECK-ARITY", "Ref.new(1)"),
     "Ref is not reserved": (
-        "struct Ref\n  n: Int\nend\n\n" + main("puts(Ref(n: 1).n)", "puts(Ref.make())"), None, None),
+        "struct Ref\n  n: Int\nend\n\n" + main("puts(Ref(n: 1).n)", "puts(Ref.new())"), None, None),
     "a program's own Ref is its type": (
-        "struct Ref\n  n: Int\nend\n\n" + main("r: Ref = Ref.make()"), "CHECK-TYPE-MISMATCH", "Ref.make()"),
+        "struct Ref\n  n: Int\nend\n\n" + main("r: Ref = Ref.new()"), "CHECK-TYPE-MISMATCH", "Ref.new()"),
 }
 
 # A module case is m.agc and a main.agc that imports it, which check clean.
 MODULES = {
     "a module that declares no Ref has the builtin": (
-        "struct Node\n  id: Ref\nend\n\ndef node() -> Node = Node(id: Ref.make())\n\n"
+        "struct Node\n  id: Ref\nend\n\ndef node() -> Node = Node(id: Ref.new())\n\n"
         "def same?(a: Node, b: Node) -> Bool = a.id == b.id\n",
         'import M from "m"\n\n' + main("puts(M.same?(M.node(), M.node()))")),
     "a module's own Ref is its type": (
         "struct Ref\n  n: Int\nend\n\ndef make() -> Ref = Ref(n: 1)\n",
-        'import M from "m"\n\n' + main("puts(M.make().n)", "puts(Ref.make())")),
+        'import M from "m"\n\n' + main("puts(M.make().n)", "puts(Ref.new())")),
+    "a struct Ref of the root file stays out of a module": (
+        "def fresh() -> Ref = Ref.new()\n",
+        'import M from "m"\n\nstruct Ref\n  n: Int\nend\n\n' + main("puts(M.fresh())", "puts(Ref(n: 1).n)")),
+    "an alias Ref of the root file stays out of a module": (
+        "def fresh() -> Ref = Ref.new()\n",
+        'import M from "m"\n\ntype Ref = Int\n\n' + main("puts(M.fresh())", "r: Ref = 1", "puts(r)")),
 }
 
 

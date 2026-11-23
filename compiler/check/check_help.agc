@@ -56,6 +56,11 @@ def conversion(expected: Types.Type, actual: Types.Type) -> String
     return "this is #{Types.to_text(actual)}; wrap it with some(...) for #{Types.to_text(expected)}"
   end
 
+  # The builtin Ref and a type of the root file named Ref print alike.
+  if Types.to_text(expected) == "Ref" and Types.to_text(actual) == "Ref"
+    return "the Ref of Ref.new is the builtin token; in this file, Ref names the file's own type Ref"
+  end
+
   # A PEM path where a context goes, as in the TLS forms before contexts (19a): a client or a server one.
   context = Types.Type.Opaque("TLS.Context")
   if Types.same?(expected, context) and Types.same?(actual, Types.Type.String)

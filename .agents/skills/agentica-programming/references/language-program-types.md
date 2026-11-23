@@ -99,7 +99,7 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `TCP.Listener`, `HTTP.Client`, `HTTP.Server`, `Codec[T]` (`json.md`).
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
-- `Ref`: a token from `Ref.make()`, unique in the run: data with `==` and
+- `Ref`: a token from `Ref.new()`, unique in the run: data with `==` and
   text, a map key, sorted by creation, no JSON (`builtins.md`). Not reserved:
   a file's own type `Ref` wins in that file.
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;

@@ -64,7 +64,7 @@ def key_type?(type: ResolvedType) -> Bool
   Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes") or ref?(type)
 end
 
-## True for Ref, the token of Ref.make.
+## True for Ref, the token of Ref.new.
 def ref?(type: ResolvedType) -> Bool = Types.is?(type, "Opaque") and Types.name(type) == "Ref"
 
 ## True when the type may be a Map key or a Set element where cx checks: Int, String, Bytes and Ref, and in the files
@@ -812,16 +812,15 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Range)
   elsif name == "Bytes"
     return ok(Types.Type.Bytes)
-  elsif cx.resources.include?(name) or (OPAQUE_TYPES.include?(name) and !program_type?(cx, name))
+  elsif name == Types.REF_TYPE
+    return ok(Types.Type.Opaque("Ref"))
+  elsif cx.resources.include?(name) or (OPAQUE_TYPES.include?(name) and name != "Ref")
+    # A plain Ref is a type of the root file: the linker names the builtin Types.REF_TYPE.
     return ok(Types.Type.Opaque(name))
   end
 
   resolve_generic(cx, st, ref)
 end
-
-# True for a struct or enum of the program. Only Ref, the one opaque type that is not reserved, can share its name
-# with one: a `struct Ref` of the entry file, whose linked name has no prefix.
-def program_type?(cx: State.Cx, name: String) -> Bool = cx.structs.has_key?(name) or cx.enums.has_key?(name)
 
 def resolve_function(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   params: List[ResolvedType] = []

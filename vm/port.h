@@ -479,7 +479,7 @@ typedef struct {
      limit for the whole run. Set once at launch. */
   bool budget_settable;
   _Atomic uint64_t next_task_id;
-  /* The Refs made so far (Ref.make, vm/builtins.c): the last number given; every scheduler adds to it with no lock. */
+  /* The Refs made so far (Ref.new, vm/builtins.c): the last number given; every scheduler adds to it with no lock. */
   _Atomic uint64_t next_ref;
   agc_log_registry log;
   agc_trace trace;

@@ -153,9 +153,6 @@ def lower_call(
   elsif key == "Task.monitor" and task_ref?(Lowering.type_of(cx, node.args[0]))
     # A monitor through a TaskRef (Task.current) does not observe a crash: only the holder of the Task[R] can await it.
     key = "Task.monitor_ref"
-  elsif key == "List.sort_by" and ref_key?(Lowering.type_of(cx, node.args[1]))
-    # Refs sort by their numbers in a builtin of their own, so the sort of the other keys stays as it is.
-    key = "List.sort_by_ref"
   elsif form.ok? and CODEC_BUILTINS.include?(node.name)
     return lower_codec(cx, fx, Defaults.in_parameter_order(node), key, want, void, checked, tail)
   elsif optional_call?(node)
@@ -693,11 +690,6 @@ def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Res
 end
 
 def task_ref?(type: Types.Type) -> Bool = Types.is?(type, "Opaque") and Types.name(type) == "TaskRef"
-
-# True for the type of a key function that gives a Ref.
-def ref_key?(type: Types.Type) -> Bool
-  Types.is?(type, "Fn") and Types.is?(Types.result(type), "Opaque") and Types.name(Types.result(type)) == "Ref"
-end
 
 def lower_name(fx: Lowering.Fx, node: Ast.NameRef, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)

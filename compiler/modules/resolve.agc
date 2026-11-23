@@ -69,11 +69,11 @@ end
 
 ## The linked name of a type written with `arity` type arguments, as resolve with Want.Type. Address[M] is always the
 ## builtin, as in the checker (check_types.agc): Address is not reserved, since a program's own `struct Address` is
-## common. Ref is not reserved either (std/actor has a `struct Ref`): it is the builtin unless the file declares or
-## imports a type of that name.
+## common. Ref is not reserved either (std/actor has a `struct Ref`): it is the builtin, T.REF_TYPE, unless the file
+## declares or imports a type of that name.
 def resolve_type(cx: Context, name: String, arity: Int, span: Source.Span) -> Result[String]
   return ok(name) if name == "Address" and arity == 1
-  return ok(name) if name == "Ref" and arity == 0 and !cx.me.names.has_key?(name) and !cx.me.named.has_key?(name)
+  return ok(T.REF_TYPE) if name == "Ref" and arity == 0 and !cx.me.names.has_key?(name) and !cx.me.named.has_key?(name)
 
   resolve(cx, name, Want.Type, span, false)
 end

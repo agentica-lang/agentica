@@ -51,7 +51,7 @@ programs are valid and how they run.
   is data, not a handle. `Address` is not reserved: written with one type
   argument it is this builtin, so a program may still declare its own
   `struct Address`, but not a generic one (section 6c)
-- `Ref`: Opaque token from `Ref.make`, equal only to itself and unique in the
+- `Ref`: Opaque token from `Ref.new`, equal only to itself and unique in the
   run; data, a `Map` key and a `Set` element, sorted by `sort` and `sort_by` in
   the order the Refs were made. `Ref` is not reserved: in a file that declares
   or imports a type `Ref`, the name means that type

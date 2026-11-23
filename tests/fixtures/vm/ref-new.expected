@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 36559,
+  "steps": 36568,
   "stdout": [
     "true",
     "false",
@@ -16,6 +16,7 @@
     "false",
     "a",
     "false",
+    "2",
     "2",
     "true",
     "in the table",

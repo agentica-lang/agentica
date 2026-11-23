@@ -172,7 +172,6 @@ List.set
 List.size
 List.sort
 List.sort_by
-List.sort_by_ref
 List.take
 LogRegistry.attach
 LogRegistry.detach
@@ -317,7 +316,7 @@ Range.include?
 Range.last
 Range.size
 Range.to_a
-Ref.make
+Ref.new
 RegexEngine.search
 Result.message
 Result.ok?

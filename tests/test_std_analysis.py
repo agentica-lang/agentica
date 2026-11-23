@@ -1190,6 +1190,8 @@ def map_with(xs: List[Int], f: Fn[Int, Int]) -> List[Int] = xs.map(f)
 def head(source: Lazy[String]) -> Result[List[String]] = source.first(1)
 
 def steps() -> Result[List[Int]] = [1, 2].lazy.map { |x| x + 1 }.to_a
+
+def token() -> Ref = Ref.new()
 """
 
 
@@ -1221,6 +1223,7 @@ def test_bodies_say_why_a_function_is_not_pure(driver, project):
         "map_with": (False, [("function-value", "List.map", 51, [])]),
         "head": (False, [("function-value", "Lazy.first", 53, [])]),
         "steps": (False, [("function-value", "Lazy.to_a", 55, [])]),
+        "token": (False, [("concurrency", "Ref.new", 57, [])]),
     }
 
 

@@ -3,11 +3,11 @@ import Model from "builtin_model"
 
 ROWS: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Ref.make",
+    name: "Ref.new",
     parameters: [],
     result: Types.Type.Opaque("Ref"),
     rule: Model.Rule.Plain,
-    implementation: "Ref.make",
+    implementation: "Ref.new",
     effects: [],
     description: (
       "Return a new Ref, equal only to itself and unique in the run; Refs sort in the order they were made, so a " +

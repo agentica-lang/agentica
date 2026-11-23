@@ -177,7 +177,7 @@ def test_sha256_in_eight_tasks_on_four_schedulers_matches_hashlib(tmp_path):
     assert [json.loads(line) for line in result.stdout.splitlines()] == expected
 
 
-# Ref.make adds to one atomic counter from every scheduler. Eight tasks make Refs at once, and a relay of eight tasks
+# Ref.new adds to one atomic counter from every scheduler. Eight tasks make Refs at once, and a relay of eight tasks
 # passes a Ref on through channels, each making a new one after it gets the last. The checks are Python's, on the
 # printed Refs: all differ, each task's grow, a relay's new Ref sorts after the one it got, and main's last Ref, made
 # after every task ended, after all of them.
@@ -189,7 +189,7 @@ end
 
 def maker(k: Int) -> Int
   for _ in 0...300
-    puts("made #{k} #{Ref.make()}")
+    puts("made #{k} #{Ref.new()}")
   end
 
   k
@@ -197,7 +197,7 @@ end
 
 def stage(link: Link) -> Result[Void]
   got = try link.from.recv(10000)
-  made = Ref.make()
+  made = Ref.new()
   puts("relay #{got} #{made}")
   link.to.send(made, 10000)
 end
@@ -206,7 +206,7 @@ def main() -> Void
   makers = (1..8).to_a.map do |k| Task.spawn(&maker, k) end
   channels: List[Channel[Ref]] = (0..8).to_a.map do |_| Channel.new(1) end
   stages = (0...8).to_a.map do |i| Task.spawn(&stage, Link(from: channels[i], to: channels[i + 1])) end
-  _ = channels[0].send(Ref.make(), 10000)
+  _ = channels[0].send(Ref.new(), 10000)
   for t in stages
     _ = Task.await(t)
   end
@@ -215,7 +215,7 @@ def main() -> Void
     _ = Task.await(t)
   end
 
-  puts("last #{Ref.make()}")
+  puts("last #{Ref.new()}")
 end
 """
 

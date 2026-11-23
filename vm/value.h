@@ -761,7 +761,7 @@ static inline agc_value agc_int(int64_t i) {
   return v;
 }
 
-/* A Ref (Ref.make): the number of its run counter (agc_runtime.next_ref), so two Refs are equal when their numbers are
+/* A Ref (Ref.new): the number of its run counter (agc_runtime.next_ref), so two Refs are equal when their numbers are
    and a later one sorts after an earlier one. No builtin turns a number into a Ref. */
 static inline agc_value agc_ref(uint64_t id) {
   agc_value v;

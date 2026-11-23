@@ -1,4 +1,4 @@
-# Ref.make: equality, the printed form, Map keys and Set elements, the order of creation, and Refs made by tasks.
+# Ref.new: equality, the printed form, Map keys and Set elements, the order of creation, and Refs made by tasks.
 
 TABLE: ATS[Ref, String] = ATS.new()
 
@@ -16,7 +16,7 @@ end
 def make_refs(n: Int) -> List[Ref]
   refs: List[Ref] = []
   for _ in 0...n
-    refs = refs.push(Ref.make())
+    refs = refs.push(Ref.new())
   end
 
   refs
@@ -25,8 +25,8 @@ end
 def ascending?(refs: List[Ref]) -> Bool = refs.sort == refs and refs.uniq.size == refs.size
 
 def main() -> Void
-  a = Ref.make()
-  b = Ref.make()
+  a = Ref.new()
+  b = Ref.new()
   puts(a == a)
   puts(a == b)
   puts(a != b)
@@ -42,7 +42,9 @@ def main() -> Void
   m: Map[Ref, String] = {}
   m = m.put(b, "b").put(a, "a")
   puts(m[a])
-  puts(m.has_key?(Ref.make()))
+  puts(m.has_key?(Ref.new()))
+  literal: Map[Ref, Int] = {a: 1, b: 2}
+  puts(literal[b])
   set = Set.new([a, b, a])
   puts(set.size)
   puts(set.include?(b))
@@ -79,6 +81,6 @@ def main() -> Void
   end
 
   puts(Set.new(all).size)
-  last = Ref.make()
+  last = Ref.new()
   puts(([last] + all).sort.last == last)
 end
