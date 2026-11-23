@@ -2,7 +2,7 @@
 title: Canal
 weight: 2
 description: Envía valores de una tarea a otra por una cola acotada.
-source_hash: "cfd7faca6511"
+source_hash: "5d389ca1814b"
 ---
 
 Un canal es una cola acotada: una tarea envía valores y otra los recibe. Consulta también [Tareas](/tour/tasks/).
@@ -48,7 +48,7 @@ Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 
 Añade el valor al final y da `ok()`. Si está lleno, la tarea espera a que haya sitio, a que se cierre el canal o a `timeout_ms`. El valor no se añade en estos casos:
 
-- `error("channel: closed")`, o `error("channel: timed out")`.
+- `error("channel: closed")`, la razón de un [cierre con razón](#channelclose), o `error("channel: timed out")`.
 
 `timeout_ms` es 0 o más; `0` lo intenta una vez y nunca espera. Un valor negativo es `RUNTIME-INVALID-DURATION`. Nada espera para siempre.
 
@@ -75,7 +75,7 @@ Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 
 Toma el valor más antiguo (primero en entrar, primero en salir) y da `ok(value)`. Si está vacío, la tarea espera a un valor, a un cierre o a `timeout_ms`. Las tareas en espera se atienden en el orden en que empezaron a esperar, y lo mismo los emisores en espera, sin colarse: un valor enviado va directo al primer receptor en espera. Una espera que se va antes de ejecutarse, porque la cancelaron o porque antes se agotó su tiempo de espera, pasa lo que recibió a la siguiente. Un receptor al que le dieron un valor lo devuelve aunque su plazo pase antes de que se ejecute. Ningún valor se pierde ni se añade dos veces. Errores:
 
-- `error("channel: closed")` cuando el canal está cerrado y se han tomado todos los valores, o `error("channel: timed out")`.
+- `error("channel: closed")` cuando el canal está cerrado y se han tomado todos los valores (la razón, en un [cierre con razón](#channelclose)), o `error("channel: timed out")`.
 
 ```agentica
 def main() -> Void
@@ -98,9 +98,12 @@ channel: timed out
 
 ```signature
 Channel.close(channel: Channel[T]) -> Void
+Channel.close(channel: Channel[T], error: Error) -> Void
 ```
 
-Cerrar otra vez no hace nada. Los emisores en espera reciben el error de cierre, y lo mismo los emisores despertados que aún no se han ejecutado. Los receptores reciben los valores que quedan y después el error de cierre.
+Cerrar otra vez no hace nada, con razón o sin ella: se queda el primer cierre. Los emisores en espera reciben el error de cierre, y lo mismo los emisores despertados que aún no se han ejecutado. Los receptores reciben los valores que quedan y después el error de cierre.
+
+Con un [`Error`](/library/errors/error/), los emisores reciben `error(error)`, con ese mismo `Error`, en lugar de `error("channel: closed")`, y lo mismo los receptores una vez tomados los valores que quedan: el receptor sabe por qué terminó el flujo. El error se guarda aparte de los valores, así que un canal lleno se puede cerrar con él. [`ch.lazy`](/library/data-structures/lazy/#chlazy) da los valores que quedan y después termina el método final con él.
 
 - El lado emisor debe cerrar en todos los caminos; los receptores no deben hacerlo. Si nadie lo cierra, un bucle de recepción nunca termina.
 - Un canal con propietario también se cierra cuando su propietario termina ([Un productor que posee el canal](#a-producer-that-owns-the-channel)).
@@ -120,6 +123,48 @@ end
 channel: closed
 1
 channel: closed
+```
+
+Un productor que falla pasa su error:
+
+```agentica
+def fetch(n: Int) -> Result[Int]
+  return error("connection reset", kind: "net.closed") if n == 3
+
+  ok(n * 10)
+end
+
+def send_all(jobs: Channel[Int]) -> Result[Void]
+  for n in 1..5
+    try jobs.send(try fetch(n), 1000)
+  end
+
+  ok()
+end
+
+def produce(jobs: Channel[Int]) -> Void
+  case send_all(jobs)
+    ok(_) -> jobs.close
+    error(e) -> jobs.close(e)
+  end
+end
+
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(4)
+  Task.spawn(&produce, jobs)
+  puts(jobs.recv(1000).unwrap!)
+  puts(jobs.recv(1000).unwrap!)
+  case jobs.recv(1000)
+    ok(n) -> puts(n)
+    error(e) -> puts("#{e.kind}: #{e.message}")
+  end
+end
+```
+
+```output
+10
+20
+net.closed: connection reset
 ```
 
 ## Channel.closed? {#channelclosed}

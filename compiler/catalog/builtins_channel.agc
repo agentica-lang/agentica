@@ -20,7 +20,24 @@ ROWS: List[Model.Builtin] = [
     implementation: "Channel.close",
     effects: ["concurrency"],
     description: "Close a channel idempotently; waiting tasks wake, and received values still drain; VM only.",
-    alternatives: [],
+    alternatives: [
+      Model.Builtin(
+        name: "Channel.close",
+        parameters: [
+          Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T"))),
+          Model.Named(name: "error", type: Types.Type.Struct("Error", [])),
+        ],
+        result: Types.Type.Void,
+        rule: Model.Rule.ChannelTarget,
+        implementation: "Channel.close",
+        effects: ["concurrency"],
+        description: (
+          "Close a channel with a reason: senders, and receivers once the values are taken, get error(error) in " +
+          "place of the closed error; a second close keeps the first; VM only."
+        ),
+        alternatives: [],
+      ),
+    ],
   ),
   Model.Builtin(
     name: "Channel.closed?",

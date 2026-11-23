@@ -1,8 +1,8 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth, turn cost, wrap-around,
- * capacity and waiter order, a monitor's notice past the capacity, abandoned channels, HttpWire.awaited? and watch,
- * when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a freed channel).
- * All of it again in a shared VM, where the channel and timer locks are real.
+ * capacity and waiter order, a close with a reason, a monitor's notice past the capacity, abandoned channels,
+ * HttpWire.awaited? and watch, wait clocks, and addresses (one per channel, a send that waits, closed, another run, a
+ * freed channel). All of it again in a shared VM, where the channel and timer locks are real.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -15,7 +15,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, WATCH, COUNT };
+enum { NEW, SEND, RECV, CLOSE, CLOSE_REASON, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, WATCH, COUNT };
 
 static agc_vm vm;
 static agc_task *main_task;
@@ -79,6 +79,11 @@ static void close_channel(agc_value ch) {
   now(main_task, CLOSE, args);
 }
 
+static void close_with(agc_value ch, agc_value reason) {
+  agc_value args[2] = {ch, reason};
+  now(main_task, CLOSE_REASON, args);
+}
+
 static bool closed(agc_value ch) {
   agc_value args[1] = {ch};
   return agc_as_bool(&vm, now(main_task, CLOSED, args));
@@ -98,6 +103,11 @@ static bool failed(agc_value result, const char *text) {
   const agc_result *r = agc_as_result(&vm, result);
   const agc_string *s = agc_as_string(&vm, r->value);
   return !r->ok && s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0;
+}
+
+static bool ended(agc_value result, agc_value reason) {
+  const agc_result *r = agc_as_result(&vm, result);
+  return !r->ok && r->value.as.p == reason.as.p;
 }
 
 static agc_task *ready_head(void) { return agc_test_ready_head(vm.rt->runq); }
@@ -460,6 +470,47 @@ static void test_close_wakes_receivers(void) {
   assert(failed(now(b, RECV, args), "channel: closed"));
 }
 
+/* Channel.close(channel, error): a parked sender and a later send get the reason, the value left comes before it, a
+   parked receiver gets it, and a second close, with a reason or without, keeps the first. A close without a reason
+   gives no reason to a later close. A stand-in Error record: the test program has none. */
+static void test_close_with_reason(void) {
+  uint32_t found = vm.rt->error_struct;
+  vm.rt->error_struct = 7;
+  agc_value reason = agc_struct_value(agc_new_struct(7, AGC_ERROR_FIELDS));
+  agc_value other = agc_struct_value(agc_new_struct(7, AGC_ERROR_FIELDS));
+  agc_value ch = make_channel(1);
+  agc_task *a = agc_test_task(), *b = agc_test_task();
+  send(main_task, ch, 1, 0);
+  wait_send(a, ch, 2, 5000);
+  close_with(ch, reason);
+  close_with(ch, other);
+  close_channel(ch);
+  assert(next_ready() == a);
+  settle();
+  agc_value args_a[3] = {ch, agc_int(2), agc_int(5000)};
+  assert(ended(now(a, SEND, args_a), reason));
+  assert(ended(send(main_task, ch, 3, 0), reason));
+  assert(closed(ch) && !empty(ch));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(ended(recv(main_task, ch, 0), reason));
+  assert(ended(recv(main_task, ch, 0), reason));
+
+  agc_value waited = make_channel(1);
+  wait_recv(b, waited, 5000);
+  close_with(waited, reason);
+  assert(next_ready() == b);
+  settle();
+  agc_value args_b[2] = {waited, agc_int(5000)};
+  assert(ended(now(b, RECV, args_b), reason));
+
+  agc_value plain = make_channel(1);
+  close_channel(plain);
+  close_with(plain, reason);
+  vm.rt->error_struct = found;
+  assert(failed(recv(main_task, plain, 0), "channel: closed"));
+  assert(failed(send(main_task, plain, 1, 0), "channel: closed"));
+}
+
 static void test_timeout_before_reservation(void) {
   agc_value ch = make_channel(2);
   agc_task *a = agc_test_task(), *b = agc_test_task();
@@ -782,6 +833,7 @@ static void all(void) {
   test_close_cancels_reserved_value();
   test_close_with_reserved_slot();
   test_close_wakes_receivers();
+  test_close_with_reason();
   test_timeout_before_reservation();
   test_reservation_beats_deadline();
   test_abandoned();
@@ -801,10 +853,10 @@ int main(void) {
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   main_task = vm.task;
-  static const char *names[COUNT] = {"Channel.new",    "Channel.send",    "Channel.recv",    "Channel.close",
-                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send",
-                                     "HttpWire.awaited?", "HttpWire.watch"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3, 1, 1};
+  static const char *names[COUNT] = {"Channel.new",     "Channel.send",    "Channel.recv",    "Channel.close",
+                                     "Channel.close",   "Channel.closed?", "Channel.empty?", "Channel.address",
+                                     "Address.send",    "HttpWire.awaited?", "HttpWire.watch"};
+  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 2, 1, 1, 1, 3, 1, 1};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);

@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
+- `Channel.close(channel, error)` closes with a reason: senders, and receivers once the values left are taken, get that error in place of `error("channel: closed")` (#1790).
 
 ## [0.36.0] - 2026-11-23
 
