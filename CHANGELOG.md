@@ -8,7 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- `agentica test --max-steps N|unlimited` sets the step budget of each test and scenario (default 1,000,000); `agentica --max-steps N test` now applies instead of being ignored.
+## [0.36.0] - 2026-11-23
+
+### Added
+
+- `agentica test --max-steps N|unlimited` sets the step budget of each test and scenario (default 1,000,000); `agentica --max-steps N test` now applies instead of being ignored (#1917).
 
 ## [0.35.1] - 2026-11-20
 
@@ -1758,7 +1762,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.35.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.36.0...HEAD
+[0.36.0]: https://github.com/agentica-lang/agentica/compare/0.35.1...0.36.0
 [0.35.1]: https://github.com/agentica-lang/agentica/compare/0.35.0...0.35.1
 [0.35.0]: https://github.com/agentica-lang/agentica/compare/0.34.2...0.35.0
 [0.34.2]: https://github.com/agentica-lang/agentica/compare/0.34.1...0.34.2
