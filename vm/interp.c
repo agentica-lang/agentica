@@ -999,7 +999,7 @@ static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x
     return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
   }
   if (tags_are(x, y, AGC_T_BOOL)) return agc_as_bool(vm, *x) == agc_as_bool(vm, *y);
-  if (tags_are(x, y, AGC_T_FLOAT32)) return x->as.f == y->as.f;
+  if (tags_are(x, y, AGC_T_FLOAT32)) return agc_as_float32(vm, *x) == agc_as_float32(vm, *y);
   return -1;
 }
 
@@ -1013,7 +1013,7 @@ static inline int same_doubles(double a, double b) {
 /* same_values of two values of one tag that is not Float: Float32 as Float, the rest by equal_values. Out of line, so
    that Float32 adds no code to SAME in the turn loop. */
 static __attribute__((noinline)) int same_other(agc_vm *vm, const agc_value *x, const agc_value *y) {
-  if (agc_is(*x, AGC_T_FLOAT32)) return same_doubles(x->as.f, y->as.f);
+  if (agc_is(*x, AGC_T_FLOAT32)) return same_doubles(agc_as_float32(vm, *x), agc_as_float32(vm, *y));
   return equal_values(vm, x, y);
 }
 
@@ -1076,13 +1076,13 @@ OP_HELPER agc_status agc_op_neg_i(agc_vm *vm, agc_value *dst, const agc_value *a
    binary32 nearest the exact result: the operands are binary32 values and binary64 has 53 >= 2 * 24 + 2 bits
    (Figueroa, 1995); a subnormal binary32 sum is exact, and a product or quotient is a normal double. Any other pair is
    the wrong tag, a Float with a Float32 too. */
-static __attribute__((noinline, cold)) agc_status float32_op(agc_value *dst, const agc_value *a, const agc_value *b,
-                                                             agc_opcode op) {
+static __attribute__((noinline, cold)) agc_status float32_op(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                             const agc_value *b, agc_opcode op) {
   if (!agc_is(*b, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
-  double y = b->as.f;
+  double y = agc_as_float32(vm, *b);
   if (op == AGC_OP_DIV_F && y == 0) return AGC_STATUS_DIVISION_BY_ZERO;
   if (!agc_is(*a, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
-  double x = a->as.f;
+  double x = agc_as_float32(vm, *a);
   switch (op) {
     case AGC_OP_ADD_F: *dst = agc_float32(agc_round_f32(x + y)); break;
     case AGC_OP_SUB_F: *dst = agc_float32(agc_round_f32(x - y)); break;
@@ -1095,9 +1095,9 @@ static __attribute__((noinline, cold)) agc_status float32_op(agc_value *dst, con
   return AGC_STATUS_OK;
 }
 
-static __attribute__((noinline, cold)) agc_status float32_neg(agc_value *dst, const agc_value *a) {
+static __attribute__((noinline, cold)) agc_status float32_neg(agc_vm *vm, agc_value *dst, const agc_value *a) {
   if (!agc_is(*a, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
-  *dst = agc_float32(-a->as.f);
+  *dst = agc_float32(-agc_as_float32(vm, *a));
   return AGC_STATUS_OK;
 }
 
@@ -1170,7 +1170,7 @@ static inline __attribute__((always_inline)) agc_status float_le(agc_vm *vm, agc
 #define FLOAT_ENTRY(name, helper, op)                                                                \
   agc_status name(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {              \
     agc_status status = helper(vm, dst, a, b);                                                       \
-    return status == AGC_STATUS_WRONG_TAG ? float32_op(dst, a, b, op) : status;                      \
+    return status == AGC_STATUS_WRONG_TAG ? float32_op(vm, dst, a, b, op) : status;                  \
   }
 FLOAT_ENTRY(agc_op_add_f, float_add, AGC_OP_ADD_F)
 FLOAT_ENTRY(agc_op_sub_f, float_sub, AGC_OP_SUB_F)
@@ -1182,7 +1182,7 @@ FLOAT_ENTRY(agc_op_le_f, float_le, AGC_OP_LE_F)
 
 agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
   agc_status status = float_neg(vm, dst, a);
-  return status == AGC_STATUS_WRONG_TAG ? float32_neg(dst, a) : status;
+  return status == AGC_STATUS_WRONG_TAG ? float32_neg(vm, dst, a) : status;
 }
 
 OP_HELPER agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
@@ -1322,8 +1322,8 @@ static __attribute__((noinline, cold)) void float_failed(agc_vm *vm, agc_status 
     const agc_frame *frame = &t->frames[t->frame_count - 1];
     agc_instr in = vm->rt->program->functions[frame->function].code[frame->pc - 1];
     agc_value *R = t->regs + frame->base;
-    status = in.op == AGC_OP_NEG_F ? float32_neg(&R[in.a], &R[in.b])
-                                   : float32_op(&R[in.a], &R[in.b], &R[in.c], (agc_opcode)in.op);
+    status = in.op == AGC_OP_NEG_F ? float32_neg(vm, &R[in.a], &R[in.b])
+                                   : float32_op(vm, &R[in.a], &R[in.b], &R[in.c], (agc_opcode)in.op);
     if (status == AGC_STATUS_OK) return;
   }
   op_failed(vm, status);

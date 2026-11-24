@@ -512,11 +512,6 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float.to_float32", 1, builtin_float_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Int.to_float32", 1, builtin_int_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float32.to_f", 1, builtin_float32_to_f, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float32.to_bits", 1, builtin_float32_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float32.from_bits", 1, builtin_float32_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8", 1, builtin_int_to_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8!", 1, builtin_int_to_int8_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int16", 1, builtin_int_to_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
@@ -590,6 +585,11 @@ const agc_builtin agc_number_builtins[] = {
   {"Math.log10", 1, builtin_math_log10, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Math.sin", 1, builtin_math_sin, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Math.cos", 1, builtin_math_cos, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float.to_float32", 1, builtin_float_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_float32", 1, builtin_int_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.to_f", 1, builtin_float32_to_f, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.to_bits", 1, builtin_float32_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.from_bits", 1, builtin_float32_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
 };
 
 const size_t agc_number_builtin_count = sizeof agc_number_builtins / sizeof agc_number_builtins[0];

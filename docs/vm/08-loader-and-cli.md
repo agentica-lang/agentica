@@ -24,9 +24,10 @@ branch.
 - **Prelude**: the flag of each function is 0 or 1. A `CALL` of a function with
   the flag has its argument spans in range, and a call of a prelude-only builtin
   (`__fail_arg`) is in a function with the flag (4.7).
-- **Tables**: constant kinds 0 to 7 only. A String constant is valid UTF-8; a
-  Bytes constant is any bytes, at most what is left of the file. Field counts
-  and variant arities are at most 65535. Every builtin `(name, arity)` pair
+- **Tables**: constant kinds 0 to 7 and 9 only. A String constant is valid
+  UTF-8; a Bytes constant is any bytes, at most what is left of the file; a
+  Float32 constant is a decimal text that rounds to a finite Float32. Field
+  counts and variant arities are at most 65535. Every builtin `(name, arity)` pair
   exists. The loader does not check builtin records: a builtin finds its record
   by exact name and fields at run time (5.2).
 - **Types**: at most 65535 types with known kinds. A List or Map entry names an

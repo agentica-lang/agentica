@@ -895,7 +895,11 @@ uint64_t agc_value_units(agc_value v) {
     case AGC_T_LIST: return agc_list_len(v.as.p);
     case AGC_T_MAP:
     case AGC_T_SET: return ((const agc_map *)v.as.p)->size;
-    case AGC_T_JSON: return ((const agc_json *)v.as.p)->count;
+    case AGC_T_JSON: {
+      /* The count of a float leaf is the side hint of agc_json_to_float32, not a size. */
+      const agc_json *j = v.as.p;
+      return j->kind == AGC_JSON_FLOAT ? 0 : j->count;
+    }
     default: return 0;
   }
 }
@@ -1561,9 +1565,8 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
 #define FLOAT32_OVERFLOW 0x1.ffffffp127
 
 /* The significant digits of a decimal that its binary32 depends on: no binary32 value and no midpoint between two
-   has more than 105 (the last digit of one is at 10^-150 at most, the first at 10^-46 at least), so a text with more
-   is cut to FLOAT32_DIGITS and a nonzero digit cut off becomes one more digit 1, which stays between the same two
-   midpoints. */
+   has more than 113 ((2^25 - 1) * 2^-150), so a text with more is cut to FLOAT32_DIGITS and a nonzero digit cut off
+   becomes one more digit 1, which stays between the same two midpoints. */
 #define FLOAT32_DIGITS 128
 
 static void big_set(big *b, uint32_t value) {
@@ -1748,7 +1751,12 @@ bool agc_read_float32(const char *s, size_t len, double *out) {
     q--;
   }
   for (; n > 0 && digits[n - 1] == '0'; n--) q++;
-  double x = n ? decimal_f32(digits, n, q) : 0.0;
+  /* An integer below 10^18 (16777217.0, 3e9) is rounded once from the int64, without the bignum. */
+  int64_t whole = 0;
+  bool small = n <= 18 && q >= 0 && q <= 18;
+  for (size_t k = 0; small && k < n; k++) whole = whole * 10 + (digits[k] - '0');
+  for (int64_t k = 0; small && k < q; k++) small = !__builtin_mul_overflow(whole, 10, &whole);
+  double x = !n ? 0.0 : small ? (double)(float)whole : decimal_f32(digits, n, q);
   *out = negative ? -x : x;
   return true;
 }
@@ -1789,6 +1797,7 @@ static size_t integer_digits(uint64_t v, int last, char *digits, int *lead) {
 }
 
 size_t agc_float32_text(double x, char out[AGC_SCALAR_TEXT]) {
+  x = agc_round_f32(x);
   if (isnan(x) || isinf(x)) return agc_float_text(x, out);
   size_t at = 0;
   if (signbit(x)) {

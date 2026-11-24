@@ -77,7 +77,8 @@ in a PR that rewrites the goldens.
   locale). A JSON float whose double is halfway between two binary32 values
   keeps which side its text was on, so the field rounds the text and not the
   double. Past the largest Float32, a literal does not load and a field is a
-  decode error.
+  decode error. `==` on JSON.Values and `JSON.encode` of one use the double
+  alone, so two equal values can still give two Float32s.
 
 ### 2.3 Strings and text
 
