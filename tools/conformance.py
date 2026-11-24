@@ -147,6 +147,7 @@ AREAS = {
             "tests/test_spec_package_native_use.py",
             "tests/test_spec_package_override.py", "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
             "tests/test_spec_package_test_group.py", "tests/test_spec_package_namespace.py",
+            "tests/test_spec_package_version.py",
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_case_differential.py", "tests/test_spec_extern.py",
             "tests/test_spec_generic_structs.py",
