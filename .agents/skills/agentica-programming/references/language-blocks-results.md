@@ -168,10 +168,11 @@ and `case`. Command: enum variants applied with `reduce`. Decorator: a function
 taking and returning an `Fn` (it returns a lambda that calls `f`). Observer: a
 struct holding a `List[Fn[...]]`, called with `map`.
 
-Composition root: `main` builds the collaborators (tables, stores, the clock,
-such as `&Time.now_ms`) and passes them in; a function never builds what it
-calls. Boundary: write the body as `Result[T]` with `try`, and convert once
-where the caller needs another type:
+Composition root: `main` builds the collaborators (the clock as
+`&Time.now_ms`, a store) and passes them in; a function never builds what it
+calls, and a test passes a fake. Result all the way (boundary): write the body
+as `Result[T]` with `try`, and convert once where the caller needs another
+type:
 
 ```ruby
 def handler(call: Call) -> Reply
@@ -181,3 +182,12 @@ def handler(call: Call) -> Reply
   end
 end
 ```
+
+Resource with a block: `with_x(...) do |r| ... end` opens, calls the block and
+closes. There is no `ensure`: keep the block's `Result` in a variable, close,
+then return it (`try` on the call would skip the close). Interpreter: a
+recursive enum and a `case` that walks it (a Visitor is one such function).
+Pipeline: tasks joined by `Channel`s; the sender calls `close` as the end and a
+receiver stops on the `recv` error. Retry with backoff: a function taking an
+`Fn[Int, Result[T]]`, calling it again after a growing `Task.sleep`, up to a
+number of attempts.
