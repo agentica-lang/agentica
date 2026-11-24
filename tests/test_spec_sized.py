@@ -1,5 +1,5 @@
 """The narrow integer types (Int8, Int16, Int32, UInt8, UInt16, UInt32) through the product CLI: literals typed by their
-context, the range of a literal, the conversions to and from Int, and the reserved names, with their diagnostic codes
+context, the range of a literal, the conversions to and from Int, the operators and the reserved names, with their diagnostic codes
 and spans.
 
 A rule case is `(program, code, covered text)`: the code of the diagnostic and the source text its range covers. A
@@ -17,7 +17,6 @@ def main(*lines: str) -> str:
 
 
 PIXEL = "struct Pixel\n  r: UInt8\nend\n\n"
-A_B = ("a: UInt8 = 1", "b: UInt8 = 2")
 
 RULES = {
     "a literal takes the type of an annotation, a field, a parameter, a return, an item and a case": (
@@ -59,12 +58,23 @@ RULES = {
     "a reassignment out of range": (main("x: UInt8 = 1", "x = 256", "puts(x)"), "CHECK-INT-RANGE", "256"),
     "a nested item out of range": (main("xs: List[Optional[UInt8]] = [some(256)]", "puts(xs)"), "CHECK-INT-RANGE",
                                    "256"),
-    # Operators, JSON, keys and the list sums of the narrow types come in later pull requests of #984.
-    "no + yet": (main(*A_B, "puts(a + b)"), "CHECK-TYPE-MISMATCH", "+"),
-    "no < yet": (main(*A_B, "puts(a < b)"), "CHECK-TYPE-MISMATCH", "<"),
-    "no unary minus yet": (main("a: Int8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
-    "no += yet": (main("a: UInt8 = 1", "a += 1", "puts(a)"), "CHECK-TYPE-MISMATCH", "+="),
-    "no literal on the other side of == yet": (main("a: UInt8 = 1", "puts(a == 255)"), "CHECK-TYPE-MISMATCH", "=="),
+    "operators on one narrow type, a literal on either side, and compound assignment": (
+        main("a: UInt8 = 200", "b: UInt8 = 50", "s: Int8 = -5", "x: UInt8 = 1 + 2", "y: UInt8 = (1 + 2) * b",
+             "a += 1", "puts(a + b - 2 * b / 3 % 7)", "puts(a < 255 and 0 <= a and 255 == a or a != b)",
+             "puts(a >= b and a > b)", "puts(-s + -(1 + 2))", "puts(\"#{x} #{y}\")"), None, None),
+    "a Bool context gives a literal tree Int": (main("x: Bool = 1 < 2", "puts(x)"), None, None),
+    "two narrow types in +": (main("a: UInt8 = 1", "b: UInt16 = 2", "puts(a + b)"), "CHECK-TYPE-MISMATCH", "+"),
+    "two narrow types in <": (main("a: Int8 = 1", "b: Int16 = 2", "puts(a < b)"), "CHECK-TYPE-MISMATCH", "<"),
+    "two narrow types in ==": (main("a: Int8 = 1", "b: UInt8 = 2", "puts(a == b)"), "CHECK-TYPE-MISMATCH", "=="),
+    "a narrow type and an Int in %": (main("a: UInt8 = 1", "n = 2", "puts(a % n)"), "CHECK-TYPE-MISMATCH", "%"),
+    "a narrow type and an Int variable in +": (main("a: UInt8 = 1", "n = 2", "puts(n + a)"), "CHECK-TYPE-MISMATCH", "+"),
+    "a narrow type and a Float literal": (main("a: UInt8 = 1", "puts(a + 1.5)"), "CHECK-TYPE-MISMATCH", "+"),
+    "a literal above the other side": (main("a: UInt8 = 1", "puts(a + 256)"), "CHECK-INT-RANGE", "256"),
+    "a literal above the other side, on the left": (main("a: UInt8 = 1", "puts(300 < a)"), "CHECK-INT-RANGE", "300"),
+    "a negative literal against an unsigned side": (main("a: UInt8 = 1", "puts(a == -1)"), "CHECK-INT-RANGE", "-1"),
+    "a literal tree above the context": (main("x: UInt8 = 200 + 300"), "CHECK-INT-RANGE", "300"),
+    "no unary minus on an unsigned value": (main("a: UInt8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
+    # JSON, keys and the list sums of the narrow types come in later pull requests of #984.
     "no JSON.encode yet": (main("a: UInt8 = 1", "puts(JSON.encode(a))"), "CHECK-NOT-ENCODABLE", "a"),
     "no JSON.decode yet": (PIXEL + main('puts(JSON.decode("{}", Pixel).ok?)'), "CHECK-NOT-DECODABLE", "Pixel"),
     "no map key yet": (main("m: Map[UInt8, Int] = {}", "puts(m)"), "CHECK-MAP-KEY-TYPE", "UInt8"),

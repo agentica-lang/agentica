@@ -812,7 +812,17 @@ def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) ->
   end
 
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.op_span)
+  fx = narrowed(fx, made.slot, Lowering.type_of(cx, node.operand), node.op_span)
   ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+end
+
+# After an operation on a narrow integer type, which the VM runs on Ints: the result goes through the type's
+# to_<type>!, which halts with RUNTIME-INTEGER-OVERFLOW at the operator when the type does not hold it. A remainder
+# always fits.
+def narrowed(fx: Lowering.Fx, slot: Int, type: Types.Type, span: Source.Span) -> Lowering.Fx
+  return fx if !Types.narrow_int?(type)
+
+  Lowering.emit_builtin(fx, slot, "Int.to_#{Types.tag(type).downcase}!", 1, [span, span])
 end
 
 def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) -> Result[Lowering.Out]
@@ -880,6 +890,9 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
       fx = Lowering.emit_at(fx, ops[op], [dst, right.slot, left.slot], node.op_span)
     else
       fx = Lowering.emit_at(fx, ops[op], [dst, left.slot, right.slot], node.op_span)
+      if ["plus", "minus", "multiply", "divide"].include?(op)
+        fx = narrowed(fx, dst, side, node.op_span)
+      end
     end
   end
 
