@@ -1,4 +1,4 @@
-# The narrow integer types: literals typed by their context, printing, ==, case, to_int, and Int.to_uint16! halting on
+# The narrow integer types: literals typed by their context, printing, ==, case, to_i, and Int.to_uint16! halting on
 # a value outside the type.
 
 struct Pixel
@@ -21,7 +21,7 @@ def main() -> Void
   puts(a.to_s + " " + b.inspect)
   puts(a == p.r)
   puts(p.r == 255.to_uint8!)
-  puts(a.to_int + b.to_int)
+  puts(a.to_i + b.to_i)
   case a
     200 -> puts("two hundred")
     _ -> puts("other")

@@ -107,7 +107,7 @@ INT_TO_NARROW(uint8, "UInt8", 0, UINT8_MAX)
 INT_TO_NARROW(uint16, "UInt16", 0, UINT16_MAX)
 INT_TO_NARROW(uint32, "UInt32", 0, UINT32_MAX)
 
-/* to_int on a narrow integer type: its value is an Int already. */
+/* to_i on a narrow integer type: its value is an Int already. */
 static agc_value builtin_int_from_narrow(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)span;

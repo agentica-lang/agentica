@@ -30,7 +30,7 @@ RULES = {
     "Int64 is Int and Float64 is Float": (
         main("a: Int64 = 1", "b: Int = a", "f: Float64 = 1.5", "g: Float = f", "puts(b + 1)", "puts(g)"), None, None),
     "the conversions to and from Int": (
-        main("a: UInt8 = 7", "n: Int = a.to_int", "b: Result[UInt8] = n.to_uint8", "c: UInt8 = n.to_uint8!",
+        main("a: UInt8 = 7", "n: Int = a.to_i", "b: Result[UInt8] = n.to_uint8", "c: UInt8 = n.to_uint8!",
              "puts(a == c)", "puts(b.ok?)"), None, None),
     "two values of a narrow type compare with ==": (main("a: UInt8 = 1", "b: UInt8 = 2", "puts(a == b)"), None, None),
     "a literal above the type": (main("x: UInt8 = 256"), "CHECK-INT-RANGE", "256"),

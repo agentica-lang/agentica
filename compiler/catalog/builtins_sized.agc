@@ -1,5 +1,5 @@
-## The conversions between Int and the narrow integer types (Types.NARROW_INTS): to_int on each type, and to_<type>
-## and to_<type>! on Int. The VM holds a narrow value as an Int, so to_int changes nothing at run time and the other
+## The conversions between Int and the narrow integer types (Types.NARROW_INTS): to_i on each type, and to_<type>
+## and to_<type>! on Int. The VM holds a narrow value as an Int, so to_i changes nothing at run time and the other
 ## two check the range (vm/numbers.c).
 
 import Types from "../syntax/types"
@@ -12,7 +12,7 @@ ROWS: List[Model.Builtin] = Types.NARROW_INTS.keys.flat_map do |name: String|
   int = [Model.Named(name: "int", type: Types.Type.Int)]
   [
     Model.Builtin(
-      name: "#{name}.to_int",
+      name: "#{name}.to_i",
       parameters: [Model.Named(name: word, type: type)],
       result: Types.Type.Int,
       rule: Model.Rule.Plain,

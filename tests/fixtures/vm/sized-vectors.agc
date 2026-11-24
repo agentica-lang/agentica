@@ -1,48 +1,47 @@
-# The vectors of tests/fixtures/sized-vectors.py (Python ints), read from stdin: Int.to_<type> of each value,
-# and to_int
+# The vectors of tests/fixtures/sized-vectors.py (Python ints), read from stdin: Int.to_<type> of each value, and to_i
 # back.
 
 def shown(text: String, back: Int) -> String
   return "ok #{text}" if text == back.to_s
 
-  "to_int gives #{back} for #{text}"
+  "to_i gives #{back} for #{text}"
 end
 
 def converted(name: String, n: Int) -> String
   case name
     "int8" ->
       case n.to_int8
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 
     "int16" ->
       case n.to_int16
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 
     "int32" ->
       case n.to_int32
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 
     "uint8" ->
       case n.to_uint8
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 
     "uint16" ->
       case n.to_uint16
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 
     "uint32" ->
       case n.to_uint32
-        ok(v) -> shown("#{v}", v.to_int)
+        ok(v) -> shown("#{v}", v.to_i)
         error(_) -> "error"
       end
 

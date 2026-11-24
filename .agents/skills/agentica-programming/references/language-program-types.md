@@ -82,7 +82,7 @@ and types. Builtin methods and `to_s`: `builtins.md`.
 - `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`: narrow integers. A
   literal takes the type its place expects (annotation, parameter, field,
   return, item, `case` pattern); `x: Int8 = -128` checks, `x: UInt8 = 256` is
-  `CHECK-INT-RANGE`. No implicit conversion: `x.to_int`, `n.to_uint8` (a
+  `CHECK-INT-RANGE`. No implicit conversion: `x.to_i`, `n.to_uint8` (a
   Result), `n.to_uint8!` (halts). No operators on them yet. `Int64` and
   `Float64` are `Int` and `Float`; all ten names are reserved.
 - `Void`: completion without a value; no literal.
