@@ -1024,7 +1024,7 @@ def covers?(cx: State.Cx, rows: List[List[Ast.Slot]], types: List[T.Type]) -> Bo
   # A column that does not name every variant of its type is covered only where the rows with any value there cover
   # the rest (Maranget's default matrix), so one recursion decides it; splitting by every variant would be exponential
   # in the columns.
-  if (!names.ok? or !names.unwrap!.all? { |name: String| heads.include?(name) })
+  if !names.ok? or !names.unwrap!.all? { |name: String| heads.include?(name) }
     left = rows.select { |row: List[Ast.Slot]| any_value?(row[0]) }
     return covers?(cx, left.map { |row: List[Ast.Slot]| row.drop(1) }, rest)
   end

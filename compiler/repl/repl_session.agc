@@ -568,7 +568,7 @@ def words_of(text: String) -> Set[String]
   case Lexer.lex(text)
     Diag.Outcome.Failed(_) -> Set.new([])
     Diag.Outcome.Done(tokens) ->
-      return Set.new([]) if (tokens.any? { |token: Tokens.Token| token.kind == "eag" })
+      return Set.new([]) if tokens.any? { |token: Tokens.Token| token.kind == "eag" }
 
       Set.new(tokens.map { |token: Tokens.Token| bare_word(token.lexeme) })
   end
@@ -947,7 +947,7 @@ def built(
 
       # The record of the entry before is no longer declared, and no name holds one.
       stale: List[Binding] = []
-      if (merged.changed.any? { |name: String| !name.start_with?(RECORD) })
+      if merged.changed.any? { |name: String| !name.start_with?(RECORD) }
         stale = plan.held.values.filter { |binding: Binding| !current?(binding, merged.ran) }
       end
 

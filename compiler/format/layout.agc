@@ -1029,13 +1029,13 @@ def blocked?(expr: Ast.Expr, condition: Bool) -> Bool
   false
 end
 
-# Whether the last of `args` is a block that a head refuses: any block in a while, for or case head; in a condition a
-# block in braces, or a `do` block after a plain name written without `()` (`bare`).
+# Whether the last of `args` is a block that a head refuses: a block after a plain name written without `()` (`bare`),
+# and in a while, for or case head a `do` block. A method call takes a block in braces in every head.
 def refused_block?(args: List[Ast.Expr], condition: Bool, bare: Bool) -> Bool
   return false if args.size == 0
 
   case args[args.size - 1]
-    Ast.Expr.BlockLit(lit) if !lit.lambda -> !condition or lit.braces or bare
+    Ast.Expr.BlockLit(lit) if !lit.lambda -> bare or (!condition and !lit.braces)
     _ -> false
   end
 end

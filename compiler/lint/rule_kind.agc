@@ -80,7 +80,7 @@ FAMILIES = Set.new(ERROR_KINDS.map do |kind: String| kind.split(".")[0] end)
 # `error:` (`Error.is_a?(error: e, family: "x")`, or `Error.is_a?("x", error: e)`) leaves one positional slot fewer.
 def tested(args: List[Ast.Expr], named: List[Ast.NamedArg], index: Int) -> List[Seen]
   at = index
-  if (index > 0 and named.any? { |arg: Ast.NamedArg| arg.name == "error" })
+  if index > 0 and named.any? { |arg: Ast.NamedArg| arg.name == "error" }
     at = index - 1
   end
 
