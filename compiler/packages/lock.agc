@@ -18,6 +18,7 @@ import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
 import Toml from "std/toml"
 import Reader from "toml_read"
+import VersionRequirement from "version_requirement"
 
 ## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits. A workspace member (member
 ## is true) and a package of a `path` (source.path is not "") have "" for both: their files are the ones in the
@@ -207,8 +208,10 @@ private
 
 # The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
 TOP_KEYS = ["version", "package", "native-artifact"]
-PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override", "repository"]
-GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace", "repository"]
+PACKAGE_KEYS = [
+  "name", "git", "subdir", "tag", "ref", "version", "commit", "hash", "workspace", "path", "override", "repository",
+]
+GIT_KEYS = ["git", "subdir", "tag", "ref", "version", "commit", "hash", "workspace", "repository"]
 ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
 
 LOCK_FORMAT = 1
@@ -216,7 +219,8 @@ HASH_PREFIX = "sha256:"
 HASH_LENGTH = 71
 HEX = Set.new("0123456789abcdef".split(""))
 
-# The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, then commit and hash,
+# The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, `version` (when a
+# requirement chose the tag), then commit and hash,
 # or `workspace = true` for a member; name and path for a local folder. `override = true` is last.
 def package_table(locked: Locked) -> Toml.Value
   keys = package_keys(locked)
@@ -245,6 +249,10 @@ def package_keys(locked: Locked) -> Map[String, Toml.Value]
   end
 
   keys = keys.put(pin_key, pin)
+  if locked.source.version != ""
+    keys = keys.put("version", Toml.Value.Str(locked.source.version))
+  end
+
   return keys.put("workspace", Toml.Value.Bool(true)) if locked.member
 
   if root?(locked)
@@ -535,7 +543,7 @@ def path_of(
   problem = GitSource.path_problem(folder)
   return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem)) if problem != ""
 
-  source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder)
+  source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", version: "", path: folder)
   ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override, repository: ""))
 end
 
@@ -574,14 +582,34 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
     problem = GitSource.tag_problem(tag)
     return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem)) if problem != ""
 
-    return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: "", path: ""))
+    version = ""
+    if entries.has_key?("version")
+      version = try text_of(reading, entries, path, "version")
+      here = Reader.child(path, "version")
+      requirement = VersionRequirement.parse(version)
+      if !requirement.ok?
+        return error(Reader.fail_help(reading, here, "not a version requirement", requirement.message))
+      end
+
+      prefix = VersionRequirement.tag_prefix(subdir)
+      if !VersionRequirement.tag_satisfies?(requirement.unwrap!, tag, prefix)
+        message = "the tag #{tag} does not satisfy the version #{version}"
+        return error(Reader.fail(reading, Reader.child(path, "tag"), message))
+      end
+    end
+
+    return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: "", version: version, path: ""))
+  end
+
+  if entries.has_key?("version")
+    return error(Reader.fail(reading, Reader.child(path, "version"), "a version goes with the tag that it chose"))
   end
 
   ref = try text_of(reading, entries, path, "ref")
   problem = GitSource.ref_problem(ref)
   return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem)) if problem != ""
 
-  ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, path: ""))
+  ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, version: "", path: ""))
 end
 
 def text_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String, key: String) -> Result[String]

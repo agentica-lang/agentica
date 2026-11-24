@@ -1,6 +1,7 @@
 ## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies, the
 ## native libraries of a package ([native]) and the [style] rules. A dependency is a local name and a git source:
-## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional
+## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag`, `ref` and `version` (a
+## requirement over the tags, `version = "~> 0.8"`; version_requirement.agc), and an optional
 ## `subdir`: the folder of the repository that is the package. The root project's manifest may also write `name = {
 ## path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any other
 ## source of the name in the tree); `require_package` refuses both, and `[native_policy]`, in the manifest of a
@@ -23,6 +24,7 @@ import NativePrebuilt from "native_prebuilt"
 import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
+import VersionRequirement from "version_requirement"
 
 ## The one group a dependency can be in: the tests of the project.
 TEST_GROUP = "test"
@@ -205,8 +207,8 @@ private
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "agentica", "dependencies", "native", "native_policy", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
-DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override", "group", "workspace"]
-GIT_KEYS = ["git", "tag", "ref", "subdir"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "version", "subdir", "path", "override", "group", "workspace"]
+GIT_KEYS = ["git", "tag", "ref", "version", "subdir"]
 PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
 SYSTEMS = Set.new(["linux", "macos", "windows"])
@@ -307,7 +309,7 @@ def workspace_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path
   flag = try Reader.boolean(reading, entries["workspace"], here)
   return ok(false) if !flag
 
-  for key in ["subdir", "path"]
+  for key in ["subdir", "path", "version"]
     if entries.has_key?(key)
       help = "a workspace is the whole repository: leave #{key} out, or leave workspace out"
       return error(Reader.fail_help(reading, here, "workspace has no #{key}", help))
@@ -335,7 +337,7 @@ end
 def path_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
   for key in GIT_KEYS
     if entries.has_key?(key)
-      help = "write a path alone, or git with a tag or a ref"
+      help = "write a path alone, or git with a tag, a ref or a version"
       return error(Reader.fail_help(reading, path, "a dependency has a git source or a path", help))
     end
   end
@@ -345,13 +347,13 @@ def path_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pa
   problem = GitSource.path_problem(folder)
   return error(Reader.fail_help(reading, here, "not a path", problem)) if problem != ""
 
-  ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder))
+  ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", version: "", path: folder))
 end
 
 # A dependency that is a git source.
 def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
   if !entries.has_key?("git")
-    help = "write git = \"https://...\" with a tag or a ref, or path = \"../folder\""
+    help = "write git = \"https://...\" with a tag, a ref or a version, or path = \"../folder\""
     return error(Reader.fail_help(reading, path, "missing key git", help))
   end
 
@@ -359,20 +361,30 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
   problem = GitSource.git_problem(git)
   return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem)) if problem != ""
 
-  if entries.has_key?("tag") == entries.has_key?("ref")
-    return error(Reader.fail_help(reading, path, "a dependency has a tag or a ref", "write exactly one of them"))
+  pins = ["tag", "ref", "version"].select do |key: String| entries.has_key?(key) end
+  if pins.size != 1
+    message = "a dependency has a tag, a ref or a version"
+    return error(Reader.fail_help(reading, path, message, "write exactly one of them"))
   end
 
   tag = ""
   ref = ""
+  version = ""
   if entries.has_key?("tag")
     tag = try Reader.text(reading, entries["tag"], Reader.child(path, "tag"))
     tag_problem = GitSource.tag_problem(tag)
     return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", tag_problem)) if tag_problem != ""
-  else
+  elsif entries.has_key?("ref")
     ref = try Reader.text(reading, entries["ref"], Reader.child(path, "ref"))
     ref_problem = GitSource.ref_problem(ref)
     return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", ref_problem)) if ref_problem != ""
+  else
+    version = try Reader.text(reading, entries["version"], Reader.child(path, "version"))
+    version_problem = VersionRequirement.problem(version)
+    here = Reader.child(path, "version")
+    if version_problem != ""
+      return error(Reader.fail_help(reading, here, "not a version requirement", version_problem))
+    end
   end
 
   subdir = ""
@@ -384,7 +396,7 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
     end
   end
 
-  ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
+  ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, version: version, path: ""))
 end
 
 # [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, an optional `build`,

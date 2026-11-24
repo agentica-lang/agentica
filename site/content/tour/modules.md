@@ -307,7 +307,7 @@ Paths that start with `pkg/` load installed libraries: `import Tools from "pkg/a
 
 ## Packages
 
-A package is a git repository of `.agc` files. A project with an `agentica.toml` next to its main file, or in a folder above it, can import the packages the manifest declares. Each dependency has a local name and one pin, a `tag` or a `ref` (a commit):
+A package is a git repository of `.agc` files. A project with an `agentica.toml` next to its main file, or in a folder above it, can import the packages the manifest declares. Each dependency has a local name and one pin, a `tag`, a `ref` (a commit) or a `version` (a requirement over the tags):
 
 ```toml
 name = "notes"
@@ -328,8 +328,9 @@ import Sqlite from "pkg/sqlite/db"
 A manifest that declares dependencies needs an `agentica.lock` beside it, with the exact commit and a hash of every package. A build never downloads anything: it reads each package from `deps/<name>/` and checks its hash. Three commands keep `deps/` and the lock, through the system `git`:
 
 - `agentica install` fetches what the lock names into `deps/`; it never changes the lock.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--workspace`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
-- `agentica update [NAME]` fetches the tag pins again and repairs a lock that is out of date.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--version REQUIREMENT`, `--subdir DIR`, `--workspace`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
+- `agentica update [NAME]` fetches the tag pins again, takes the highest tag that satisfies each `version`, and repairs a lock that is out of date.
+- `version = "~> 0.8"` takes the highest tag `X.Y.Z` or `vX.Y.Z` (`NAME-X.Y.Z` for a `subdir`) that satisfies a requirement as RubyGems and Mix read it: terms joined by commas with `~>`, `>=`, `>`, `<=`, `<` and `==`, where `~> 0.8` means `>= 0.8.0, < 1.0.0` and `~> 0.8.1` means `>= 0.8.1, < 0.9.0`. The lock keeps the chosen `tag` and the `version`, so a build and `install` stay exact and offline; only `add` and `update` list the tags. A requirement that no tag satisfies is `PKG-VERSION-UNSATISFIED`. A name has one requirement in the whole tree for now.
 
 ```sh
 agentica install

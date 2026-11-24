@@ -8,9 +8,9 @@ is `PKG-MANIFEST-EXISTS`, a bad name `PKG-MANIFEST-INVALID`; nothing is written.
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
-id; `--subdir DIR` for a folder of the repository, `--workspace` for the whole
+id, `--version REQ` for a requirement over the tags; `--subdir DIR` for a folder of the repository, `--workspace` for the whole
 workspace) adds a dependency and writes
-the lock, `agentica update [NAME]` moves tag pins, and `agentica install`
+the lock, `agentica update [NAME]` moves tag pins and `version` requirements, and `agentica install`
 writes every locked package into `deps/<name>/` beside `agentica.toml` (through
 a download cache). A build reads packages only from `deps/`; a declared package
 missing there is `CHECK-IMPORT-PACKAGE`.
@@ -34,10 +34,15 @@ import Sqlite from "pkg/sqlite/db"
 ```
 
 - A dependency is a local name and a table with `git`
-  (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a commit). A
-  name starts with a lowercase letter, then lowercase letters, digits, `_` and
-  `-`, at most 64 characters. A branch or a version range is
+  (`https://host/owner/repo`) and exactly one of `tag`, `ref` (a commit) or
+  `version`. A name starts with a lowercase letter, then lowercase letters,
+  digits, `_` and `-`, at most 64 characters. A branch is
   `PKG-MANIFEST-INVALID`.
+- `version = "~> 0.8"` is a RubyGems-style requirement (terms joined by `,`:
+  `~>`, `>=`, `>`, `<=`, `<`, `==`; `~> 0.8` is `>= 0.8.0, < 1.0.0`) over the tags
+  `X.Y.Z` or `vX.Y.Z` (`NAME-X.Y.Z` with a `subdir`); `add` and `update` lock the
+  highest one (`tag` and `version` in the lock), none is `PKG-VERSION-UNSATISFIED`.
+  Not with `tag`, `ref`, `path` or `workspace`; one requirement per name in the tree.
 - `[style] max_line_width = N` makes a line of more than N characters (comments
   too) `CHECK-LINE-TOO-LONG`; `agentica fmt` lays out in N columns (default
   119). `[style] blank_line_after_end = true` (default false) makes a line with
@@ -128,7 +133,7 @@ import Sqlite from "pkg/sqlite/db"
 - `add` and `update` run `git` as `install` does and write `agentica.lock`
   (every package of the build, sorted by name). `add` puts one line in
   `[dependencies]` and changes no other byte of `agentica.toml`. `update` with
-  no name fetches every tag again; with a name, that dependency only; it also
+  no name fetches every tag again and reads `version` requirements against the tags; with a name, that dependency only; it also
   makes a missing or stale lock right. A commit pin never moves. A bad name,
   URL, tag or commit on the command line is a usage error (exit 2). Nothing is
   written when a step before the lock fails; if only the manifest write fails,

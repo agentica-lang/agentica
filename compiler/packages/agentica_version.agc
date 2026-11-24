@@ -16,6 +16,13 @@ enum Owner
   Package(String)
 end
 
+## The parts of a version, as text: the three numbers of the core and the pre-release identifiers (none for a release).
+## A number is compared as text by length first, which is its value because it has no leading zero.
+struct Version
+  core: List[String]
+  pre: List[String]
+end
+
 ## Why text is not one SemVer version, or "" when it is one.
 def problem(text: String) -> String
   parsed = parse(text)
@@ -55,22 +62,8 @@ def check(file: String, owner: Owner, needed: String, running: String) -> Result
   error(Failure.fail_key(file, KEY, "PKG-AGENTICA-TOO-OLD", message, Failure.hint(help)))
 end
 
-private
-
-DIGITS = Set.new("0123456789".split(""))
-IDENTIFIER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
-# A version is short; the limit keeps a hostile manifest from making the compare walk a long text.
-MAX_LENGTH = 256
-
-# The parts of a version, as text: the three numbers of the core and the pre-release identifiers (none for a release).
-# A number is compared as text by length first, which is its value because it has no leading zero.
-struct Version
-  core: List[String]
-  pre: List[String]
-end
-
-# The parts of a version, or why the text is not one: MAJOR.MINOR.PATCH, then an optional `-` and dot-separated
-# pre-release identifiers, then an optional `+` and build identifiers.
+## The parts of a version, or why the text is not one: MAJOR.MINOR.PATCH, then an optional `-` and dot-separated
+## pre-release identifiers, then an optional `+` and build identifiers.
 def parse(text: String) -> Result[Version]
   shape = "a version is MAJOR.MINOR.PATCH, with an optional pre-release such as -alpha.1"
   return error(shape) if text.length == 0 or text.length > MAX_LENGTH
@@ -98,7 +91,7 @@ def parse(text: String) -> Result[Version]
   ok(Version(core: core, pre: pre))
 end
 
-# Below 0, 0 or above 0 as a is older than, the same as or newer than b.
+## Below 0, 0 or above 0 as a is older than, the same as or newer than b.
 def compare(a: Version, b: Version) -> Int
   for index in 0...3
     order = compare_numbers(a.core[index], b.core[index])
@@ -120,6 +113,13 @@ def compare(a: Version, b: Version) -> Int
 
   a.pre.size - b.pre.size
 end
+
+private
+
+DIGITS = Set.new("0123456789".split(""))
+IDENTIFIER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
+# A version is short; the limit keeps a hostile manifest from making the compare walk a long text.
+MAX_LENGTH = 256
 
 # Two pre-release identifiers: numbers by value, a number before any other identifier, the others in ASCII order.
 def compare_identifiers(a: String, b: String) -> Int

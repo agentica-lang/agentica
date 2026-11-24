@@ -138,6 +138,7 @@ packages/package_hash.agc
 packages/package_import.agc
 packages/project.agc
 packages/toml_read.agc
+packages/version_requirement.agc
 query/at.agc
 query/bodies_json.agc
 query/definitions.agc

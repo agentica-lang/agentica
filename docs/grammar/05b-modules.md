@@ -396,10 +396,11 @@ import Sqlite from "pkg/sqlite/db"
   repository, each with only letters, digits, `.`, `_` and `-`, not `.`, `..` or
   starting with `-`, not ending in `.` and not a Windows device name such as
   `con` or `nul`), and exactly one of `tag` (1 to 128 letters, digits and the
-  characters `.`, `_`, `+` and `-`; no `/`, and not starting with `.` or `-`) or
-  `ref` (7 to 64 lowercase hex digits of a commit), and optionally `subdir`
-  (next item), or a `path` instead of all of those (the item after the next).
-  A branch, a version range or another key is `PKG-MANIFEST-INVALID`, at the
+  characters `.`, `_`, `+` and `-`; no `/`, and not starting with `.` or `-`),
+  `ref` (7 to 64 lowercase hex digits of a commit) or `version` (a requirement
+  over the tags, the item after the next), and optionally `subdir` (next item),
+  or a `path` instead of all of those (the item after that).
+  A branch or another key is `PKG-MANIFEST-INVALID`, at the
   key path (`dependencies.sqlite.branch`). `override = true`,
   `group = "test"` and `workspace = true` are the only other keys (their items
   below).
@@ -418,6 +419,25 @@ import Sqlite from "pkg/sqlite/db"
   that needs another folder of its own repository declares it like any other
   dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
   tags (`postgres-0.1.0`).
+- `version = "~> 0.8"` takes the highest tag of the repository that satisfies a
+  requirement, as `~>` of RubyGems and Mix does; `agentica add` and `agentica
+  update` choose it, and the lock keeps the chosen `tag` (below), so a build
+  stays exact and offline. A requirement is terms joined by `,`, and a tag
+  satisfies it when it satisfies every term. A term is an operator and a
+  version: `~>`, `>=`, `>`, `<=`, `<` or `==`, and a version alone is `==`. A
+  version has one to three numbers (the missing ones are 0) and may end in a
+  pre-release (`1.2.3-rc.1`, only with all three numbers); `~> 0.8` means `>=
+  0.8.0, < 1.0.0`, `~> 0.8.1` means `>= 0.8.1, < 0.9.0` and `~> 1` means `>=
+  1.0.0, < 2.0.0`. At most 256 characters and 8 terms. The tags that count are
+  `X.Y.Z` and `vX.Y.Z` for a repository, and `NAME-X.Y.Z` for a `subdir`, NAME
+  being the last folder of it (`lib-1.2.0` for `libs/lib`); every other tag is
+  ignored, and a tag that is a SemVer pre-release counts only when a term names
+  a pre-release. Versions are ordered as SemVer says. The key is exclusive with
+  `tag`, `ref`, `path` and `workspace = true`, and a text that is no
+  requirement is `PKG-MANIFEST-INVALID` at `dependencies.<name>.version`. A
+  name has one requirement in the whole tree for now: another source of the
+  name, with another requirement as well, is `PKG-SOURCE-CONFLICT`, as for a
+  tag.
 - `path = "../sqlite"` is a dependency on a folder of this machine: relative to
   the folder of the manifest, or absolute; not empty, with no control
   character, at most 1024 characters. It excludes `git`, `tag`, `ref` and
@@ -565,12 +585,14 @@ import Sqlite from "pkg/sqlite/db"
   missing `version` or any other value is `PKG-LOCK-INVALID`), then one
   `[[package]]` for every package of the build, direct or not, one entry for
   each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `subdir` (only
-  when the dependency has one), `tag` or `ref` (as in the manifest), `commit`
+  when the dependency has one), `tag` or `ref` (as in the manifest; for a
+  `version` dependency the `tag` that was chosen, then `version`, the
+  requirement as written), `commit`
   (40 or 64 lowercase hex digits; it starts with the `ref`) and `hash`
   (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
-  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. A
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. So is a `version` that is no requirement or that comes with a `ref`, at `package[n].version`, and a `tag` that the `version` of its entry does not accept, at `package[n].tag`. A
   workspace dependency (`workspace = true`) has one entry with its name, the
   `git` and the pin, the `commit` and `repository`, the `[workspace]`
   `repository` of that commit (a `git` URL), and no `hash` and no `subdir`,
@@ -588,7 +610,7 @@ import Sqlite from "pkg/sqlite/db"
   `[[native-artifact]]` follows the rule of a name or a namespaced name. Every
   dependency of the manifest must be in the lock with the same `git` (with or
   without a `.git` at the end), the same `subdir` (or none) and the same `tag`
-  or `ref`, or the same `path`, and the same `override`, and `workspace` (a
+  or `ref` (or the same `version`: the tag of the lock is not compared), or the same `path`, and the same `override`, and `workspace` (a
   workspace dependency has the entry of a workspace, and any other a package),
   or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of every
   locked package that is in `deps/`, where a sibling is looked up under the
@@ -715,12 +737,14 @@ import Sqlite from "pkg/sqlite/db"
   again. The lock is sorted by name (just `version = 1`
   when it is empty), in the layout above, so it has the same bytes when nothing
   changed.
-  - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
-    that order, then `--subdir DIR` if the package is a folder of the repository
+  - `add` takes the local name, the `https://` URL and `--tag`, `--ref` or
+    `--version REQUIREMENT`, in that order, then `--subdir DIR` if the package is a folder of the repository
     or `--workspace` (a flag with no value) if it is the whole workspace of the
     repository, and `--group test` for the test group. `--workspace` with
-    `--subdir` is a usage error, and it turns off the folder that a tag
-    `NAME-X.Y.Z` would take. In place of the URL, `OWNER/REPO`
+    `--subdir` or `--version` is a usage error, and it turns off the folder
+    that a tag `NAME-X.Y.Z` would take. A text that is no requirement is a
+    usage error, and `--version` writes `version = "REQUIREMENT"` in the
+    manifest and locks the highest tag that satisfies it. In place of the URL, `OWNER/REPO`
     (a GitHub account name of letters, digits and `-`, not first, at most 39
     characters, then a repository of letters, digits, `.`, `_` and `-`) is
     `https://github.com/OWNER/REPO`; the manifest and the lock store the full
@@ -750,7 +774,13 @@ import Sqlite from "pkg/sqlite/db"
   - `update` takes no word or the name of a dependency of the manifest (else
     `PKG-DEPENDENCY-UNKNOWN`). It fetches the tag pins again, all of them or
     the one named, and takes the commit they point to now, so a moved tag is
-    the new commit and hash in the lock. A pin that is a commit is not fetched
+    the new commit and hash in the lock. A `version` dependency is read against
+    the tags of its repository again (`git ls-remote --tags`, the only place
+    that lists them): it takes the highest tag that satisfies the requirement
+    now, and `add` and `install` keep the locked tag. A repository with no tag
+    that satisfies the requirement is `PKG-VERSION-UNSATISFIED` at
+    `dependencies.<name>.version`, and the help lists the newest tags that read
+    as a version. A pin that is a commit is not fetched
     again. It also fixes a lock that is missing or stale (a manifest edited by
     hand) and drops the packages that nothing asks for any more. A project with
     no dependency and no lock gets none.
