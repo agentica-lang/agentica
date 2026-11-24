@@ -133,17 +133,25 @@ def resolve(
     repository: "",
   )
 
-  made = make_temp(cache)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
-  end
+  resolve_pin(workspace, cache, place, pin, "")
+end
 
-  temp = made.unwrap!
-  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  resolved = resolve_into(workspace, cache, place, scratch, pin)
-  # As in fetch: a temporary folder that cannot be removed does not change the answer.
-  remove_temp(temp)
-  resolved
+## As `resolve` for a tag `NAME-X.Y.Z` that `add` got with no `--subdir` (`package` is NAME): the one fetch also tells
+## the folder of the repository that is the package, NAME when the tagged commit has the file NAME/agentica.toml and
+## its root has no agentica.toml whose `name` is NAME, else the repository itself. The entry it gives has that
+## `source.subdir`, the commit of the fetch and the hash of that folder, so the folder and the lock come from one
+## commit, whatever the tag does afterwards.
+def resolve_open(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  name: String,
+  source: GitSource.Source,
+  package: String,
+) -> Result[Lock.Locked]
+  pin = Lock.Locked(name: name, source: source, commit: "", hash: "", member: false, override: false, repository: "")
+
+  resolve_pin(workspace, cache, place, pin, package)
 end
 
 ## Fetches the pin of a workspace dependency, for `add` and `update`: with one fetch it reads the `[workspace]` table
@@ -184,39 +192,6 @@ def resolve_workspace(
   resolved = workspace_into(workspace, cache, place, scratch, pin)
   remove_temp(temp)
   resolved
-end
-
-## The folder of the repository that `add` takes for a tag `NAME-X.Y.Z` with no `--subdir` (`package` is NAME): NAME
-## when the tagged commit has the file NAME/agentica.toml and its root has no agentica.toml whose `name` is NAME, else
-## "" (the repository itself). The tag is fetched as `resolve` fetches it, and `git ls-tree -l` of the commit lists
-## only the two manifests; the root one is read with `git cat-file` (manifest_blobs). `place` names the dependency.
-def tag_subdir(
-  workspace: Workspace.Workspace,
-  cache: String,
-  place: Place,
-  source: GitSource.Source,
-  package: String,
-) -> Result[String]
-  made = make_temp(cache)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
-  end
-
-  temp = made.unwrap!
-  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  pin = Lock.Locked(
-    name: package,
-    source: source,
-    commit: "",
-    hash: "",
-    member: false,
-    override: false,
-    repository: "",
-  )
-
-  found = subdir_in(place, scratch, pin, package)
-  remove_temp(temp)
-  found
 end
 
 ## What a dependency asks of the tag, or none when it asks nothing that other asks can meet: a `version`, or a `tag`
@@ -506,18 +481,47 @@ def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
   ok()
 end
 
+def resolve_pin(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  open_pin: Lock.Locked,
+  package: String,
+) -> Result[Lock.Locked]
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  resolved = resolve_into(workspace, cache, place, scratch, open_pin, package)
+  # As in fetch: a temporary folder that cannot be removed does not change the answer.
+  remove_temp(temp)
+  resolved
+end
+
+# One fetch of the pin, then the folder (`package` is the name of the folder to look for when the pin did not say
+# which, "" otherwise), its files, the hash and the place in the cache.
 def resolve_into(
   workspace: Workspace.Workspace,
   cache: String,
   place: Place,
   scratch: Scratch,
-  pin: Lock.Locked,
+  open_pin: Lock.Locked,
+  package: String,
 ) -> Result[Lock.Locked]
-  try init_repository(place, scratch, pin)
-  try fetch_pin(place, scratch, pin)
+  try init_repository(place, scratch, open_pin)
+  try fetch_pin(place, scratch, open_pin)
   commit = try peel(place, scratch)
-  if pin.source.ref != "" and commit != pin.source.ref
-    return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{pin.source.ref}", ""))
+  if open_pin.source.ref != "" and commit != open_pin.source.ref
+    return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{open_pin.source.ref}", ""))
+  end
+
+  pin = open_pin
+  if package != ""
+    subdir = try subdir_of(place, scratch, commit, package)
+    pin = open_pin.with(source: open_pin.source.with(subdir: subdir))
   end
 
   try copy_tree(place, scratch, commit, pin.source.subdir)
@@ -661,10 +665,7 @@ def members_present(place: Place, scratch: Scratch, commit: String, folders: Lis
   ok()
 end
 
-def subdir_in(place: Place, scratch: Scratch, pin: Lock.Locked, package: String) -> Result[String]
-  try init_repository(place, scratch, pin)
-  try fetch_pin(place, scratch, pin)
-  commit = try peel(place, scratch)
+def subdir_of(place: Place, scratch: Scratch, commit: String, package: String) -> Result[String]
   folder_manifest = "#{package}/#{MANIFEST}"
   arguments = ["ls-tree", "-z", "-l", commit, "--", MANIFEST, folder_manifest]
   listing = try git_text(place, scratch, inside(scratch, arguments))
