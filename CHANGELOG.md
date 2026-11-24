@@ -20,7 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `agentica add NAME URL --tag NAME-X.Y.Z` with no `--subdir` fetches the tag once, so the folder it picks and the commit it locks come from the same fetch (#1839).
-- A checker message writes a std/http or std/logger type as the file imported it (`W.Request` for `import W from "std/http"`), never `HTTP.Request` for a file that binds `HTTP` to another module; `agentica help std/http.serve` and a CHECK-ARITY callee write the types std/http declares itself as `HTTP.App`, like the ones it re-exports (#1431).
+- Checker messages and `agentica help std/http.serve` write std/http and std/logger types as the file imports them, one style for each (#1431).
 
 ## [0.37.0] - 2026-11-23
 

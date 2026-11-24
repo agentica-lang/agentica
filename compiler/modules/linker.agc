@@ -137,12 +137,12 @@ end
 ## block itself, and so is a block that such a file re-exports (`export Agents.Counter`). A builtin type that a std/
 ## module re-exports maps to its whole text: the name of an import list (`Request`), else the alias and the member
 ## (`H.Request`).
-def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
+def written_prefixes(modules: List[LinkedModule], focus: LinkedModule) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = focus.aliases
   here = focus.key
   for alias in aliases.keys.sort
-    for module in linked.modules
+    for module in modules
       named = module.key == aliases[alias] and module.key != here
       if named and module.prefix != "" and !written.has_key?(module.prefix)
         written = written.put(module.prefix, alias)
@@ -151,7 +151,7 @@ def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
   end
 
   for alias in aliases.keys.sort
-    for module in linked.modules
+    for module in modules
       inner = module.block != "" and home_key(module) == aliases[alias]
       if inner and !written.has_key?(module.prefix)
         written = written.put(module.prefix, "#{alias}.#{module.block}")
@@ -160,14 +160,14 @@ def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
   end
 
   blocks: Map[String, String] = {}
-  for module in linked.modules
+  for module in modules
     if module.block != ""
-      blocks = blocks.put(block_name(linked.modules, module), module.prefix)
+      blocks = blocks.put(block_name(modules, module), module.prefix)
     end
   end
 
   for alias in aliases.keys.sort
-    for module in linked.modules
+    for module in modules
       if module.key == aliases[alias]
         for name in module.reexported.keys.sort
           block = blocks.get(module.reexported[name])
@@ -189,7 +189,7 @@ def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
   end
 
   for alias in aliases.keys.sort
-    for module in linked.modules
+    for module in modules
       if module.key == aliases[alias]
         for name in module.reexported.keys.sort
           original = module.reexported[name]
@@ -199,6 +199,49 @@ def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
             written = written.put(original, alias)
           end
         end
+      end
+    end
+  end
+
+  written
+end
+
+## `written_prefixes` of `file` plus the std/ modules that write their types through the module name
+## (T.reexporting_stem): by alias `W.RequestBody`, by name only what it names (the rest bare), else `HTTP.RequestBody`.
+## A file that binds the stem to something else gets builtin names (`HttpWire.Request`) and bare names.
+def std_written(modules: List[LinkedModule], file: String) -> Map[String, String]
+  found = modules.select do |module: LinkedModule| module.file == file end
+  return {} if found.size == 0
+
+  here = found[0]
+  written = written_prefixes(modules, here)
+  for module in modules
+    stem = T.reexporting_stem(module.key)
+    next if stem == "" or module.key == here.key or module.prefix == ""
+
+    elsewhere = here.aliases.get(stem, module.key) != module.key or here.named.has_key?(stem)
+    named = here.named.values.any? do |linked: String|
+      linked.start_with?(module.prefix) or T.REEXPORTED_TYPES.get(linked, "").start_with?("#{stem}.")
+    end
+
+    if !written.has_key?(module.prefix)
+      alias = stem
+      if elsewhere or named
+        alias = ""
+      end
+
+      written = written.put(module.prefix, alias)
+    end
+
+    for original in T.REEXPORTED_TYPES.keys
+      canonical = T.REEXPORTED_TYPES[original]
+      if canonical.start_with?("#{stem}.") and !written.has_key?(original) and (elsewhere or named)
+        member = canonical.split(".")[1]
+        if elsewhere
+          member = original
+        end
+
+        written = written.put(original, member)
       end
     end
   end

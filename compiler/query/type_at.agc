@@ -51,7 +51,9 @@ def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Aske
 end
 
 ## The names the root file writes for the types of other files and of std/ modules (`Linker.written_prefixes`).
-def written_prefixes(linked: Linker.Linked) -> Map[String, String] = Linker.written_prefixes(linked, linked.modules[0])
+def written_prefixes(linked: Linker.Linked) -> Map[String, String]
+  Linker.written_prefixes(linked.modules, linked.modules[0])
+end
 
 ## The file of the definition of `answered`; "" when the answer has none.
 def definition_file(answered: Answer) -> String

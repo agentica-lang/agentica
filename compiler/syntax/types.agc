@@ -15,11 +15,6 @@ REEXPORTED_TYPES: Map[String, String] = {
   "LogRegistry.Level": "Logger.Level",
 }
 
-## The std/ modules that re-export builtin types (REEXPORTED_TYPES), by file, with the name a program writes the
-## module as. Their own types are written through it too (`HTTP.App`), so a signature does not mix `HTTP.Request` with
-## a bare `App`.
-STD_TYPE_MODULES: Map[String, String] = {"std/http.agc": "HTTP", "std/logger.agc": "Logger"}
-
 ## The linked name of the builtin type Ref (Ref.new). Ref is not reserved, and the names of the root file keep no
 ## prefix, so the linker gives the builtin a name that no file can declare, as it does to the names of other files.
 REF_TYPE = "@Ref"
@@ -291,6 +286,17 @@ end
 ## The name of a struct, enum or other named type as a message prints it: display_name, and a builtin type that a std/
 ## module re-exports by its written name (HttpWire.Request is HTTP.Request).
 def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_name(name))
+
+## The name that the std/ module `key` (`std/http.agc`) writes its types through (`HTTP`), "" for a module that
+## re-exports no builtin type. A module's own types are written so too, `HTTP.App`.
+def reexporting_stem(key: String) -> String
+  for original in REEXPORTED_TYPES.keys
+    stem = REEXPORTED_TYPES[original].split(".")[0]
+    return stem if key == "std/#{stem.downcase}.agc"
+  end
+
+  ""
+end
 
 ## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
 ## of a std/ signature prints as `HTTP.ClientOptions()`. Only a whole name outside a string literal is a type: the

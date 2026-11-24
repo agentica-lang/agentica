@@ -4,6 +4,7 @@
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
 import {CALLABLE_NAMES, ENTRIES, METHOD_RECORDS, PRELUDE_ONLY, RECORDS} from "../catalog/builtins"
+import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
@@ -584,8 +585,9 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
   end
 
   message = "\"#{name}\" expects #{wanted}, found #{node.args.size}"
-  params = signature.params.map do |type: T.Type| T.to_text_as(type, cx.std_written) end
-  callee = "#{name}(#{params.join(", ")}) -> #{T.to_text_as(signature.result, cx.std_written)}"
+  written = Linker.std_written(cx.modules, cx.file)
+  params = signature.params.map do |type: T.Type| T.to_text_as(type, written) end
+  callee = "#{name}(#{params.join(", ")}) -> #{T.to_text_as(signature.result, written)}"
   State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end
 

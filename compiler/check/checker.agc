@@ -204,21 +204,8 @@ def start(linked: Linker.Linked) -> State.Cx
     json_needs: {},
     lenient: Set.new([]),
     std: std_prefixes(linked.modules),
-    std_written: std_written(linked.modules),
+    modules: linked.modules,
   )
-end
-
-# The module name that each std/ module writes its types through (HTTP for std/http), by prefix.
-def std_written(modules: List[Linker.LinkedModule]) -> Map[String, String]
-  found: Map[String, String] = {}
-  for module in modules
-    name = T.STD_TYPE_MODULES.get(module.key, "")
-    if name != "" and module.prefix != ""
-      found = found.put(module.prefix, name)
-    end
-  end
-
-  found
 end
 
 # The prefixes of the modules of the standard library, which CHECK-UNUSED-VARIABLE does not count as the program's own
@@ -303,7 +290,7 @@ def lenient_files(linked: Linker.Linked, settings: Env.Settings) -> Set[String]
   Set.new(files)
 end
 
-# `check_all`, with the std/ type names of each problem written as the file of the problem writes them.
+# `check_all`, with the re-exported std/ types in each problem written as the file of the problem writes them.
 def run(
   linked: Linker.Linked,
   settings: Env.Settings,
@@ -318,15 +305,22 @@ def run(
   ok(done.with(problems: done.problems.map do |found: Failure.Problem| settled(found, linked) end))
 end
 
-# The problem with the names of the std/ types in its texts as its file writes them (std_names).
 def settled(found: Failure.Problem, linked: Linker.Linked) -> Failure.Problem
+  hint = ""
+  case found.help
+    Diag.Help.Hint(text) -> hint = text
+    Diag.Help.NoHelp -> hint = ""
+  end
+
+  texts = [found.message, found.expected, found.actual, found.callee, found.signature, hint]
+  return found if !texts.any? do |text: String| mentions_std?(text) end
+
   names = std_names(linked, found.file)
   return found if names.size == 0
 
   help = found.help
-  case found.help
-    Diag.Help.Hint(text) -> help = Diag.Help.Hint(T.replaced_names(text, names, false))
-    Diag.Help.NoHelp -> help = found.help
+  if hint != ""
+    help = Diag.Help.Hint(T.replaced_names(hint, names, false))
   end
 
   found.with(
@@ -342,81 +336,43 @@ def settled(found: Failure.Problem, linked: Linker.Linked) -> Failure.Problem
   )
 end
 
-# The names that a message prints for the types of the std/ modules that write their types through the module name
-# (T.STD_TYPE_MODULES): `HTTP.Request`, `HTTP.App`, by the text that the file `file` writes for each, from the names
-# it imported (Linker.written_prefixes: `W.Request`, or `Request` for an import list). A file that binds the module
-# name to something else gets the builtin name of a re-exported type (`HttpWire.Request`) and the bare name of the
-# others, so a message never says `HTTP.Request` for a type of another HTTP. A name that it writes as the message does
-# is left out.
+# What a message prints for each re-exported std/ type (`HTTP.Request`), to what the file writes (Linker.std_written).
+# A name that a user type has too is written as the builtin (`HttpWire.Request`), so the two never read alike.
 def std_names(linked: Linker.Linked, file: String) -> Map[String, String]
+  written = Linker.std_written(linked.modules, file)
   names: Map[String, String] = {}
-  focus = linked.modules.select do |module: Linker.LinkedModule| module.file == file end
-  return names if focus.size == 0
-
-  here = focus[0]
-  written = Linker.written_prefixes(linked, here)
-  for module in linked.modules
-    stem = T.STD_TYPE_MODULES.get(module.key, "")
-    next if stem == "" or module.key == here.key
-
-    bound = here.aliases.get(stem, module.key) != module.key or here.named.has_key?(stem)
-    for original in T.REEXPORTED_TYPES.keys.sort
-      canonical = T.REEXPORTED_TYPES[original]
-      next if !canonical.start_with?("#{stem}.")
-
-      names = names.put(canonical, std_text(original, canonical, written, bound, original))
+  for original in T.REEXPORTED_TYPES.keys
+    canonical = T.REEXPORTED_TYPES[original]
+    text = T.to_text_as(T.Type.Struct(original, []), written)
+    if user_type?(linked.modules, text)
+      text = original
     end
 
-    for decl in module.declarations
-      own = declared_type(decl)
-      next if own == ""
-
-      canonical = "#{stem}.#{T.display_name(own)}"
-      names = names.put(canonical, std_text(own, canonical, written, bound, T.display_name(own)))
+    if text != canonical
+      names = names.put(canonical, text)
     end
   end
 
-  kept: Map[String, String] = {}
-  for canonical in names.keys
-    if names[canonical] != canonical
-      kept = kept.put(canonical, names[canonical])
-    end
+  names
+end
+
+# Whether a file that is not of the standard library declares a struct or an enum written `name`.
+def user_type?(modules: List[Linker.LinkedModule], name: String) -> Bool
+  modules.any? do |module: Linker.LinkedModule|
+    !module.key.start_with?("std/") and module.declarations.any? do |decl: Ast.Decl| declares?(decl, name) end
   end
-
-  kept
 end
 
-# What a file writes for the type `linked_name` that a message prints as `canonical`: the text of `written`, else
-# `canonical`, or `fallback` when the file binds the module name to something else.
-def std_text(
-  linked_name: String,
-  canonical: String,
-  written: Map[String, String],
-  bound: Bool,
-  fallback: String,
-) -> String
-  if !mapped?(linked_name, written)
-    return fallback if bound
-
-    return canonical
-  end
-
-  T.to_text_as(T.Type.Struct(linked_name, []), written)
-end
-
-# Whether `written` has the type: its linked name, or the prefix of its module.
-def mapped?(linked_name: String, written: Map[String, String]) -> Bool
-  written.has_key?(linked_name) or written.has_key?(Linker.prefix_of(linked_name))
-end
-
-# The linked name of the struct, enum or alias that `decl` declares, "" for other declarations.
-def declared_type(decl: Ast.Decl) -> String
+def declares?(decl: Ast.Decl, name: String) -> Bool
   case decl
-    Ast.Decl.Struct(node) -> node.name
-    Ast.Decl.Enum(node) -> node.name
-    Ast.Decl.TypeAlias(node) -> node.name
-    _ -> ""
+    Ast.Decl.Struct(node) -> T.display_name(node.name) == name
+    Ast.Decl.Enum(node) -> T.display_name(node.name) == name
+    _ -> false
   end
+end
+
+def mentions_std?(text: String) -> Bool
+  T.REEXPORTED_TYPES.values.any? do |canonical: String| text.include?(canonical) end
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends

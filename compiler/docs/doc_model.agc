@@ -74,7 +74,7 @@ end
 
 ## The exported API of a parsed program, in source order. Private declarations and imports are left out. `origins` maps
 ## each name the program re-exports to the item of the original declaration (doc_origins.agc); a re-export without an
-## entry is left out. The module at `path` that writes its types through the module name (T.STD_TYPE_MODULES) has its
+## entry is left out. The module at `path` that writes its types through the module name (T.reexporting_stem) has its
 ## own types written so too (`HTTP.App`), as the types it re-exports are.
 def of_program(program: Ast.Program, text: String, origins: Map[String, Item], path: String) -> Module
   items = declared_through(program, text, origins).filter do |item: Item| item.exported end
@@ -150,7 +150,7 @@ def own_types(program: Ast.Program, path: String) -> Map[String, String]
     file = "#{path}.agc"
   end
 
-  stem = T.STD_TYPE_MODULES.get(file, "")
+  stem = T.reexporting_stem(file)
   names: Map[String, String] = {}
   return names if stem == ""
 
