@@ -26,6 +26,6 @@ def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[
   case parse(text)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(program) ->
-      Diag.Outcome.Done(Model.of_program(program, text, Origins.of_file(settings, path, program)))
+      Diag.Outcome.Done(Model.of_program(program, text, Origins.of_file(settings, path, program), path))
   end
 end

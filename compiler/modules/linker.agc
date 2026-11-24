@@ -2,6 +2,7 @@
 ## (rewrite.agc).
 
 import Ast from "../syntax/ast"
+import T from "../syntax/types"
 import Declarations from "declarations"
 import ImportUse from "import_use"
 import Env from "link_env"
@@ -124,6 +125,175 @@ def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
 
   ""
 end
+
+## The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file
+## is written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases
+## for one file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the
+## file that re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports
+## its own file under an alias. When two files re-export the same type, the alphabetically first alias is the one
+## written. The `focus` module (the first, for a query) may be a module block (At.focus): its own types are written
+## bare, as it writes them, and those of the other blocks of its file through their names (`Counter.Msg`). A block
+## of a file imported under an alias is written through both (`Agents.Counter.Msg`), unless the root file names the
+## block itself, and so is a block that such a file re-exports (`export Agents.Counter`). A builtin type that a std/
+## module re-exports maps to its whole text: the name of an import list (`Request`), else the alias and the member
+## (`H.Request`).
+def written_prefixes(modules: List[LinkedModule], focus: LinkedModule) -> Map[String, String]
+  written: Map[String, String] = {}
+  aliases = focus.aliases
+  here = focus.key
+  for alias in aliases.keys.sort
+    for module in modules
+      named = module.key == aliases[alias] and module.key != here
+      if named and module.prefix != "" and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, alias)
+      end
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in modules
+      inner = module.block != "" and home_key(module) == aliases[alias]
+      if inner and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, "#{alias}.#{module.block}")
+      end
+    end
+  end
+
+  blocks: Map[String, String] = {}
+  for module in modules
+    if module.block != ""
+      blocks = blocks.put(block_name(modules, module), module.prefix)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          block = blocks.get(module.reexported[name])
+          if block.some? and !written.has_key?(block.unwrap!)
+            written = written.put(block.unwrap!, "#{alias}.#{name}")
+          end
+        end
+      end
+    end
+  end
+
+  # A builtin type that a std/ module re-exports has no prefix: it is written as the root file imported it by name
+  # (`Request`), else through the alias of the std module (`HTTP.Request`).
+  named = focus.named
+  for local in named.keys.sort
+    if T.REEXPORTED_TYPES.has_key?(named[local]) and !written.has_key?(named[local])
+      written = written.put(named[local], local)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          original = module.reexported[name]
+          if T.REEXPORTED_TYPES.has_key?(original) and !written.has_key?(original)
+            written = written.put(original, "#{alias}.#{name}")
+          elsif !written.has_key?(original) and !written.has_key?(prefix_of(original))
+            written = written.put(original, alias)
+          end
+        end
+      end
+    end
+  end
+
+  written
+end
+
+## `written_prefixes` of `file` plus the std/ modules that write their types through the module name
+## (T.reexporting_stem): by alias `W.RequestBody`, by name only what it names (the rest bare), else `HTTP.RequestBody`.
+## A file that binds the stem to something else gets builtin names (`HttpWire.Request`) and bare names.
+def std_written(modules: List[LinkedModule], file: String) -> Map[String, String]
+  found = modules.select do |module: LinkedModule| module.file == file end
+  return {} if found.size == 0
+
+  here = found[0]
+  written = written_prefixes(modules, here)
+  for module in modules
+    stem = T.reexporting_stem(module.key)
+    next if stem == "" or module.key == here.key or module.prefix == ""
+
+    elsewhere = here.aliases.get(stem, module.key) != module.key or here.named.has_key?(stem)
+    named = here.named.values.any? do |linked: String|
+      linked.start_with?(module.prefix) or T.REEXPORTED_TYPES.get(linked, "").start_with?("#{stem}.")
+    end
+
+    if !written.has_key?(module.prefix)
+      alias = stem
+      if elsewhere or named
+        alias = ""
+      end
+
+      written = written.put(module.prefix, alias)
+    end
+
+    for original in T.REEXPORTED_TYPES.keys
+      canonical = T.REEXPORTED_TYPES[original]
+      if canonical.start_with?("#{stem}.") and !written.has_key?(original) and (elsewhere or named)
+        member = canonical.split(".")[1]
+        if elsewhere
+          member = original
+        end
+
+        written = written.put(original, member)
+      end
+    end
+  end
+
+  written_apart(modules, here, written)
+end
+
+# A re-exported std/ type that `written` writes with a bare name that a user type the file sees also has (its own, or
+# one of a file it imports) is written as the builtin (`HttpWire.Request`).
+def written_apart(modules: List[LinkedModule], here: LinkedModule, written: Map[String, String]) -> Map[String, String]
+  bare = T.REEXPORTED_TYPES.keys.filter do |original: String|
+    !T.to_text_as(T.Type.Struct(original, []), written).include?(".") and written.has_key?(original)
+  end
+
+  return written if bare.size == 0
+
+  seen: List[String] = []
+  for module in modules
+    if module.key == here.key or (!module.key.start_with?("std/") and imported?(here, module))
+      for decl in module.declarations
+        seen = seen.push(declared_name(decl))
+      end
+    end
+  end
+
+  apart = written
+  for original in bare
+    if seen.include?(T.to_text_as(T.Type.Struct(original, []), written))
+      apart = apart.put(original, original)
+    end
+  end
+
+  apart
+end
+
+def imported?(here: LinkedModule, module: LinkedModule) -> Bool
+  (
+    here.aliases.values.include?(module.key) or
+    here.named.values.any? do |linked: String| module.prefix != "" and linked.start_with?(module.prefix) end
+  )
+end
+
+def declared_name(decl: Ast.Decl) -> String
+  case decl
+    Ast.Decl.Struct(node) -> T.display_name(node.name)
+    Ast.Decl.Enum(node) -> T.display_name(node.name)
+    _ -> ""
+  end
+end
+
+## The prefix of a linked name: "@2::" of "@2::User", "" for a bare name.
+def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)
 
 ## Links several roots into one program with shared tables (docs/grammar/06b-builtins.md): a module that two
 ## roots reach is linked once, and every module, the roots too, has the prefix "@N::", so two roots may declare `main`.

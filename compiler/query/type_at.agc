@@ -50,83 +50,9 @@ def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Aske
   end
 end
 
-## The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file is
-## written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
-## file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the file that
-## re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports its own file
-## under an alias. When two files re-export the same type, the alphabetically first alias is the one written. The first
-## module may be a module block (At.focus): its own types are written bare, as it writes them, and those of the other
-## blocks of its file through their names (`Counter.Msg`). A block of a file imported under an alias is written through
-## both (`Agents.Counter.Msg`), unless the root file names the block itself, and so is a block that such a file
-## re-exports (`export Agents.Counter`). A builtin type that a std/ module re-exports maps to its whole text: the name
-## of an import list (`Request`), else the alias and the member (`H.Request`).
+## The names the root file writes for the types of other files and of std/ modules (`Linker.written_prefixes`).
 def written_prefixes(linked: Linker.Linked) -> Map[String, String]
-  written: Map[String, String] = {}
-  aliases = linked.modules[0].aliases
-  here = linked.modules[0].key
-  for alias in aliases.keys.sort
-    for module in linked.modules
-      named = module.key == aliases[alias] and module.key != here
-      if named and module.prefix != "" and !written.has_key?(module.prefix)
-        written = written.put(module.prefix, alias)
-      end
-    end
-  end
-
-  for alias in aliases.keys.sort
-    for module in linked.modules
-      inner = module.block != "" and Linker.home_key(module) == aliases[alias]
-      if inner and !written.has_key?(module.prefix)
-        written = written.put(module.prefix, "#{alias}.#{module.block}")
-      end
-    end
-  end
-
-  blocks: Map[String, String] = {}
-  for module in linked.modules
-    if module.block != ""
-      blocks = blocks.put(Linker.block_name(linked.modules, module), module.prefix)
-    end
-  end
-
-  for alias in aliases.keys.sort
-    for module in linked.modules
-      if module.key == aliases[alias]
-        for name in module.reexported.keys.sort
-          block = blocks.get(module.reexported[name])
-          if block.some? and !written.has_key?(block.unwrap!)
-            written = written.put(block.unwrap!, "#{alias}.#{name}")
-          end
-        end
-      end
-    end
-  end
-
-  # A builtin type that a std/ module re-exports has no prefix: it is written as the root file imported it by name
-  # (`Request`), else through the alias of the std module (`HTTP.Request`).
-  named = linked.modules[0].named
-  for local in named.keys.sort
-    if T.REEXPORTED_TYPES.has_key?(named[local]) and !written.has_key?(named[local])
-      written = written.put(named[local], local)
-    end
-  end
-
-  for alias in aliases.keys.sort
-    for module in linked.modules
-      if module.key == aliases[alias]
-        for name in module.reexported.keys.sort
-          original = module.reexported[name]
-          if T.REEXPORTED_TYPES.has_key?(original) and !written.has_key?(original)
-            written = written.put(original, "#{alias}.#{name}")
-          elsif !written.has_key?(original) and !written.has_key?(prefix_of(original))
-            written = written.put(original, alias)
-          end
-        end
-      end
-    end
-  end
-
-  written
+  Linker.written_prefixes(linked.modules, linked.modules[0])
 end
 
 ## The file of the definition of `answered`; "" when the answer has none.
@@ -152,9 +78,6 @@ CAPITALS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
 
 # The longest name a call head is read from, in characters.
 HEAD_LIMIT = 128
-
-# The "@N::" in front of a linked name; "" for a name of the root file.
-def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)
 
 # The answer at `offset`, a character of the root file; the first module of `linked` is the one that holds it.
 def answer_at(

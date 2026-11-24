@@ -230,19 +230,16 @@ def signature(entry: Model.Builtin) -> String
   forms.map(&form_signature).join("\n")
 end
 
-## The signature of one form.
+## The signature of one form. A form of a std-only module (HttpWire, LogRegistry) names its types as the VM does
+## (`HttpWire.Request`), as its shape does; the others as a program writes them (`HTTP.Request`).
 def form_signature(form: Model.Builtin) -> String
-  parameters = form.parameters.map do |parameter: Model.Named| parameter_text(parameter) end
-  "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
+  internal = std_only_name?(form.name)
+  parameters = form.parameters.map do |parameter: Model.Named| parameter_written(parameter, internal) end
+  "#{form.name}(#{parameters.join(", ")}) -> #{type_written(form.result, internal)}"
 end
 
 ## A parameter as a signature writes it: `level: Int = 6`.
-def parameter_text(parameter: Model.Named) -> String
-  typed = "#{parameter.name}: #{Types.to_text(parameter.type)}"
-  return typed if !default_present?(parameter.default)
-
-  "#{typed} = #{default_text(parameter.default)}"
-end
+def parameter_text(parameter: Model.Named) -> String = parameter_written(parameter, false)
 
 ## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none, Enum.Variant or Record(); ""
 ## for no default.
@@ -515,4 +512,17 @@ def module_of(name: String) -> String
   return name.slice(0, dot.unwrap!) if dot.some?
 
   ""
+end
+
+def parameter_written(parameter: Model.Named, internal: Bool) -> String
+  typed = "#{parameter.name}: #{type_written(parameter.type, internal)}"
+  return typed if !default_present?(parameter.default)
+
+  "#{typed} = #{default_text(parameter.default)}"
+end
+
+def type_written(type: Types.Type, internal: Bool) -> String
+  return Types.builtin_text(type) if internal
+
+  Types.to_text(type)
 end
