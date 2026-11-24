@@ -277,6 +277,88 @@ static agc_value builtin_int_shift_right_unsigned(agc_vm *vm, agc_value *args, u
   return agc_int(int_from_bits(count >= 64 ? 0 : bits >> count));
 }
 
+/* wrapping_add, wrapping_sub and wrapping_mul keep the low 64 bits of the two's complement result. */
+static agc_value builtin_int_wrapping_add(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) + (uint64_t)agc_as_int(vm, args[1])));
+}
+
+static agc_value builtin_int_wrapping_sub(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) - (uint64_t)agc_as_int(vm, args[1])));
+}
+
+static agc_value builtin_int_wrapping_mul(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) * (uint64_t)agc_as_int(vm, args[1])));
+}
+
+/* The low width bits of bits, read as a narrow integer type: a signed type takes the top of the width as its sign. */
+static int64_t narrow_from_bits(uint64_t bits, unsigned width, bool is_signed) {
+  uint64_t low = bits & (((uint64_t)1 << width) - 1);
+  if (is_signed && (low >> (width - 1)) != 0) return (int64_t)low - ((int64_t)1 << width);
+  return (int64_t)low;
+}
+
+/* The wrapping and shifting builtins of a narrow integer type (a value of the VM Int that the type holds): the Int
+   operation on the 64-bit forms, then the low bits again. A shift count of the width or more drops every bit. */
+#define NARROW_WRAP(word, width, is_signed)                                                           \
+  static agc_value builtin_int_wrap_##word(agc_vm *vm, agc_value *args, uint32_t span) {                   \
+    (void)span;                                                                                            \
+    return agc_int(narrow_from_bits((uint64_t)agc_as_int(vm, args[0]), width, is_signed));                 \
+  }                                                                                                        \
+  static agc_value builtin_##word##_wrapping_add(agc_vm *vm, agc_value *args, uint32_t span) {             \
+    (void)span;                                                                                            \
+    uint64_t sum = (uint64_t)agc_as_int(vm, args[0]) + (uint64_t)agc_as_int(vm, args[1]);                  \
+    return agc_int(narrow_from_bits(sum, width, is_signed));                                               \
+  }                                                                                                        \
+  static agc_value builtin_##word##_wrapping_sub(agc_vm *vm, agc_value *args, uint32_t span) {             \
+    (void)span;                                                                                            \
+    uint64_t difference = (uint64_t)agc_as_int(vm, args[0]) - (uint64_t)agc_as_int(vm, args[1]);           \
+    return agc_int(narrow_from_bits(difference, width, is_signed));                                        \
+  }                                                                                                        \
+  static agc_value builtin_##word##_wrapping_mul(agc_vm *vm, agc_value *args, uint32_t span) {             \
+    (void)span;                                                                                            \
+    uint64_t product = (uint64_t)agc_as_int(vm, args[0]) * (uint64_t)agc_as_int(vm, args[1]);              \
+    return agc_int(narrow_from_bits(product, width, is_signed));                                           \
+  }                                                                                                        \
+  static agc_value builtin_##word##_shift_left(agc_vm *vm, agc_value *args, uint32_t span) {               \
+    uint64_t count = shift_count(vm, args, span);                                                          \
+    uint64_t bits = (uint64_t)agc_as_int(vm, args[0]);                                                     \
+    return agc_int(narrow_from_bits(count >= width ? 0 : bits << count, width, is_signed));                \
+  }
+
+NARROW_WRAP(int8, 8, true)
+NARROW_WRAP(int16, 16, true)
+NARROW_WRAP(int32, 32, true)
+NARROW_WRAP(uint8, 8, false)
+NARROW_WRAP(uint16, 16, false)
+NARROW_WRAP(uint32, 32, false)
+
+/* shift_right_unsigned on a signed type shifts its width bits as an unsigned number. On an unsigned type it is
+   Int.shift_right_unsigned, and bit_not on a signed type is Int.bit_not. */
+#define SIGNED_SHIFT_RIGHT_UNSIGNED(word, width)                                                           \
+  static agc_value builtin_##word##_shift_right_unsigned(agc_vm *vm, agc_value *args, uint32_t span) {    \
+    uint64_t count = shift_count(vm, args, span);                                                         \
+    uint64_t low = (uint64_t)narrow_from_bits((uint64_t)agc_as_int(vm, args[0]), width, false);           \
+    return agc_int(narrow_from_bits(count >= width ? 0 : low >> count, width, true));                     \
+  }
+
+SIGNED_SHIFT_RIGHT_UNSIGNED(int8, 8)
+SIGNED_SHIFT_RIGHT_UNSIGNED(int16, 16)
+SIGNED_SHIFT_RIGHT_UNSIGNED(int32, 32)
+
+/* bit_not on an unsigned type flips the bits within its width. */
+#define UNSIGNED_BIT_NOT(word, width)                                                             \
+  static agc_value builtin_##word##_bit_not(agc_vm *vm, agc_value *args, uint32_t span) {         \
+    (void)span;                                                                                   \
+    return agc_int(narrow_from_bits(~(uint64_t)agc_as_int(vm, args[0]), width, false));           \
+  }
+
+UNSIGNED_BIT_NOT(uint8, 8)
+UNSIGNED_BIT_NOT(uint16, 16)
+UNSIGNED_BIT_NOT(uint32, 32)
+
 static double float64_from_bits(uint64_t bits) {
   double x;
   memcpy(&x, &bits, sizeof x);
@@ -447,6 +529,45 @@ const agc_builtin agc_number_builtins[] = {
   {"Int.to_uint16!", 1, builtin_int_to_uint16_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_uint32", 1, builtin_int_to_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_uint32!", 1, builtin_int_to_uint32_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrapping_add", 2, builtin_int_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrapping_sub", 2, builtin_int_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrapping_mul", 2, builtin_int_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_int8", 1, builtin_int_wrap_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int8.wrapping_add", 2, builtin_int8_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int8.wrapping_sub", 2, builtin_int8_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int8.wrapping_mul", 2, builtin_int8_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int8.shift_left", 2, builtin_int8_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int8.shift_right_unsigned", 2, builtin_int8_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_int16", 1, builtin_int_wrap_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int16.wrapping_add", 2, builtin_int16_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int16.wrapping_sub", 2, builtin_int16_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int16.wrapping_mul", 2, builtin_int16_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int16.shift_left", 2, builtin_int16_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int16.shift_right_unsigned", 2, builtin_int16_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_int32", 1, builtin_int_wrap_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int32.wrapping_add", 2, builtin_int32_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int32.wrapping_sub", 2, builtin_int32_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int32.wrapping_mul", 2, builtin_int32_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int32.shift_left", 2, builtin_int32_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int32.shift_right_unsigned", 2, builtin_int32_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_uint8", 1, builtin_int_wrap_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt8.wrapping_add", 2, builtin_uint8_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt8.wrapping_sub", 2, builtin_uint8_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt8.wrapping_mul", 2, builtin_uint8_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt8.shift_left", 2, builtin_uint8_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt8.bit_not", 1, builtin_uint8_bit_not, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_uint16", 1, builtin_int_wrap_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt16.wrapping_add", 2, builtin_uint16_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt16.wrapping_sub", 2, builtin_uint16_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt16.wrapping_mul", 2, builtin_uint16_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt16.shift_left", 2, builtin_uint16_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt16.bit_not", 1, builtin_uint16_bit_not, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_uint32", 1, builtin_int_wrap_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt32.wrapping_add", 2, builtin_uint32_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt32.wrapping_sub", 2, builtin_uint32_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt32.wrapping_mul", 2, builtin_uint32_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt32.shift_left", 2, builtin_uint32_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt32.bit_not", 1, builtin_uint32_bit_not, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Float32`, IEEE 754 binary32: a float literal takes it where its place expects it, rounded once, `+ - * /` and the comparisons round each result to the nearest `Float32`, `to_s` gives the shortest text (`0.1`), `x.to_f`, `f.to_float32`, `n.to_float32`, `x.to_bits` and `Float32.from_bits` convert, and JSON encodes and decodes it (#984).
+- The narrow integer types have the bit methods of `Int` at their width (`a.bit_not`, `a.shift_left(1)`), `wrapping_add`, `wrapping_sub` and `wrapping_mul` (on `Int` too), `n.wrap_uint8` and the other `wrap_<type>` of an `Int`, widenings that cannot fail (`a.to_uint16`) and `a.to_f` (#984).
 - The narrow integer types take `+`, `-`, `*`, `/`, `%`, the comparisons and `==`: a literal on either side takes the type of the other (`a + 1`, `a == 255`), two types are `CHECK-TYPE-MISMATCH`, a result outside the type halts with `RUNTIME-INTEGER-OVERFLOW`, and an unsigned value has no unary minus (#984).
 - The narrow integer types `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` and `UInt32`: an integer literal takes the type its place expects, out of range is `CHECK-INT-RANGE`, and `x.to_i`, `n.to_uint8` and `n.to_uint8!` convert; `Int64` and `Float64` name `Int` and `Float` (#984).
 - `BDD.run(steps, hooks: some(BDD.Hooks(before_all:, after_all:)))` sets a feature up once per `--jobs` worker, as RSpec's `before(:all)`, and `BDD.feature_state(ctx)` gives each scenario what it returned; failures are `RUNTIME-BDD-BEFORE-ALL` and `RUNTIME-BDD-AFTER-ALL` (#1459).

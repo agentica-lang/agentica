@@ -88,8 +88,12 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   (`a + 1`, `a == 255`); two types, or one and `Int`, are
   `CHECK-TYPE-MISMATCH`. A result outside the type halts with
   `RUNTIME-INTEGER-OVERFLOW` (`UInt8` `3 - 5` too); no unary minus on
-  unsigned. `Int64` and `Float64` are `Int` and `Float`; all ten names are
-  reserved.
+  unsigned. Bit methods as on `Int`, read at the type's width (`a.bit_not`,
+  `a.shift_left(1)`); `a.wrapping_add(b)` (also `wrapping_sub`,
+  `wrapping_mul`, on `Int` too) and `n.wrap_uint8` keep the low bits and never
+  fail; `a.to_uint16` (a widening that fits) and `a.to_f` have no Result; any
+  other conversion is `a.to_i.to_uint8!`. `Int64` and `Float64` are `Int` and
+  `Float`; all ten names are reserved.
 - `Float32`: binary32. A float literal takes it from its place, as above
   (`x: Float32 = 0.1`; `x: Float32 = 1` is `CHECK-TYPE-MISMATCH`). A literal
   that rounds to an infinity is `CHECK-FLOAT-RANGE` (`Float32` from about
