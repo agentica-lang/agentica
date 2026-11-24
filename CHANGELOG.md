@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `BDD.run(steps, hooks: some(BDD.Hooks(before_all:, after_all:)))` sets a feature up once per `--jobs` worker, as RSpec's `before(:all)`, and `BDD.feature_state(ctx)` gives each scenario what it returned; failures are `RUNTIME-BDD-BEFORE-ALL` and `RUNTIME-BDD-AFTER-ALL` (#1459).
 - `o&.name` and `o&.name(args)` read a field or call a method of the value inside an Optional and give an Optional (`user.address&.city.unwrap_or("?")`); on a receiver that is not an Optional it is `CHECK-SAFE-NAV-RECEIVER` (#1947).
 - `agentica COMMAND --help` (and `-h`) prints the usage of that command and its part of the summary, for every command, and exits 0 (#1928).
 - The `version` requirements and `tag` pins that several packages of one tree ask for the same repository meet in one tag: `add` and `update` take the highest tag that meets them all, and `PKG-VERSION-UNSATISFIED` says who asked for what (#1147).

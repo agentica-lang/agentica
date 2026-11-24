@@ -141,7 +141,7 @@ Feature: Memory
 
 ```signature
 BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
-BDD.run(steps: List[BDD.Step]) -> Void
+BDD.run(steps: List[BDD.Step], hooks: Optional[BDD.Hooks] = none) -> Void
 ```
 
 The handler gets the context and the `{string}` and `{int}` captures as strings, in order. A block works too and sees the variables around it:
@@ -155,7 +155,39 @@ def main() -> Void
 end
 ```
 
-`BDD.run` puts the built-in steps in front of the list, runs what `agentica test` asks for, and never returns.
+`BDD.run` puts the built-in steps in front of the list, runs what `agentica test` asks for, and never returns. `hooks` set a feature up once for its scenarios ([Feature hooks](#feature-hooks)).
+
+## Feature hooks
+
+```signature
+BDD.Feature(name: String, tags: List[String])
+BDD.Hooks(before_all: Fn[BDD.Feature, Result[JSON.Value]], after_all: Fn[BDD.Feature, JSON.Value, Result[Void]])
+BDD.feature_state(ctx: BDD.Context) -> JSON.Value
+```
+
+`before_all` starts what a whole feature needs, such as one server for all its scenarios, and `after_all` stops it. They are RSpec's `before(:all)` and `after(:all)`, with `BDD.after` as the per-scenario hook.
+
+- They run in the worker that runs the scenarios, once for each feature and each worker: with `--jobs 4` a feature may start up to four times, so use port 0 and a folder of its own. With `--isolate` every scenario has a process of its own, so they run for each scenario.
+- `before_all` runs before the first scenario of the feature that the worker takes, in a task that stays until `after_all`. A handle it opens (a program started with `Process.spawn`) belongs to that task, so it outlives the scenarios and closes when the task ends. It returns the state of the feature as JSON (a port, a folder); every scenario reads it with `BDD.feature_state`. Without hooks it is `null`.
+- `after_all` runs, with that state, when the worker leaves the feature (the next scenario is of another feature, or the lane has no more). A worker that a failed scenario ended runs none: its handles close with it, and the next scenario gets a new worker and a new `before_all`.
+- The runner resets nothing. Each scenario must leave what `before_all` made as it found it: reset it in a `Background` step or a `BDD.after` hook.
+- `before_all` that returns an `error`, crashes or takes more than 25 seconds fails the scenario that needed it with `RUNTIME-BDD-BEFORE-ALL`, at its first step. The other scenarios of that feature on that worker's lane are `not_executed`. `after_all` that returns an `error` or crashes is `RUNTIME-BDD-AFTER-ALL` on the feature file, at its `Feature` line, and the run exits `1`.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def start(feature: BDD.Feature) -> Result[JSON.Value]
+  server = try Process.spawn("agentica", ["server.agc"], Process.Options(timeout_ms: 20000))
+  port = try Process.read_line(server, 5000)
+  ok(JSON.object({"port": JSON.from(port.to_i!)}))
+end
+
+def stop(feature: BDD.Feature, state: JSON.Value) -> Result[Void] = ok()
+
+def main() -> Void
+  BDD.run([], hooks: some(BDD.Hooks(before_all: &start, after_all: &stop)))
+end
+```
 
 ## BDD.assert
 
