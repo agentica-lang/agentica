@@ -190,6 +190,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   not writable (git's message is in the help); the tag now points to another
   commit than `agentica.lock` (the lock is not changed); two package paths
   differ only in case; no `agentica.toml`.
+- `PKG-VERSION-UNSATISFIED`: `agentica add --version` or `agentica update`
+  found no tag of the repository that satisfies the `version` of a dependency
+  (the help lists the newest tags that read as a version).
 - `PKG-MANIFEST-EXISTS`: `agentica init` found an `agentica.toml` in the working
   folder and wrote nothing.
 - `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT`,

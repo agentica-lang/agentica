@@ -29,8 +29,9 @@ import Engine from "native_artifact"
 import NativeArtifact from "../packages/native_artifact"
 import PackageFetch from "package_fetch"
 
-## Which tag pins are fetched again: every one (`all`), or the one of the package called `name` ("" for none). A
-## commit (`ref`) cannot move, so it is never fetched again while the lock holds it.
+## Which tag pins are fetched again: every one (`all`), or the one of the package called `name` ("" for none); a
+## `version` is read against the tags of the repository again. A commit (`ref`) cannot move, so it is never fetched
+## again while the lock holds it.
 struct Refresh
   all: Bool
   name: String
@@ -302,7 +303,12 @@ def settle(
   end
 
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
-  fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
+  source = wanted.source
+  if source.version != ""
+    source = try PackageFetch.choose_tag(settings.workspace, cache, place, source)
+  end
+
+  fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, source)
   ok([fetched.with(override: wanted.override)])
 end
 
@@ -343,7 +349,8 @@ def settle_workspace(
 end
 
 def moves?(refresh: Refresh, wanted: Wanted) -> Bool
-  wanted.source.tag != "" and (refresh.all or refresh.name == wanted.name)
+  pinned = wanted.source.tag != "" or wanted.source.version != ""
+  pinned and (refresh.all or refresh.name == wanted.name)
 end
 
 # The dependencies in the manifest of a package that is in the cache (or in the folder of a member or a path); none

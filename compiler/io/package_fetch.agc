@@ -24,6 +24,7 @@ import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
 import Tree from "../packages/package_tree"
 import Reader from "../packages/toml_read"
+import VersionRequirement from "../packages/version_requirement"
 import GitProcess from "git_process"
 import Toml from "std/toml"
 
@@ -208,6 +209,67 @@ def tag_subdir(
   found
 end
 
+## The tag that a `version` dependency takes now, for `add` and `update`: `git ls-remote --tags` of the repository (the
+## only place that lists tags, so install and the build stay offline), then the highest tag that satisfies the
+## requirement (VersionRequirement.highest). It gives the source with that `tag` besides its `version`. A repository
+## with no tag that satisfies it is PKG-VERSION-UNSATISFIED at `version` of the dependency that `place` names, with the
+## newest tags that read as a version in the help; a git that fails is PKG-FETCH.
+def choose_tag(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  source: GitSource.Source,
+) -> Result[GitSource.Source]
+  requirement = VersionRequirement.parse(source.version)
+  if !requirement.ok?
+    return error(fail(place, "PKG-MANIFEST-INVALID", "version", "not a version requirement", requirement.message))
+  end
+
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  listed = git(place, scratch, ["ls-remote", "--tags", "--refs", "--", source.git])
+  remove_temp(temp)
+  listing = try listed
+  tags = tag_names(listing.scrub)
+  prefix = VersionRequirement.tag_prefix(source.subdir)
+  chosen = VersionRequirement.highest(requirement.unwrap!, tags, prefix)
+  return ok(source.with(tag: chosen.unwrap!)) if chosen.some?
+
+  seen = VersionRequirement.newest(tags, prefix, SEEN_TAGS)
+  message = "no tag of #{source.git} satisfies the version #{source.version}"
+  help = "the repository has no tag that reads as a version (#{tag_shape(prefix)})"
+  if seen.size > 0
+    help = "the newest tags are #{seen.join(", ")}"
+  end
+
+  error(fail(place, "PKG-VERSION-UNSATISFIED", "version", message, help))
+end
+
+## The names of the tags in the output of `git ls-remote --tags --refs`: a line is a commit, a tab, `refs/tags/NAME`. A
+## name that is not UTF-8 comes scrubbed, so it reads as no version and the other tags still count.
+def tag_names(listing: String) -> List[String]
+  names: List[String] = []
+  for line in listing.split("\n")
+    columns = line.strip.split("\t")
+    next if columns.size != 2 or !columns[1].start_with?(TAGS_PREFIX)
+
+    names = names.push(columns[1].slice(TAGS_PREFIX.length, columns[1].length - TAGS_PREFIX.length))
+  end
+
+  names
+end
+
+def tag_shape(prefix: String) -> String
+  return "X.Y.Z or vX.Y.Z" if prefix == ""
+
+  "#{prefix}X.Y.Z"
+end
+
 ## The failure for the key of an entry ("" for the entry as a whole). An empty help is no help.
 def fail(place: Place, code: String, key: String, message: String, help: String) -> String
   path = Reader.child(place.entry, key)
@@ -228,6 +290,9 @@ TEMP_TRIES = 5
 # Where the fetched pin lands in the temporary repository. It is not under refs/tags/, so the name cannot clash with a
 # tag of the repository.
 PINNED = "refs/fetched/pin"
+# The tags that a failure of a requirement lists, and the start of the name of a tag in `git ls-remote`.
+SEEN_TAGS = 5
+TAGS_PREFIX = "refs/tags/"
 # The number of characters of git's error text that goes in the help.
 HELP_LIMIT = 600
 MANIFEST = "agentica.toml"
@@ -432,7 +497,7 @@ def workspace_into(
   found = [root]
   for index in 0...table.folders.size
     folder = table.folders[index]
-    source = GitSource.Source(git: pin.source.git, subdir: folder, tag: pin.source.tag, ref: pin.source.ref, path: "")
+    source = pin.source.with(subdir: folder)
 
     member = Lock.Locked(
       name: "#{pin.name}/#{folder}",

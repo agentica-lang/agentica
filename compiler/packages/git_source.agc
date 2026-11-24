@@ -1,17 +1,19 @@
-## Where a package comes from (docs/grammar/05b-modules.md): a git URL and one pin, a tag or a commit (`ref`), or a
-## local folder (`path`, only in the manifest of the root project). The manifest and the lock both write it, and the
-## build compares the two. The rules of the three parts are here, so that
+## Where a package comes from (docs/grammar/05b-modules.md): a git URL and one pin, a tag, a commit (`ref`) or a
+## requirement over the tags (`version`), or a local folder (`path`, only in the manifest of the root project). The
+## manifest and the lock both write it, and the build compares the two. The rules of the three parts are here, so that
 ## a rule changes in one place. Every check returns "" when the text is fine, else a reason for the diagnostic.
 
 import AgenticaVersion from "agentica_version"
 
-## A source: a git URL as written, exactly one of tag and ref ("" for the other), and the folder of the repository
-## that is the package ("" for the repository itself); or a local folder, `path` as written, with every other field "".
+## A source: a git URL as written, exactly one of tag, ref and version ("" for the others), and the folder of the
+## repository that is the package ("" for the repository itself); or a local folder, `path` as written, with every
+## other field "". The lock of a `version` dependency has the `tag` that the requirement chose besides the `version`.
 struct Source
   git: String
   subdir: String
   tag: String
   ref: String
+  version: String
   path: String
 end
 
@@ -175,10 +177,13 @@ def identity(url: String) -> String
 end
 
 ## Whether two sources are the same: the same repository, the same folder of it and the same pin, or the same path as
-## written.
+## written. A `version` is the same when the requirement is: the tag that the lock chose is not part of the manifest.
 def same?(left: Source, right: Source) -> Bool
   same_place = identity(left.git) == identity(right.git) and left.subdir == right.subdir
-  same_place and left.tag == right.tag and left.ref == right.ref and left.path == right.path
+  return false if !same_place or left.path != right.path or left.version != right.version
+  return true if left.version != ""
+
+  left.tag == right.tag and left.ref == right.ref
 end
 
 ## The pin as written: the tag, or the ref.
@@ -211,6 +216,7 @@ def describe(source: Source) -> String
     place = "#{source.git} (folder #{source.subdir})"
   end
 
+  return "#{place} at version #{source.version}" if source.version != ""
   return "#{place} at tag #{source.tag}" if source.tag != ""
 
   "#{place} at ref #{source.ref}"

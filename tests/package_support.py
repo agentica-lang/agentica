@@ -65,13 +65,15 @@ def cache_path(git):
     return rest[:-len(".git")] if rest.endswith(".git") else rest
 
 
-def dependency(git, tag=None, ref=None, subdir=None):
+def dependency(git, tag=None, ref=None, subdir=None, version=None):
     """A dependency of a manifest, as the inline table the manifest writes."""
     entry = {"git": git}
     if tag is not None:
         entry["tag"] = tag
     if ref is not None:
         entry["ref"] = ref
+    if version is not None:
+        entry["version"] = version
     if subdir is not None:
         entry["subdir"] = subdir
     return entry
@@ -145,7 +147,7 @@ class Workspace:
         text = "version = 1\n"
         for entry in entries:
             text += "\n[[package]]\n"
-            order = ["name", "git", "subdir", "tag", "ref", "commit", "hash"]
+            order = ["name", "git", "subdir", "tag", "ref", "version", "commit", "hash"]
             for key in order + [key for key in entry if key not in order]:
                 if key in entry:
                     text += "%s = %s\n" % (key, json.dumps(entry[key]))
@@ -257,7 +259,7 @@ class Remotes:
         return commit
 
 
-def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None, subdir=None):
+def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None, subdir=None, version=None):
     """Notes the lock entry of a package whose files the remote holds. The hash comes from the Python implementation of
     the hash rule, over a scratch copy of the .agc files. For a package that is a folder of the repository (`subdir`),
     `files` are the files of that folder, with paths relative to it, and `name` is required."""
@@ -272,6 +274,8 @@ def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None, 
     if subdir is not None:
         entry["subdir"] = subdir
     entry.update({"tag": tag} if ref is None else {"ref": ref})
+    if version is not None:
+        entry["version"] = version
     ws.locked.append(entry)
     return entry
 

@@ -40,6 +40,8 @@ def inline_table(source: GitSource.Source, test: Bool, workspace: Bool) -> Strin
   keys = ["git = \"#{source.git}\""]
   if source.tag != ""
     keys = keys.push("tag = \"#{source.tag}\"")
+  elsif source.version != ""
+    keys = keys.push("version = \"#{source.version}\"")
   else
     keys = keys.push("ref = \"#{source.ref}\"")
   end
