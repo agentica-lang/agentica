@@ -6,6 +6,8 @@ import Ast from "../syntax/ast"
 import T from "../syntax/types"
 import State from "check_state"
 
+ARITHMETIC_OPERATORS = Set.new(["plus", "minus", "multiply", "divide", "modulo"])
+
 ## Argument 0 as a Map[K, V].
 def map_argument(cx: State.Cx, st: State.St, site: State.Site, context: T.Type) -> Result[State.Out]
   shaped(cx, st, site, context, "Map", T.Type.Map(T.Type.Var("K"), T.Type.Var("V")))
@@ -67,6 +69,31 @@ end
 def empty_map?(node: Ast.Expr) -> Bool
   case node
     Ast.Expr.MapLit(map) -> map.entries.size == 0
+    _ -> false
+  end
+end
+
+def integer_literal?(node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Whole(_) -> true
+        Ast.LitValue.Huge(_) -> true
+        _ -> false
+      end
+
+    _ -> false
+  end
+end
+
+# True for an integer literal, a minus before one, or an arithmetic operator on two such trees: `1`, `-5`, `(1 + 2) *
+# 3`. It takes the narrow type that its other side or its context gives it.
+def literal_tree?(node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.Literal(_) -> integer_literal?(node)
+    Ast.Expr.Unary(found) -> found.op == "minus" and literal_tree?(found.operand)
+    Ast.Expr.Binary(found) ->
+      ARITHMETIC_OPERATORS.include?(found.op) and literal_tree?(found.left) and literal_tree?(found.right)
     _ -> false
   end
 end

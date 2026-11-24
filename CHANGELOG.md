@@ -28,6 +28,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float32` and `Float64` are reserved type names (#984).
+- **Breaking:** `std/binary` uses the sized types: `read_u16_be` and the other readers give `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64` (all 64 bits, no error above `Int`) or `Int` (`i64`), and the writers take that type and return a plain `Bytes` (no `Result`: a value that may not fit is converted first, `try n.to_uint16`) (#984).
+- **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one (#984).
+- `Result.unwrap_or(n.to_uint8, 0)` and `.unwrap_or(0)` type an integer literal default by the Result's value (#984).
 
 ### Fixed
 

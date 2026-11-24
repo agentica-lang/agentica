@@ -123,6 +123,9 @@ def f32_bits(x: float) -> int:
     return expected
 
 
+U64 = (1 << 64) - 1
+
+
 def f64_bits(x: float) -> int:
     if math.isnan(x):
         return CANONICAL_NAN64
@@ -234,11 +237,11 @@ def float_lines() -> list[str]:
     lines = []
     for x in FLOATS:
         text = encode_float(x)
-        lines.append(f"to_bits {text} {f64_bits(x)}")
-        lines.append(f"from_bits {f64_bits(x)} {text}")
+        lines.append(f"to_bits {text} {f64_bits(x) & U64}")
+        lines.append(f"from_bits {f64_bits(x) & U64} {text}")
         lines.append(f"to_bits32 {text} {f32_bits(x)}")
     for bits in BITS64:
-        lines.append(f"from_bits {bits} {encode_float(f64_from_bits(bits))}")
+        lines.append(f"from_bits {bits & U64} {encode_float(f64_from_bits(bits))}")
     for bits in BITS32:
         x = f32_from_bits(bits)
         expected = CANONICAL_NAN32 if math.isnan(x) else bits

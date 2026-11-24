@@ -105,8 +105,8 @@ def run(op: String, data: Bytes) -> String
     "unb64url" -> bytes_reply(Base64.urlsafe_decode64(text(data)))
     "unb64" -> "ok #{hex(Base64.decode64(text(data)))}"
     "hex" -> "ok #{hex(hex(data).bytes)}"
-    "float" -> "ok #{hex(Float.from_bits(text(data).to_i!).to_s.bytes)}"
-    "float_back" -> float_back(Float.from_bits(text(data).to_i!))
+    "float" -> "ok #{hex(Float.from_bits(text(data).to_i!.wrap_uint64).to_s.bytes)}"
+    "float_back" -> float_back(Float.from_bits(text(data).to_i!.wrap_uint64))
     "to_f" -> "ok #{hex(text(data).to_f!.to_bits.to_s.bytes)}"
     "unhex" -> bytes_reply(OpenSSL.Digest.hexdecode(text(data)))
     "upcase" -> text_reply_with_length(text(data).upcase)
@@ -599,7 +599,7 @@ def test_float_text_reads_back(codec):
         for b in (bits, bits | 1 << 63):
             signed = struct.unpack("<q", struct.pack("<Q", b))[0]
             got = codec.ask("float_back", str(signed).encode("ascii"))
-            assert got == b"%d %d" % (signed, signed), (hex(b), got)
+            assert got == b"%d %d" % (b, b), (hex(b), got)
 
 
 def test_a_long_mantissa_cancels_its_exponent(codec):

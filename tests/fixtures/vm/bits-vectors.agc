@@ -1,3 +1,9 @@
+def uint64_of(text: String) -> UInt64
+  text.bytes.to_a.reduce(0.to_uint64!) do |acc: UInt64, digit: Int|
+    acc * 10 + (digit - 48).to_uint64!
+  end
+end
+
 def infinity() -> Float
   x = 10.0
   i = 0
@@ -77,7 +83,7 @@ def check(line: String) -> Int
   elsif kind == "to_bits"
     return report(line, Float.to_bits(float_of(f[1])).to_s, f[2])
   elsif kind == "from_bits"
-    return report(line, float_text(Float.from_bits(f[1].to_i!)), float_text(float_of(f[2])))
+    return report(line, float_text(Float.from_bits(uint64_of(f[1]))), float_text(float_of(f[2])))
   elsif kind == "to_bits32"
     return report(line, Float.to_bits32(float_of(f[1])).to_s, f[2])
   elsif kind == "from_bits32"

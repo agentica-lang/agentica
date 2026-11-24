@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "e0de0939c462"
+source_hash: "d82a5546a18c"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -503,13 +503,13 @@ end
 ## Float.to_bits y Float.from_bits {#floatto_bits-and-floatfrom_bits}
 
 ```signature
-Float.to_bits(float: Float) -> Int
-Float.from_bits(bits: Int) -> Float
+Float.to_bits(float: Float) -> UInt64
+Float.from_bits(bits: UInt64) -> Float
 ```
 
-`to_bits` da los bits IEEE 754 binary64 de `float` como un `Int` en complemento a dos (`1.0` es `4607182418800017408`, `-0.0` es `-9223372036854775808`). Todo NaN da el NaN silencioso `9221120237041090560`. `x.to_bits < 0` comprueba el bit de signo de cada valor salvo NaN (para NaN, comprueba con `x != x`), y `to_bits` distingue `-0.0` de `0.0`.
+`to_bits` da los bits IEEE 754 binary64 de `float` como un `UInt64` (`1.0` es `4607182418800017408`, `-0.0` es `9223372036854775808`). Todo NaN da el NaN silencioso `9221120237041090560`. `x.to_bits >= 9223372036854775808` comprueba el bit de signo de cada valor salvo NaN (para NaN, comprueba con `x != x`), y `to_bits` distingue `-0.0` de `0.0`.
 
-`from_bits` lee los 64 bits de cualquier `Int` como binary64; los subnormales, los infinitos y `-0.0` vuelven exactos, y cualquier patrón NaN da NaN. Así que `Float.to_bits(Float.from_bits(n)) == n` para todo `n`, salvo los patrones NaN distintos del NaN silencioso.
+`from_bits` lee los 64 bits de cualquier `UInt64` como binary64; los subnormales, los infinitos y `-0.0` vuelven exactos, y cualquier patrón NaN da NaN. Así que `Float.to_bits(Float.from_bits(n)) == n` para todo `n`, salvo los patrones NaN distintos del NaN silencioso.
 
 ```agentica
 def main() -> Void
@@ -525,9 +525,9 @@ end
 
 ```output
 4607182418800017408
--4611686018427387904
+13835058055282163712
 true
--9223372036854775808
+9223372036854775808
 1.0
 true
 true

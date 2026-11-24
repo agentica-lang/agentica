@@ -23,7 +23,7 @@ def test_std_binary_prints_no_mismatch_and_ends_with_the_fixed_summary(tmp_path)
     assert not any(line.startswith("mismatch") for line in lines)
     assert lines[-2:] == ["all checks ok", ""]
     assert "frames: 0 mismatches" in lines
-    assert "error(u64 at offset 0 does not fit in Int)" in lines
+    assert "top bit: 0 mismatches" in lines
     assert "error(frame limit -1 is negative)" in lines
 
 

@@ -679,12 +679,24 @@ def check_result_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.
     Model.Rule.ResultUnwrap ->
       target = try Args.result_argument(cx, st, site, T.result_of(site.expected))
       ok(State.Out(st: target.st, type: T.item(target.type)))
-    Model.Rule.ResultDefault ->
-      default = try State.expr(cx, st, site.args[1], site.expected)
-      target = try Args.result_argument(cx, default.st, site, T.Type.Result(default.type))
-      ok(State.Out(st: target.st, type: default.type))
+    Model.Rule.ResultDefault -> check_result_default(cx, st, site)
     _ -> check_other_rule(cx, st, site, rule)
   end
+end
+
+# Result.unwrap_or: a default that is an integer literal takes the type of the Result's
+# value (`read_u16_be(...).unwrap_or(0)`
+# is a UInt16); any other default gives the type.
+def check_result_default(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  if Args.literal_tree?(site.args[1])
+    target = try Args.result_argument(cx, st, site, T.Type.Unknown)
+    default = try State.expr(cx, target.st, site.args[1], T.item(target.type))
+    return ok(State.Out(st: default.st, type: T.item(target.type)))
+  end
+
+  default = try State.expr(cx, st, site.args[1], site.expected)
+  target = try Args.result_argument(cx, default.st, site, T.Type.Result(default.type))
+  ok(State.Out(st: target.st, type: default.type))
 end
 
 # The rules of the Task, Channel, Map and Set builtins, then of the List builtins.

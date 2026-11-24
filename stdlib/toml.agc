@@ -688,7 +688,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
   if c == 105 or c == 110
     word = piece(src, p, stop)
     if word == "inf"
-      return ok(Parsed(value: Value.Float(Float.from_bits(-4503599627370496)), pos: stop)) if negative
+      return ok(Parsed(value: Value.Float(-Float.from_bits(9218868437227405312)), pos: stop)) if negative
       return ok(Parsed(value: Value.Float(Float.from_bits(9218868437227405312)), pos: stop))
     elsif word == "nan"
       return ok(Parsed(value: Value.Float(Float.from_bits(9221120237041090560)), pos: stop))
@@ -1008,7 +1008,7 @@ end
 # ---- writing ----
 
 def finite?(x: Float) -> Bool
-  x == x and x != Float.from_bits(9218868437227405312) and x != Float.from_bits(-4503599627370496)
+  x == x and x != Float.from_bits(9218868437227405312) and x != -Float.from_bits(9218868437227405312)
 end
 
 def float_text(x: Float) -> String
@@ -1016,7 +1016,7 @@ def float_text(x: Float) -> String
     return "nan"
   elsif x == Float.from_bits(9218868437227405312)
     return "inf"
-  elsif x == Float.from_bits(-4503599627370496)
+  elsif x == -Float.from_bits(9218868437227405312)
     return "-inf"
   end
   x.to_s

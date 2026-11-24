@@ -2841,11 +2841,11 @@
         "",
         "def main() -> Void",
         "  data = \"ab\".bytes",
-        "  n: Result[Int] = Binary.read_u16_be(data, 0)",
-        "  w: Result[Bytes] = Binary.write_u32_le(7)",
+        "  n: Result[UInt16] = Binary.read_u16_be(data, 0)",
+        "  w: Bytes = Binary.write_u32_le(7)",
         "  f: Result[Bytes] = Binary.frame(data)",
         "  both: Bytes = Bytes.concat([Binary.write_i64_be(1), Binary.write_f64_le(1.5)])",
-        "  puts(n.ok? and w.ok? and f.ok? and both.size == 16)",
+        "  puts(n.ok? and w.size == 4 and f.ok? and both.size == 16)",
         "end"
       ],
       "code": null
@@ -2867,14 +2867,29 @@
         "import Binary from \"std/binary\"",
         "",
         "def main() -> Void",
-        "  w: Result[List[Int]] = Binary.write_u8(1)",
+        "  w: List[Int] = Binary.write_u8(1)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [4, 26],
+      "start": [4, 18],
       "covers": "Binary.write_u8(1)",
-      "expected": "Result[List[Int]]",
-      "actual": "Result[Bytes]"
+      "expected": "List[Int]",
+      "actual": "Bytes"
+    },
+    {
+      "program": [
+        "import Binary from \"std/binary\"",
+        "",
+        "def main() -> Void",
+        "  n = 513",
+        "  Binary.write_u16_be(n)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [5, 23],
+      "covers": "n",
+      "expected": "UInt16",
+      "actual": "Int"
     },
     {
       "program": [

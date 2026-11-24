@@ -140,12 +140,12 @@ def complete(head: Head, tail: Bytes) -> Head
   length = head.length
   used = 0
   if head.length == 126
-    length = Binary.read_u16_be(tail, 0).unwrap!
+    length = Binary.read_u16_be(tail, 0).unwrap!.to_i
     used = 2
   end
 
   if head.length == 127
-    length = Result.unwrap_or(Binary.read_u64_be(tail, 0), -1)
+    length = Result.unwrap_or(Binary.read_i64_be(tail, 0), -1)
     used = 8
   end
 
@@ -243,7 +243,7 @@ def parse_close(payload: Bytes) -> Closing
 
   return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "a close frame with one byte")) if payload.size == 1
 
-  code = Binary.read_u16_be(payload, 0).unwrap!
+  code = Binary.read_u16_be(payload, 0).unwrap!.to_i
   return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "invalid close code")) if not valid_code?(code)
 
   case String.from_bytes(payload.drop(2))
@@ -259,7 +259,7 @@ def frame(opcode: Int, payload: Bytes) -> Bytes
   return Bytes.concat([head, Bytes.from_list([size]).unwrap!, payload]) if size < 126
 
   if size < 65536
-    return Bytes.concat([head, Bytes.from_list([126]).unwrap!, Binary.write_u16_be(size).unwrap!, payload])
+    return Bytes.concat([head, Bytes.from_list([126]).unwrap!, Binary.write_u16_be(size.wrap_uint16), payload])
   end
 
   Bytes.concat([head, Bytes.from_list([127]).unwrap!, Binary.write_i64_be(size), payload])
@@ -281,7 +281,7 @@ def data_frame?(frame: Bytes) -> Bool
   return frame.size - 2 == length if length < 126
 
   if length == 126
-    size = Binary.read_u16_be(frame, 2).unwrap_or(0)
+    size = Binary.read_u16_be(frame, 2).unwrap_or(0.to_uint16!).to_i
     return size >= 126 and frame.size - 4 == size
   end
 
@@ -301,7 +301,7 @@ def pong_frame(data: Bytes) -> Bytes = frame(PONG, data)
 
 ## A close frame; the reason is cut to what a control frame can hold, at a character boundary.
 def close_frame(code: Int, reason: String) -> Bytes
-  frame(CLOSE, Bytes.concat([Binary.write_u16_be(code).unwrap!, short_reason(reason)]))
+  frame(CLOSE, Bytes.concat([Binary.write_u16_be(code.wrap_uint16), short_reason(reason)]))
 end
 
 ## True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999.

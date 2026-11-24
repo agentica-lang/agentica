@@ -371,21 +371,21 @@ end
 
 def read_u16(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u16_le(buf, at)
-    ok(value) -> ok(value)
+    ok(value) -> ok(value.to_i)
     error(_) -> error("archive: truncated ZIP data, #{what}", kind: "archive.format")
   end
 end
 
 def read_u32(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u32_le(buf, at)
-    ok(value) -> ok(value)
+    ok(value) -> ok(value.to_i)
     error(_) -> error("archive: truncated ZIP data, #{what}", kind: "archive.format")
   end
 end
 
 def le_bytes(value: Int, what: String) -> Result[Bytes]
-  case Binary.write_u32_le(value)
-    ok(bytes) -> ok(bytes)
+  case value.to_uint32
+    ok(narrow) -> ok(Binary.write_u32_le(narrow))
     error(_) -> error("archive: bad size for #{what}", kind: "archive.format")
   end
 end

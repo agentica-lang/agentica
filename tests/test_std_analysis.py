@@ -1445,8 +1445,8 @@ def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     (project / "lib").mkdir()
     write_files(project, {
         "lib/inner.agc": 'import Binary from "std/binary"\n\n'
-                         'def first(data: Bytes) -> Int = Binary.read_u8(data, 0).unwrap_or(0)\n',
-        "outer.agc": 'import Inner from "lib/inner"\n\ndef go(data: Bytes) -> Int = Inner.first(data)\n',
+                         'def first(data: Bytes) -> UInt8 = Binary.read_u8(data, 0).unwrap_or(0)\n',
+        "outer.agc": 'import Inner from "lib/inner"\n\ndef go(data: Bytes) -> UInt8 = Inner.first(data)\n',
     })
     answer, functions = bodies_of(driver, project, "outer.agc")
     files = {module["prefix"]: module["file"] for module in answer["modules"]}

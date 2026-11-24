@@ -67,7 +67,6 @@ def bounds(bits_: int, signed: bool) -> tuple[int, int]:
 
 def int_values(bits_: int, signed: bool) -> list[int]:
     low, high = bounds(bits_, signed)
-    high = min(high, INT_MAX)
     values = [0, 1, low, high, high - 1]
     if signed:
         values += [-1, -2, low + 1]
@@ -87,23 +86,6 @@ def int_lines() -> list[str]:
                 packed = struct.pack(prefix + code, value)
                 assert struct.unpack(prefix + code, packed)[0] == value
                 lines.append(f"int {name} {order} {value} {text(packed)}")
-            low, high = bounds(bits_, signed)
-            outside = [] if name == "i64" else [low - 1, high + 1, INT_MIN, INT_MAX, INT_MIN + 1]
-            if name == "u64":
-                outside = [-1, INT_MIN, INT_MIN + 1]
-            for value in sorted({v for v in outside if not low <= v <= high}):
-                try:
-                    struct.pack(prefix + code, value)
-                except struct.error:
-                    pass
-                else:
-                    raise AssertionError((name, value))
-                lines.append(f"werr {name} {order} {value}")
-    for order, prefix in ORDERS.items():
-        for value in [1 << 63, (1 << 63) + 1, (1 << 64) - 1, 0x8000000000000000 | 0x0102030405060708]:
-            packed = struct.pack(prefix + "Q", value)
-            assert struct.unpack(prefix + "Q", packed)[0] > INT_MAX
-            lines.append(f"rerr64 {order} {text(packed)}")
     return lines
 
 

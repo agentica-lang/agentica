@@ -502,13 +502,13 @@ end
 ## Float.to_bits and Float.from_bits
 
 ```signature
-Float.to_bits(float: Float) -> Int
-Float.from_bits(bits: Int) -> Float
+Float.to_bits(float: Float) -> UInt64
+Float.from_bits(bits: UInt64) -> Float
 ```
 
-`to_bits` gives the IEEE 754 binary64 bits of `float` as a two's complement `Int` (`1.0` is `4607182418800017408`, `-0.0` is `-9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits < 0` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
+`to_bits` gives the IEEE 754 binary64 bits of `float` as a `UInt64` (`1.0` is `4607182418800017408`, `-0.0` is `9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits >= 9223372036854775808` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
 
-`from_bits` reads the 64 bits of any `Int` as a binary64; subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
+`from_bits` reads the 64 bits of any `UInt64` as a binary64; subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
 
 ```agentica
 def main() -> Void
@@ -524,9 +524,9 @@ end
 
 ```output
 4607182418800017408
--4611686018427387904
+13835058055282163712
 true
--9223372036854775808
+9223372036854775808
 1.0
 true
 true

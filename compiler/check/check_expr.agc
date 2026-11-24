@@ -10,6 +10,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import BuiltinRef from "builtin_ref"
 import {REFS_MODULE} from "builtin_ref"
+import Args from "check_args"
 import Calls from "check_call"
 import Help from "check_help"
 import {ERROR_TEXT_HELP} from "check_help"
@@ -79,8 +80,6 @@ NUMBER_OPERATORS = Set.new([
   "equal",
   "not-equal",
 ])
-
-ARITHMETIC_OPERATORS = Set.new(["plus", "minus", "multiply", "divide", "modulo"])
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
@@ -730,13 +729,13 @@ end
 def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
   target = narrow_target(expected)
   inner = T.Type.Unknown
-  if node.op == "minus" and !integer_literal?(node.operand) and literal_tree?(node.operand)
+  if node.op == "minus" and !Args.integer_literal?(node.operand) and Args.literal_tree?(node.operand)
     # -(1 + 2): the tree under the minus takes the narrow type too.
     inner = target
   end
 
   operand = try unary_operand(cx, st, node, inner)
-  if node.op == "minus" and !T.unknown?(target) and integer_literal?(node.operand)
+  if node.op == "minus" and !T.unknown?(target) and Args.integer_literal?(node.operand)
     # A minus before an integer literal is part of it: -128 is an Int8.
     return negative_literal(cx, operand.st, node, target)
   end
@@ -776,19 +775,6 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -
   end
 
   ok(State.Out(st: operand.st, type: T.Type.Bool))
-end
-
-def integer_literal?(node: Ast.Expr) -> Bool
-  case node
-    Ast.Expr.Literal(found) ->
-      case found.value
-        Ast.LitValue.Whole(_) -> true
-        Ast.LitValue.Huge(_) -> true
-        _ -> false
-      end
-
-    _ -> false
-  end
 end
 
 # -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
@@ -858,7 +844,7 @@ def void_negation_help(node: Ast.Unary) -> String
 end
 
 def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
-  return literal_sides(cx, st, node, expected) if NUMBER_OPERATORS.include?(node.op) and literal_tree?(node.left)
+  return literal_sides(cx, st, node, expected) if NUMBER_OPERATORS.include?(node.op) and Args.literal_tree?(node.left)
 
   left = try State.expr(cx, st, node.left, T.Type.Unknown)
   if node.op == "dot-dot" or node.op == "dot-dot-dot"
@@ -875,7 +861,7 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) 
     wanted = left.type
   elsif node.op == "plus" and T.is?(left.type, "List")
     wanted = left.type
-  elsif NUMBER_OPERATORS.include?(node.op) and T.sized_int?(left.type) and literal_tree?(node.right)
+  elsif NUMBER_OPERATORS.include?(node.op) and T.sized_int?(left.type) and Args.literal_tree?(node.right)
     wanted = left.type
   end
 
@@ -887,9 +873,9 @@ end
 # right too, an arithmetic operator gives both sides the narrow type expected of it: `x: UInt8 = 1 + 2`. Else the right
 # side is checked first, and a narrow type of it is the type of the left side: `255 == a`.
 def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
-  if literal_tree?(node.right)
+  if Args.literal_tree?(node.right)
     wanted = T.Type.Unknown
-    if ARITHMETIC_OPERATORS.include?(node.op)
+    if Args.ARITHMETIC_OPERATORS.include?(node.op)
       wanted = narrow_target(expected)
     end
 
@@ -901,18 +887,6 @@ def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type
   right = try State.expr(cx, st, node.right, T.Type.Unknown)
   left = try State.expr(cx, right.st, node.left, narrow_target(right.type))
   ok(Sides(st: left.st, left: left.type, right: right.type))
-end
-
-# True for an integer literal, a minus before one, or an arithmetic operator on two such trees: `1`, `-5`, `(1 + 2) *
-# 3`. It takes the narrow type that its other side or its context gives it.
-def literal_tree?(node: Ast.Expr) -> Bool
-  case node
-    Ast.Expr.Literal(_) -> integer_literal?(node)
-    Ast.Expr.Unary(found) -> found.op == "minus" and literal_tree?(found.operand)
-    Ast.Expr.Binary(found) ->
-      ARITHMETIC_OPERATORS.include?(found.op) and literal_tree?(found.left) and literal_tree?(found.right)
-    _ -> false
-  end
 end
 
 # The ids of the method calls and field accesses along the target chain of an expression.

@@ -52,7 +52,19 @@ def i64(number: Int) -> List[Int]
 end
 
 ## The 8 bytes of the IEEE 754 binary64 of a number, low byte first.
-def f64(number: Float) -> List[Int] = i64(Float.to_bits(number))
+def f64(number: Float) -> List[Int]
+  bits = Float.to_bits(number)
+  [
+    bits.bit_and(255).to_i!,
+    bits.shift_right(8).bit_and(255).to_i!,
+    bits.shift_right(16).bit_and(255).to_i!,
+    bits.shift_right(24).bit_and(255).to_i!,
+    bits.shift_right(32).bit_and(255).to_i!,
+    bits.shift_right(40).bit_and(255).to_i!,
+    bits.shift_right(48).bit_and(255).to_i!,
+    bits.shift_right(56).to_i!,
+  ]
+end
 
 ## The UTF-8 bytes of a text.
 def utf8(text: String) -> List[Int] = text.bytes.to_a
