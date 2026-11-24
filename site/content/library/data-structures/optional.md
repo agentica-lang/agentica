@@ -262,6 +262,35 @@ ok(4)
 error("no even number")
 ```
 
+## Safe navigation: o&.name
+
+`o&.name` reads a field or calls a method of the value inside an Optional, and gives an Optional: `some(value.name)` for `some(value)`, and `none` for `none`, where the arguments are not computed. A member that is an Optional itself gives that Optional, not one inside another, and a member that gives nothing (`logger&.log("x")`, `xs&.each do |x| ... end`) makes the whole expression `Void`: it runs for `some` and does nothing for `none`. A plain `.` after it works on the Optional it gave, so chain `&.` at each step. A receiver that is not an Optional (a value, a type or a module) is `CHECK-SAFE-NAV-RECEIVER`: write `.`. There is no `&.call`: call a function inside an Optional from a `case`.
+
+```agentica
+struct Address
+  city: String
+end
+
+struct User
+  name: String
+  address: Optional[Address]
+end
+
+def main() -> Void
+  ana = User(name: "Ana", address: some(Address(city: "Lima")))
+  ben = User(name: "Ben", address: none)
+  puts(ana.address&.city.unwrap_or("?"))
+  puts(ben.address&.city.unwrap_or("?"))
+  puts(some("abc")&.size)
+end
+```
+
+```output
+Lima
+?
+some(3)
+```
+
 ## Optional or Result
 
 Use an Optional when having no value is normal and needs no reason: a lookup that finds nothing, a setting the caller left out. Use a [Result](/tour/results-and-try/) when something failed and the caller needs to know why, such as a parse or a file read. `to_result("message")` turns the first into the second when a missing value is an error for the caller. `List.find` and `Lazy.find` give a Result with `error("not found")`, not an Optional.

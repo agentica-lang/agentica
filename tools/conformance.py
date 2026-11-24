@@ -139,6 +139,7 @@ AREAS = {
             "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py", "tests/test_spec_lambdas.py",
             "tests/test_spec_format.py",
             "tests/test_spec_block_inference.py", "tests/test_spec_block_chain.py", "tests/test_spec_pipe_methods.py",
+            "tests/test_spec_safe_navigation.py",
             "tests/test_spec_package_add.py", "tests/test_cli_init.py", "tests/test_spec_package_fetch.py",
             "tests/test_spec_package_native_artifact.py", "tests/test_spec_package_subdir.py",
             "tests/test_spec_package_deps.py", "tests/test_spec_package_native.py",

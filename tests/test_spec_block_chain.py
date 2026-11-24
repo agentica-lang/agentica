@@ -44,6 +44,7 @@ REJECTED = [
     ("  n = xs.map do |x| x end.size\n  puts(n)", "end.size"),
     ('  puts(xs.map do |x| x.to_s end.join(", "))', "end.join"),
     ("  n = xs.map do |x| x end[0]\n  puts(n)", "end[0]"),
+    ("  n = some(xs).map do |l| l end&.size\n  puts(n)", "end&.size"),
     ("  n = xs.map do |x| x end |> size_of()\n  puts(n)", "end |> size_of()"),
     # A leading dot on the next line is the same chain, and so is the call in parentheses, which fmt drops.
     ("  n = xs.map do |x|\n    x\n  end\n    .size\n  puts(n)", "end\n    .size"),
@@ -70,8 +71,7 @@ def test_a_chain_after_the_end_of_a_do_block(checked, body, text):
 
 
 NOT_BLOCKS = [
-    # There is no &. operator, and the end of a while or a case value takes no chain: the parser refuses them first.
-    ("  n = xs.map do |x| x end&.size\n  puts(n)", "&"),
+    # The end of a while or a case value takes no chain: the parser refuses them first.
     ("  while false\n  end.to_s", "."),
     ("  y = case xs.size\n    1 -> 1\n    _ -> 2\n  end.to_s\n  puts(y)", "."),
 ]

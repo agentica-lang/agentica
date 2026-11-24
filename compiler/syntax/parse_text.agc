@@ -278,6 +278,12 @@ end
 
 def name_attr(name: String) -> String = " name=#{Text.quote(name)}"
 
+def safe_attr(safe: Optional[Source.Span]) -> String
+  return " safe" if safe.some?
+
+  ""
+end
+
 def value_text(value: Ast.LitValue) -> String
   case value
     Ast.LitValue.Whole(number) -> "int:#{number}"
@@ -457,10 +463,10 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
 
       lines
     Ast.Expr.FieldAccess(node) ->
-      lines = out.push(head(at, role, "field-access", node.id, node.span, name_attr(node.name)))
+      lines = out.push(head(at, role, "field-access", node.id, node.span, name_attr(node.name) + safe_attr(node.safe)))
       print_expr(lines, child, "target", node.target)
     Ast.Expr.MethodCall(node) ->
-      lines = out.push(head(at, role, "method-call", node.id, node.span, name_attr(node.name)))
+      lines = out.push(head(at, role, "method-call", node.id, node.span, name_attr(node.name) + safe_attr(node.safe)))
       lines = print_expr(lines, child, "target", node.target)
       lines = print_exprs(lines, child, "arg", node.args)
       print_named_args(lines, child, node.named)

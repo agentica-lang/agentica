@@ -1205,6 +1205,11 @@ def lower_method_checked(
   void: Bool,
   known: Bool,
 ) -> Result[Lowering.Out]
+  if node.safe.some?
+    member = Ast.Expr.MethodCall(node.with(target: safe_target(cx, node.id, node.target), safe: none))
+    return lower_safe(cx, fx, node.id, node.target, member, node.span, want)
+  end
+
   resolved = cx.resolved.get(node.id)
   if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
@@ -1227,6 +1232,11 @@ def lower_field_checked(
   void: Bool,
   known: Bool,
 ) -> Result[Lowering.Out]
+  if node.safe.some?
+    member = Ast.Expr.FieldAccess(node.with(target: safe_target(cx, node.id, node.target), safe: none))
+    return lower_safe(cx, fx, node.id, node.target, member, node.span, want)
+  end
+
   resolved = cx.resolved.get(node.id)
   if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
@@ -1235,6 +1245,92 @@ def lower_field_checked(
 
   try typed(cx, expr, known)
   lower_field(cx, fx, node, want)
+end
+
+# The name that the value inside the Optional of `target&.member` has while the member is lowered.
+def safe_name(id: Int) -> String = "&.#{id}"
+
+# The receiver of the member of `target&.member`: the value inside the Optional, a register of its own that safe_name
+# names.
+def safe_target(cx: Lowering.Cx, id: Int, target: Ast.Expr) -> Ast.Expr
+  target_id = Ast.expr_id(target)
+  span = Ast.expr_span(target)
+  name = Ast.Expr.Name(Ast.NameRef(id: target_id, name: safe_name(id), span: span))
+  inner = Types.item(Lowering.type_of(cx, target))
+  Ast.Expr.Typed(Ast.TypedTarget(id: target_id, target: name, type: inner, span: span))
+end
+
+# target&.member: the target is lowered once; with `some(v)` the member (which reads v) is lowered into the result, as
+# `some` of it unless it is an Optional itself (flat_safe), and with `none` the result is `none` and the member's
+# arguments are not run.
+def lower_safe(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  id: Int,
+  target: Ast.Expr,
+  member: Ast.Expr,
+  span: Source.Span,
+  want: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.step(fx, span)
+  saved = fx.next
+  made = Lowering.target(fx, want)
+  dst = made.slot
+  source = try lower_expression(cx, made.fx, target, -1, false, false)
+  fx = Lowering.new_label(source.fx)
+  absent = fx.labels - 1
+  fx = Lowering.new_label(fx)
+  done = fx.labels - 1
+  fx = Lowering.alloc(fx)
+  test = fx.next - 1
+  fx = Lowering.emit_at(fx, "is-variant", [test, source.slot, cx.variants["Optional.Some"]], span)
+  fx = Lowering.emit_at(fx, "jump-if-false", [test, absent], span)
+  if Types.is?(Lowering.type_of(cx, member), "Void")
+    return lower_safe_void(cx, fx, id, source.slot, member, span, absent, test, dst, want, saved)
+  end
+
+  inside = test
+  fx = Lowering.emit_at(fx, "payload", [inside, source.slot, 0], span)
+  names = fx.vars
+  fx = fx.with(vars: names.put(safe_name(id), inside))
+  if cx.flat_safe.include?(id)
+    out = try lower_expression(cx, fx, member, dst, false, false)
+    fx = out.fx
+  else
+    fx = Lowering.alloc(fx)
+    value = fx.next - 1
+    out = try lower_expression(cx, fx, member, value, false, false)
+    fx = Lowering.emit_at(out.fx, "enum", [dst, value, cx.variants["Optional.Some"]], span)
+  end
+
+  fx = Lowering.emit_at(fx.with(vars: names), "jump", [done], span)
+  fx = Lowering.place(fx, absent)
+  fx = Lowering.emit_at(fx, "enum", [dst, dst, cx.variants["Optional.None"]], span)
+  fx = Lowering.place(fx, done)
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
+end
+
+# The `some` branch of a member that gives nothing: it runs, and the result is Void on both branches.
+def lower_safe_void(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  id: Int,
+  source: Int,
+  member: Ast.Expr,
+  span: Source.Span,
+  absent: Int,
+  inside: Int,
+  dst: Int,
+  want: Int,
+  saved: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.emit_at(fx, "payload", [inside, source, 0], span)
+  names = fx.vars
+  fx = fx.with(vars: names.put(safe_name(id), inside))
+  out = try lower_expression(cx, fx, member, -1, true, false)
+  fx = Lowering.place(out.fx.with(vars: names), absent)
+  fx = Lowering.emit_const(fx, dst, Ir.Imm.Void, span)
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
 # What the synthetic node of the checker becomes. The receiver is checked already, with the type the resolution

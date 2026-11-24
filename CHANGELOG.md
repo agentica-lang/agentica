@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Task.spawn_link` starts a task linked to its caller: a crash of either ends the other with the same diagnostic, and a return or a cancel leaves it running (#1916).
+- `o&.name` and `o&.name(args)` read a field or call a method of the value inside an Optional and give an Optional (`user.address&.city.unwrap_or("?")`); on a receiver that is not an Optional it is `CHECK-SAFE-NAV-RECEIVER` (#1947).
 - `agentica COMMAND --help` (and `-h`) prints the usage of that command and its part of the summary, for every command, and exits 0 (#1928).
 - The `version` requirements and `tag` pins that several packages of one tree ask for the same repository meet in one tag: `add` and `update` take the highest tag that meets them all, and `PKG-VERSION-UNSATISFIED` says who asked for what (#1147).
 - `version = "~> 0.8"` in a dependency takes the highest git tag that satisfies a RubyGems-style requirement, with `agentica add NAME URL --version REQ`; `update` moves it, the lock keeps the chosen tag, and none is `PKG-VERSION-UNSATISFIED` (#1147).

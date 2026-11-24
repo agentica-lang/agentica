@@ -385,7 +385,7 @@ def place(outline: Outline, marks: Marks, comment: Tokens.Comment) -> Attached
     end
 
     # Between the lines of a method chain: after the call before it.
-    if upcoming == "dot" and preceding >= 0
+    if (upcoming == "dot" or upcoming == "safe-dot") and preceding >= 0
       return Attached(comment: comment, node: preceding, role: Role.Trailing, keyword: "")
     end
 
