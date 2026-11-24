@@ -37,6 +37,7 @@ import {ROWS as REF_ROWS} from "builtins_ref"
 import {ROWS as REGEXENGINE_ROWS} from "builtins_regexengine"
 import {ROWS as RESULT_ROWS} from "builtins_result"
 import {ROWS as SET_ROWS} from "builtins_set"
+import {ROWS as SIZED_ROWS} from "builtins_sized"
 import {ROWS as STD_ROWS} from "builtins_std"
 import {ROWS as STRING_ROWS} from "builtins_string"
 import {ROWS as SYSTEM_ROWS} from "builtins_system"
@@ -82,6 +83,7 @@ BUILTIN_ROWS: List[Model.Builtin] = (
     .concat(REGEXENGINE_ROWS)
     .concat(RESULT_ROWS)
     .concat(SET_ROWS)
+    .concat(SIZED_ROWS)
     .concat(STD_ROWS)
     .concat(STRING_ROWS)
     .concat(SYSTEM_ROWS)

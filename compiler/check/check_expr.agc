@@ -101,9 +101,9 @@ def int_min_digits() -> String = "9223372036854775808"
 def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Type) -> Result[State.Out]
   try chain_after_end(cx, st, node)
   case node
-    Ast.Expr.Literal(found) -> check_literal(cx, st, found)
+    Ast.Expr.Literal(found) -> check_literal(cx, st, found, expected)
     Ast.Expr.Name(found) -> check_name(cx, st, found)
-    Ast.Expr.Unary(found) -> check_unary(cx, st, found)
+    Ast.Expr.Unary(found) -> check_unary(cx, st, found, expected)
     Ast.Expr.Binary(found) -> check_binary(cx, st, found)
     Ast.Expr.Call(found) -> Calls.check_call(cx, st, found, expected)
     Ast.Expr.EnumConstructor(found) ->
@@ -138,9 +138,14 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
   end
 end
 
-def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State.Out]
+# An integer literal is Int, or the narrow integer type that its context expects (narrow_target).
+def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal, expected: T.Type) -> Result[State.Out]
+  target = narrow_target(expected)
   case node.value
+    Ast.LitValue.Whole(value) if !T.unknown?(target) ->
+      narrow_literal(cx, st, value, "#{value}", false, target, node.span)
     Ast.LitValue.Whole(_) -> ok(State.Out(st: st, type: T.Type.Int))
+    Ast.LitValue.Huge(digits) if !T.unknown?(target) -> narrow_literal(cx, st, 0, digits, true, target, node.span)
     Ast.LitValue.Huge(_) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
     Ast.LitValue.Real(_) -> ok(State.Out(st: st, type: T.Type.Float))
@@ -148,6 +153,34 @@ def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State
     Ast.LitValue.Flag(_) -> ok(State.Out(st: st, type: T.Type.Bool))
     Ast.LitValue.Nothing -> ok(State.Out(st: st, type: T.Type.Nil))
   end
+end
+
+# The narrow integer type that an integer literal takes where `expected` is expected, or Unknown, and the literal is an
+# Int.
+def narrow_target(expected: T.Type) -> T.Type
+  return expected if T.narrow_int?(expected)
+
+  T.Type.Unknown
+end
+
+# An integer literal of the narrow type `target`: CHECK-INT-RANGE when its value is outside the type. `text` is
+# what the
+# message shows: the decimal value, or for a huge literal, past the Int range, its digits, which fit no type; either
+# with the minus folded in.
+def narrow_literal(
+  cx: State.Cx,
+  st: State.St,
+  value: Int,
+  text: String,
+  huge: Bool,
+  target: T.Type,
+  span: Source.Span,
+) -> Result[State.Out]
+  if huge or !T.narrow_fits?(target, value)
+    return error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(target, text), span))
+  end
+
+  ok(State.Out(st: st, type: target))
 end
 
 # A name in scope. A function name is not a value, and the help of an unknown name is a close name or a name of another
@@ -673,8 +706,14 @@ def index_help(target: T.Type) -> String
 end
 
 # - and not. -9223372036854775808 is the one literal that only fits under a minus.
-def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out]
+def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
   operand = try unary_operand(cx, st, node)
+  target = narrow_target(expected)
+  if node.op == "minus" and !T.unknown?(target) and integer_literal?(node.operand)
+    # A minus before an integer literal is part of it: -128 is an Int8.
+    return negative_literal(cx, operand.st, node, target)
+  end
+
   if node.op == "minus"
     if !CheckTypes.numeric?(operand.type)
       return error(
@@ -704,6 +743,33 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out
   end
 
   ok(State.Out(st: operand.st, type: T.Type.Bool))
+end
+
+def integer_literal?(node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Whole(_) -> true
+        Ast.LitValue.Huge(_) -> true
+        _ -> false
+      end
+
+    _ -> false
+  end
+end
+
+# -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
+def negative_literal(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[State.Out]
+  case node.operand
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Whole(value) -> narrow_literal(cx, st, 0 - value, "-#{value}", false, target, node.span)
+        Ast.LitValue.Huge(digits) -> narrow_literal(cx, st, 0, "-#{digits}", true, target, node.span)
+        _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "not an integer literal", node.span))
+      end
+
+    _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "not an integer literal", node.span))
+  end
 end
 
 def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out]

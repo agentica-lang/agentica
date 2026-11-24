@@ -66,6 +66,12 @@ private
 PLAIN_KINDS = {
   "Int": T.Type.Int,
   "Float": T.Type.Float,
+  "Int8": T.Type.Int8,
+  "Int16": T.Type.Int16,
+  "Int32": T.Type.Int32,
+  "UInt8": T.Type.UInt8,
+  "UInt16": T.Type.UInt16,
+  "UInt32": T.Type.UInt32,
   "String": T.Type.String,
   "Json": T.Type.Json,
   "Range": T.Type.Range,

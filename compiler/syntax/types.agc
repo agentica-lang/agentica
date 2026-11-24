@@ -15,6 +15,27 @@ REEXPORTED_TYPES: Map[String, String] = {
   "LogRegistry.Level": "Logger.Level",
 }
 
+## The integer types narrower than Int, by name, with their least and greatest values. Only the checker tells them from
+## Int: the VM holds their values as Ints.
+NARROW_INTS: Map[String, List[Int]] = {
+  "Int8": [-128, 127],
+  "Int16": [-32768, 32767],
+  "Int32": [-2147483648, 2147483647],
+  "UInt8": [0, 255],
+  "UInt16": [0, 65535],
+  "UInt32": [0, 4294967295],
+}
+
+## The narrow integer types by name.
+NARROW_TYPES: Map[String, Type] = {
+  "Int8": Type.Int8,
+  "Int16": Type.Int16,
+  "Int32": Type.Int32,
+  "UInt8": Type.UInt8,
+  "UInt16": Type.UInt16,
+  "UInt32": Type.UInt32,
+}
+
 ## The linked name of the builtin type Ref (Ref.new). Ref is not reserved, and the names of the root file keep no
 ## prefix, so the linker gives the builtin a name that no file can declare, as it does to the names of other files.
 REF_TYPE = "@Ref"
@@ -28,6 +49,12 @@ REF_TYPE = "@Ref"
 enum Type
   Int
   Float
+  Int8
+  Int16
+  Int32
+  UInt8
+  UInt16
+  UInt32
   Bool
   String
   Nil
@@ -66,6 +93,12 @@ def tag(type: Type) -> String
   case type
     Type.Int -> "Int"
     Type.Float -> "Float"
+    Type.Int8 -> "Int8"
+    Type.Int16 -> "Int16"
+    Type.Int32 -> "Int32"
+    Type.UInt8 -> "UInt8"
+    Type.UInt16 -> "UInt16"
+    Type.UInt32 -> "UInt32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"
@@ -95,6 +128,24 @@ end
 
 ## True when the type is that variant: is?(type, "List").
 def is?(type: Type, word: String) -> Bool = tag(type) == word
+
+## True for Int8, Int16, Int32, UInt8, UInt16 and UInt32.
+def narrow_int?(type: Type) -> Bool = NARROW_INTS.has_key?(tag(type))
+
+## True when the narrow integer type holds the value.
+def narrow_fits?(type: Type, value: Int) -> Bool
+  bounds = NARROW_INTS[tag(type)]
+  value >= bounds[0] and value <= bounds[1]
+end
+
+## The message of a literal (its text) that the narrow integer type does not hold: "300 is outside UInt8, 0 to 255".
+def narrow_outside(type: Type, text: String) -> String
+  bounds = NARROW_INTS[tag(type)]
+  "#{text} is outside #{tag(type)}, #{bounds[0]} to #{bounds[1]}"
+end
+
+## The narrow integer type of that name (a key of NARROW_INTS).
+def narrow_int(name: String) -> Type = NARROW_TYPES[name]
 
 ## True for no type (Unknown).
 def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
@@ -351,6 +402,12 @@ def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
     Type.Int -> "Int"
     Type.Float -> "Float"
+    Type.Int8 -> "Int8"
+    Type.Int16 -> "Int16"
+    Type.Int32 -> "Int32"
+    Type.UInt8 -> "UInt8"
+    Type.UInt16 -> "UInt16"
+    Type.UInt32 -> "UInt32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"

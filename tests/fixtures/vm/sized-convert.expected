@@ -1,0 +1,17 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INTEGER-OVERFLOW",
+  "steps": 84,
+  "stdout": [
+    "200 -128 -32768 4294967295 [1, 65535] {\"low\": -2147483648, \"high\": 2147483647}",
+    "Pixel(r: 255, g: 0)",
+    "200 -128",
+    "false",
+    "true",
+    "72",
+    "two hundred",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

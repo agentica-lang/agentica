@@ -164,7 +164,8 @@ INTERPOLATION = "#{", expression, "}" ;
 any Unicode character except double quotes, backslash, newlines, and a `#`
 followed by `{`. `NL`, `DOC` and `EOF` are lexer tokens.
 
-The minus sign is an operator, not part of a literal. An exponent follows the
+The minus sign is an operator, not part of a literal, except before an integer
+literal of a narrow type (below). An exponent follows the
 digits or the fraction, as in Ruby: `1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are
 Floats, and `Float#to_s` writes `1e+300`, which reads back. The `e` needs a
 digit before it and a digit after the optional sign, so `1.e5` is the call
@@ -195,6 +196,15 @@ to the literal, so a prefix with no digit (`0x`), a digit outside the base
 `LEX-INVALID-NUMBER`, with the literal as the span. Unlike Ruby, a leading
 zero alone is decimal, not octal (`0755` is `755`), and a Float has no other
 base.
+
+An integer literal is an `Int`, unless its context expects a narrow integer
+type (`Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` or `UInt32`): an
+annotation, a parameter, a struct field, a return type, a list or map item, or
+a `case` pattern on a value of that type. Then the literal has that type and
+must be in its range, or it is `CHECK-INT-RANGE` with the literal as the span
+(`x: UInt8 = 256`). A minus before such a literal is part of it: `x: Int8 =
+-128` checks, and `x: UInt8 = -1` is `CHECK-INT-RANGE`. A Float literal never
+takes a narrow type.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

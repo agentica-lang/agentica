@@ -7,6 +7,11 @@ programs are valid and how they run.
 
 - `Int`: Signed 64-bit integer; overflow is a runtime error
 - `Float`: IEEE 754 binary64
+- `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`: Integers of 8, 16 and
+  32 bits, signed (`Int`) or unsigned (`UInt`); an integer literal takes one of
+  these types where its context expects it (§4, "Literals"), and `x.to_i` and
+  `n.to_uint8` and the like convert. `Int64` is another name of `Int`, and
+  `Float64` of `Float`; the ten names are reserved
 - `Bool`: Only `true` and `false`; there is no truthiness
 - `String`: Unicode text; concatenation with `+`, repetition with `* Int`
 - `Bytes`: Immutable byte string, one byte for each item (`0..255`); no literal

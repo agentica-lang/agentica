@@ -5,6 +5,7 @@
  */
 #include "services.h"
 
+#include <inttypes.h>
 #include <math.h>
 #include <string.h>
 #include <time.h>
@@ -76,6 +77,40 @@ static agc_value builtin_float_to_int(agc_vm *vm, agc_value *args, uint32_t span
 
 static agc_value builtin_float_to_int_bang(agc_vm *vm, agc_value *args, uint32_t span) {
   return float_value_to_int(vm, agc_as_float(vm, args[0]), span, true);
+}
+
+/* Int.to_<type> for a narrow integer type (Int8 to UInt32), which the VM holds as an Int: the value when the type holds
+   it, else an error Result, or with bang RUNTIME-INTEGER-OVERFLOW at span. */
+static agc_value int_to_narrow(agc_vm *vm, agc_value value, const char *name, int64_t min, int64_t max, uint32_t span,
+                               bool bang) {
+  int64_t n = agc_as_int(vm, value);
+  if (n >= min && n <= max) return bang ? value : agc_result_value(true, value);
+  char text[96];
+  int len = snprintf(text, sizeof text, "%" PRId64 " is outside %s, %" PRId64 " to %" PRId64, n, name, min, max);
+  agc_string *message = agc_make_string(text, (size_t)len, (size_t)len);
+  if (bang) agc_fail_text(vm, "RUNTIME-INTEGER-OVERFLOW", message, span);
+  return agc_error_string(vm, AGC_KIND_NUMBER_RANGE, message);
+}
+
+#define INT_TO_NARROW(word, name, min, max)                                                    \
+  static agc_value builtin_int_to_##word(agc_vm *vm, agc_value *args, uint32_t span) {        \
+    return int_to_narrow(vm, args[0], name, min, max, span, false);                           \
+  }                                                                                           \
+  static agc_value builtin_int_to_##word##_bang(agc_vm *vm, agc_value *args, uint32_t span) { \
+    return int_to_narrow(vm, args[0], name, min, max, span, true);                            \
+  }
+
+INT_TO_NARROW(int8, "Int8", INT8_MIN, INT8_MAX)
+INT_TO_NARROW(int16, "Int16", INT16_MIN, INT16_MAX)
+INT_TO_NARROW(int32, "Int32", INT32_MIN, INT32_MAX)
+INT_TO_NARROW(uint8, "UInt8", 0, UINT8_MAX)
+INT_TO_NARROW(uint16, "UInt16", 0, UINT16_MAX)
+INT_TO_NARROW(uint32, "UInt32", 0, UINT32_MAX)
+
+/* to_i on a narrow integer type: its value is an Int already. */
+static agc_value builtin_int_from_narrow(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(agc_as_int(vm, args[0]));
 }
 
 /* floor, ceil and round give an Int, as Ruby's Float#floor gives an Integer; with no bignums a result outside Int
@@ -358,6 +393,19 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.from_bits", 1, builtin_float_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int8", 1, builtin_int_to_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int8!", 1, builtin_int_to_int8_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int16", 1, builtin_int_to_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int16!", 1, builtin_int_to_int16_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int32", 1, builtin_int_to_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_int32!", 1, builtin_int_to_int32_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint8", 1, builtin_int_to_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint8!", 1, builtin_int_to_uint8_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint16", 1, builtin_int_to_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint16!", 1, builtin_int_to_uint16_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint32", 1, builtin_int_to_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint32!", 1, builtin_int_to_uint32_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

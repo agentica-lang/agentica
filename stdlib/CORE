@@ -47,6 +47,7 @@ catalog/builtins_regexengine.agc
 catalog/builtins_result.agc
 catalog/builtins_rows.agc
 catalog/builtins_set.agc
+catalog/builtins_sized.agc
 catalog/builtins_std.agc
 catalog/builtins_string.agc
 catalog/builtins_system.agc

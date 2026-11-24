@@ -1,0 +1,205 @@
+# sized-vectors.stdin: made by python3 tests/fixtures/sized-vectors.py (Python ints); do not edit by hand
+to int8 -9223372036854775808 error
+to int8 -9223372036854775807 error
+to int8 -2147483649 error
+to int8 -2147483648 error
+to int8 -2147483647 error
+to int8 -32769 error
+to int8 -32768 error
+to int8 -32767 error
+to int8 -129 error
+to int8 -128 ok -128
+to int8 -127 ok -127
+to int8 -1 ok -1
+to int8 0 ok 0
+to int8 1 ok 1
+to int8 126 ok 126
+to int8 127 ok 127
+to int8 128 error
+to int8 254 error
+to int8 255 error
+to int8 256 error
+to int8 32766 error
+to int8 32767 error
+to int8 32768 error
+to int8 65534 error
+to int8 65535 error
+to int8 65536 error
+to int8 2147483646 error
+to int8 2147483647 error
+to int8 2147483648 error
+to int8 4294967294 error
+to int8 4294967295 error
+to int8 4294967296 error
+to int8 9223372036854775806 error
+to int8 9223372036854775807 error
+to int16 -9223372036854775808 error
+to int16 -9223372036854775807 error
+to int16 -2147483649 error
+to int16 -2147483648 error
+to int16 -2147483647 error
+to int16 -32769 error
+to int16 -32768 ok -32768
+to int16 -32767 ok -32767
+to int16 -129 ok -129
+to int16 -128 ok -128
+to int16 -127 ok -127
+to int16 -1 ok -1
+to int16 0 ok 0
+to int16 1 ok 1
+to int16 126 ok 126
+to int16 127 ok 127
+to int16 128 ok 128
+to int16 254 ok 254
+to int16 255 ok 255
+to int16 256 ok 256
+to int16 32766 ok 32766
+to int16 32767 ok 32767
+to int16 32768 error
+to int16 65534 error
+to int16 65535 error
+to int16 65536 error
+to int16 2147483646 error
+to int16 2147483647 error
+to int16 2147483648 error
+to int16 4294967294 error
+to int16 4294967295 error
+to int16 4294967296 error
+to int16 9223372036854775806 error
+to int16 9223372036854775807 error
+to int32 -9223372036854775808 error
+to int32 -9223372036854775807 error
+to int32 -2147483649 error
+to int32 -2147483648 ok -2147483648
+to int32 -2147483647 ok -2147483647
+to int32 -32769 ok -32769
+to int32 -32768 ok -32768
+to int32 -32767 ok -32767
+to int32 -129 ok -129
+to int32 -128 ok -128
+to int32 -127 ok -127
+to int32 -1 ok -1
+to int32 0 ok 0
+to int32 1 ok 1
+to int32 126 ok 126
+to int32 127 ok 127
+to int32 128 ok 128
+to int32 254 ok 254
+to int32 255 ok 255
+to int32 256 ok 256
+to int32 32766 ok 32766
+to int32 32767 ok 32767
+to int32 32768 ok 32768
+to int32 65534 ok 65534
+to int32 65535 ok 65535
+to int32 65536 ok 65536
+to int32 2147483646 ok 2147483646
+to int32 2147483647 ok 2147483647
+to int32 2147483648 error
+to int32 4294967294 error
+to int32 4294967295 error
+to int32 4294967296 error
+to int32 9223372036854775806 error
+to int32 9223372036854775807 error
+to uint8 -9223372036854775808 error
+to uint8 -9223372036854775807 error
+to uint8 -2147483649 error
+to uint8 -2147483648 error
+to uint8 -2147483647 error
+to uint8 -32769 error
+to uint8 -32768 error
+to uint8 -32767 error
+to uint8 -129 error
+to uint8 -128 error
+to uint8 -127 error
+to uint8 -1 error
+to uint8 0 ok 0
+to uint8 1 ok 1
+to uint8 126 ok 126
+to uint8 127 ok 127
+to uint8 128 ok 128
+to uint8 254 ok 254
+to uint8 255 ok 255
+to uint8 256 error
+to uint8 32766 error
+to uint8 32767 error
+to uint8 32768 error
+to uint8 65534 error
+to uint8 65535 error
+to uint8 65536 error
+to uint8 2147483646 error
+to uint8 2147483647 error
+to uint8 2147483648 error
+to uint8 4294967294 error
+to uint8 4294967295 error
+to uint8 4294967296 error
+to uint8 9223372036854775806 error
+to uint8 9223372036854775807 error
+to uint16 -9223372036854775808 error
+to uint16 -9223372036854775807 error
+to uint16 -2147483649 error
+to uint16 -2147483648 error
+to uint16 -2147483647 error
+to uint16 -32769 error
+to uint16 -32768 error
+to uint16 -32767 error
+to uint16 -129 error
+to uint16 -128 error
+to uint16 -127 error
+to uint16 -1 error
+to uint16 0 ok 0
+to uint16 1 ok 1
+to uint16 126 ok 126
+to uint16 127 ok 127
+to uint16 128 ok 128
+to uint16 254 ok 254
+to uint16 255 ok 255
+to uint16 256 ok 256
+to uint16 32766 ok 32766
+to uint16 32767 ok 32767
+to uint16 32768 ok 32768
+to uint16 65534 ok 65534
+to uint16 65535 ok 65535
+to uint16 65536 error
+to uint16 2147483646 error
+to uint16 2147483647 error
+to uint16 2147483648 error
+to uint16 4294967294 error
+to uint16 4294967295 error
+to uint16 4294967296 error
+to uint16 9223372036854775806 error
+to uint16 9223372036854775807 error
+to uint32 -9223372036854775808 error
+to uint32 -9223372036854775807 error
+to uint32 -2147483649 error
+to uint32 -2147483648 error
+to uint32 -2147483647 error
+to uint32 -32769 error
+to uint32 -32768 error
+to uint32 -32767 error
+to uint32 -129 error
+to uint32 -128 error
+to uint32 -127 error
+to uint32 -1 error
+to uint32 0 ok 0
+to uint32 1 ok 1
+to uint32 126 ok 126
+to uint32 127 ok 127
+to uint32 128 ok 128
+to uint32 254 ok 254
+to uint32 255 ok 255
+to uint32 256 ok 256
+to uint32 32766 ok 32766
+to uint32 32767 ok 32767
+to uint32 32768 ok 32768
+to uint32 65534 ok 65534
+to uint32 65535 ok 65535
+to uint32 65536 ok 65536
+to uint32 2147483646 ok 2147483646
+to uint32 2147483647 ok 2147483647
+to uint32 2147483648 ok 2147483648
+to uint32 4294967294 ok 4294967294
+to uint32 4294967295 ok 4294967295
+to uint32 4294967296 error
+to uint32 9223372036854775806 error
+to uint32 9223372036854775807 error

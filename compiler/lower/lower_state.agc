@@ -279,7 +279,14 @@ def vm_type?(cx: Cx, type: Types.Type) -> Bool
     # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, Test.Case, C.Pointer) or a resource of
     # an extern block (cx.resources): the VM has them all.
     Types.Type.Opaque(_) -> true
+    # The narrow integer types are Ints at run time.
     Types.Type.Int -> true
+    Types.Type.Int8 -> true
+    Types.Type.Int16 -> true
+    Types.Type.Int32 -> true
+    Types.Type.UInt8 -> true
+    Types.Type.UInt16 -> true
+    Types.Type.UInt32 -> true
     Types.Type.Float -> true
     Types.Type.Bool -> true
     Types.Type.Nil -> true
