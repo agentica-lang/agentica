@@ -4,6 +4,8 @@
 Task.spawn(block: Fn[R]) -> Task[R]
 Task.spawn(block: Fn[A, R], arg: A) -> Task[R]
 Task.spawn_owning(block: Fn[A, R], handle: A) -> Task[R]
+Task.spawn_link(block: Fn[R]) -> Task[R]
+Task.spawn_link(block: Fn[A, R], arg: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]]
@@ -118,6 +120,16 @@ item times out. `Task.await` on a cancelled task returns `error("task:
 cancelled")` when `R` is a `Result`, else halts with `RUNTIME-TASK-CANCELLED`
 at the await: give a task you may cancel a `Result` return type when something
 awaits it.
+
+## Links
+
+`Task.spawn_link` starts a task like `Task.spawn` and links it to the caller
+until either ends. A crash of one ends the other with the same diagnostic, on
+through its links (a crashed child ends its parent and that parent's other
+linked children); a crash that reaches `main` ends the run with it. A return or
+a cancel leaves the other running. The crash is printed and counted once, and an
+await or monitor of any task it reached observes it. There is no way to link a
+running task.
 
 ## Monitors
 

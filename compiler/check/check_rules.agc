@@ -249,9 +249,9 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
   ok(true)
 end
 
-# The message of a block given to a builtin that takes none. Task.spawn takes a block, but alone.
+# The message of a block given to a builtin that takes none. Task.spawn and Task.spawn_link take a block, but alone.
 def block_target_message(name: String) -> String
-  return "Task.spawn got a function reference and a block: it takes one of them, not both" if name == "Task.spawn"
+  return "#{name} got a function reference and a block: it takes one of them, not both" if spawn_name?(name)
 
   "\"#{name}\" does not take a block: its last parameter is not a function"
 end
@@ -267,12 +267,14 @@ def block_target_help(name: String) -> String
     return "index takes a value, not a block: xs.index(value), or xs.find_index do |x| ... end for a test"
   end
 
-  if name == "Task.spawn"
-    return "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)"
+  if spawn_name?(name)
+    return "#{name} takes a block or a function reference, not both: #{name} do ... end or #{name}(&f, arg)"
   end
 
   "a block is only allowed when the last parameter is a function (Fn[...])"
 end
+
+def spawn_name?(name: String) -> Bool = name == "Task.spawn" or name == "Task.spawn_link"
 
 # The rule of the builtin, which says how its arguments are checked and what type the call has.
 def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

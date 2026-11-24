@@ -57,10 +57,10 @@ def holds_address?(cx: State.Cx, type: T.Type) -> Bool = holds?(cx, type) do |pa
 
 private
 
-# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
-# the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or
-# an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED), or every
-# one of them that a struct, enum, List, Map or Result holds.
+# Task.spawn, Task.spawn_link and Task.spawn_owning: a function of one parameter and the argument it gets; the first
+# two also have the form with no argument, for a function of no parameter. The owning form also hands over a handle, a
+# channel or an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED),
+# or every one of them that a struct, enum, List, Map or Result holds.
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   wanted = site.args.size - 1
@@ -91,7 +91,8 @@ end
 # CHECK-TYPE-MISMATCH of a spawn whose function does not take as many parameters as the call has arguments after it.
 # The 0-argument form belongs to Task.spawn alone. A one-parameter function without its argument gets a help.
 def spawn_mismatch(cx: State.Cx, callback: State.Out, site: State.Site, owning: Bool, wanted: Int) -> String
-  needs = "Task.spawn(&f) needs 0 parameters, Task.spawn(&f, arg) needs 1, a block needs 0: Task.spawn do ... end"
+  name = site.selected.name
+  needs = "#{name}(&f) needs 0 parameters, #{name}(&f, arg) needs 1, a block needs 0: #{name} do ... end"
   if owning
     needs = "Task.spawn_owning(&f, handle) needs 1 parameter"
   end

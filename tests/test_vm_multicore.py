@@ -1267,6 +1267,71 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
             0, "8\n0\nerror(\"filesystem: operation timed out\", kind: \"io.timeout\")\n", "")
 
 
+# Task.spawn_link: a crash reaches the linked task whichever scheduler runs it, in a turn or parked, and counts once.
+LINK_PAIRS = """\
+def boom(n: Int) -> Int
+  Task.sleep(n %% 3)
+  10 / 0
+end
+
+def busy(n: Int) -> Result[Int]
+  _ = Task.spawn_link(&boom, n)
+  total = 0
+  for i in 1..200000
+    total += i %% 7
+  end
+  Task.sleep(5000)
+  ok(total)
+end
+
+def main() -> Void
+  tasks = (1..%(pairs)d).map do |n| Task.spawn(&busy, n) end
+  puts(tasks.count do |t| !Task.await(t).ok? end)
+  puts(Task.pending_count())
+end
+"""
+
+
+@RACE
+def test_linked_crashes_reach_parents_in_a_turn_or_parked_and_print_once(tmp_path, repeats):
+    # Each parent spins for a while, so the crash of its child reaches it in a turn on another scheduler or after it
+    # parks (the commit race of the end of a turn); every parent ends crashed, and one notice is printed per crash.
+    pairs = 24
+    bytecode = program(tmp_path, "link-pairs", LINK_PAIRS % {"pairs": pairs})
+    for _ in range(repeats):
+        result = vm(bytecode)
+        assert (result.code, result.stdout) == (0, "%d\n0\n" % pairs)
+        assert result.stderr.count("error[RUNTIME-DIVISION-BY-ZERO] in a task") == pairs
+
+
+LINK_MAIN_IN_PRELUDE = """\
+def boom() -> Int
+  Task.sleep(200)
+  10 / 0
+end
+
+def main() -> Void
+  _child = Task.spawn_link(&boom)
+  _ = File.open(System.args()[0], "read", 60000) do |file| File.read_line(file, 60000) end
+end
+"""
+
+
+@host_only(not hasattr(os, "mkfifo"), "Windows has no FIFO files")
+def test_a_crash_that_reaches_main_in_a_prelude_call_keeps_the_place_of_the_crash(tmp_path):
+    # main waits inside the block of File.open, a prelude function: the failure it gets from the link reports where
+    # the child crashed (the place of the first notice), not the call that main was in.
+    fifo = tmp_path / "held"
+    os.mkfifo(fifo)
+    held = os.open(fifo, os.O_RDWR)
+    try:
+        result = vm(program(tmp_path, "link-prelude", LINK_MAIN_IN_PRELUDE), args=(str(fifo),))
+    finally:
+        os.close(held)
+    places = re.findall(r"(\S+:\d+:\d+) error\[RUNTIME-DIVISION-BY-ZERO\]", result.stderr)
+    assert result.code == 1 and len(places) == 2 and places[0] == places[1]
+
+
 # Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
 # I/O thread, which owns each child's handles and buffers (§16.9). The children are Python programs; those that print
 # their process id, watch another one end, read the child channel or record themselves are modes of CHILD, and a

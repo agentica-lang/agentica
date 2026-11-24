@@ -14,10 +14,14 @@ language and the checker:
   an argument that holds no handle is `CHECK-NOT-A-HANDLE`. An `Address` is
   data, not a handle: a channel passed as its address in that argument is
   shared, not handed over.
+- `Task.spawn_link` takes the forms of `Task.spawn` and links the new task to
+  the caller: a crash of either ends the other with the same diagnostic, and a
+  return or a cancel leaves it running (the `Task` page).
 - A runtime error in a task other than `main` is a crash that ends only that
-  task. `Task.await` of a crashed or cancelled task returns an error of kind
-  `task.crashed` or `task.cancelled` when the result type is a `Result`, and
-  halts with `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED` otherwise.
+  task (and the tasks linked to it). `Task.await` of a crashed or cancelled
+  task returns an error of kind `task.crashed` or `task.cancelled` when the
+  result type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` or
+  `RUNTIME-TASK-CANCELLED` otherwise.
 - `Await[T]` (`Await.Done(value)` and `Await.TimedOut`, written without
   parentheses), `TaskRef`, `TaskDown` and `TaskExit` are reserved: a struct,
   enum, type parameter or import alias with one of these names is
