@@ -1,7 +1,6 @@
-# The vectors of tests/fixtures/sized-bits.py (Python ints), read from stdin: the bit and wrapping
-# methods, Int.wrap_<type>
-# and the widenings of each integer type. The functions of each type are written out below because a method of one type
-# does not take another. A negative shift count halts: the fixture sized-shift-negative.
+# The vectors of tests/fixtures/sized-bits.py (Python ints), read from stdin: the bit and wrapping methods,
+# Int.wrap_<type> and the widenings of each integer type. The functions of each type are written out below because a
+# method of one type does not take another. A negative shift count halts: tests/test_spec_sized.py has those cases.
 
 def bits_int8(a: Int, b: Int) -> List[String]
   x = a.to_int8!

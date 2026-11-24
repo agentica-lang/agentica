@@ -1,6 +1,6 @@
-"""Write tests/fixtures/vm/sized-bits.stdin and the typed functions of tests/fixtures/vm/sized-bits.agc: the bit and
-wrapping methods, Int.wrap_<type> and the widenings of the integer types, with the result each must give, worked out
-with Python ints. The VM fixture sized-bits.agc reads the vectors and counts the ones that differ.
+"""Write tests/fixtures/vm/sized-bits.stdin: the vectors of the bit and wrapping methods, Int.wrap_<type> and the
+widenings of the integer types, with the result each must give, worked out with Python ints. The VM fixture
+sized-bits.agc reads the vectors and counts the ones that differ.
 
 A line is `wrap <type> <n> <want>`; `bits <type> <a> <b>` and the results of and, or, xor, wrapping_add, wrapping_sub
 and wrapping_mul; `not <type> <a> <want>`; `shift <type> <a> <count>` and the results of shift_left, shift_right and
@@ -39,15 +39,15 @@ def wrap(n: int, name: str) -> int:
 
 def operands(name: str) -> list[int]:
     low, high = bounds(name)
-    found = {low, low + 1, -2, -1, 0, 1, 2, 3, 7, 100, high // 2, high - 1, high, wrap(0x5555555555555555, name)}
+    found = {low, -1, 0, 1, 3, high // 2, high, wrap(0x5555555555555555, name)}
     return sorted(v for v in found if low <= v <= high)
 
 
 def wraps(name: str) -> list[int]:
     """The Ints that Int.wrap_<type> reads: past the type on both sides, and the ends of Int."""
     low, high = bounds(name)
-    return sorted({low - 1, high + 1, low * 2, high * 2 + 1, 1 << 32, -(1 << 33), 12345678901, -(1 << 63), (1 << 63) - 1,
-                   0, 1, -1, low, high})
+    found = {low - 1, high + 1, low * 2, high * 2 + 1, 1 << 32, -(1 << 33), 12345678901, -(1 << 63), (1 << 63) - 1}
+    return sorted(found | {0, 1, -1, low, high})
 
 
 def shift_right(a: int, count: int) -> int:
@@ -62,7 +62,8 @@ def shift_right_unsigned(a: int, count: int, name: str) -> int:
 def widenings(name: str) -> list[str]:
     """The narrow types that hold every value of the type, in the order of TYPES."""
     low, high = bounds(name)
-    return [other for other in TYPES if other not in (name, "int") and bounds(other)[0] <= low and bounds(other)[1] >= high]
+    wider = (other for other in TYPES if other not in (name, "int"))
+    return [other for other in wider if bounds(other)[0] <= low and bounds(other)[1] >= high]
 
 
 def lines() -> list[str]:

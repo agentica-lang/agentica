@@ -1017,11 +1017,11 @@ builtin UInt8.bit_or forms=1
 builtin UInt8.bit_xor forms=1
   UInt8.bit_xor(uint8: UInt8, other: UInt8) -> UInt8 shape=(UInt8, UInt8) -> UInt8 rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or."
 builtin UInt8.bit_not forms=1
-  UInt8.bit_not(uint8: UInt8) -> UInt8 shape=(UInt8) -> UInt8 rule=Plain impl="UInt8.bit_not" effects=[] desc="Flip the bits within the width of UInt8: 255 - uint8 for UInt8."
+  UInt8.bit_not(uint8: UInt8) -> UInt8 shape=(UInt8) -> UInt8 rule=Plain impl="UInt8.bit_not" effects=[] desc="Flip the bits within the width of UInt8: 255 - uint8."
 builtin UInt8.shift_left forms=1
   UInt8.shift_left(uint8: UInt8, count: Int) -> UInt8 shape=(UInt8, Int) -> UInt8 rule=Plain impl="UInt8.shift_left" effects=[] desc="Shift bits left; bits that leave the width of UInt8 are dropped, so it wraps; a count of the width or more gives 0; a negative count halts."
 builtin UInt8.shift_right forms=1
-  UInt8.shift_right(uint8: UInt8, count: Int) -> UInt8 shape=(UInt8, Int) -> UInt8 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right; a signed type copies its sign bit; a negative count halts."
+  UInt8.shift_right(uint8: UInt8, count: Int) -> UInt8 shape=(UInt8, Int) -> UInt8 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right, filling with zeros; a negative count halts."
 builtin UInt8.shift_right_unsigned forms=1
   UInt8.shift_right_unsigned(uint8: UInt8, count: Int) -> UInt8 shape=(UInt8, Int) -> UInt8 rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Shift the bits of the width of UInt8 right, filling with zeros; a count of the width or more gives 0; a negative count halts."
 builtin UInt8.wrapping_add forms=1
@@ -1055,11 +1055,11 @@ builtin UInt16.bit_or forms=1
 builtin UInt16.bit_xor forms=1
   UInt16.bit_xor(uint16: UInt16, other: UInt16) -> UInt16 shape=(UInt16, UInt16) -> UInt16 rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or."
 builtin UInt16.bit_not forms=1
-  UInt16.bit_not(uint16: UInt16) -> UInt16 shape=(UInt16) -> UInt16 rule=Plain impl="UInt16.bit_not" effects=[] desc="Flip the bits within the width of UInt16: 255 - uint16 for UInt8."
+  UInt16.bit_not(uint16: UInt16) -> UInt16 shape=(UInt16) -> UInt16 rule=Plain impl="UInt16.bit_not" effects=[] desc="Flip the bits within the width of UInt16: 65535 - uint16."
 builtin UInt16.shift_left forms=1
   UInt16.shift_left(uint16: UInt16, count: Int) -> UInt16 shape=(UInt16, Int) -> UInt16 rule=Plain impl="UInt16.shift_left" effects=[] desc="Shift bits left; bits that leave the width of UInt16 are dropped, so it wraps; a count of the width or more gives 0; a negative count halts."
 builtin UInt16.shift_right forms=1
-  UInt16.shift_right(uint16: UInt16, count: Int) -> UInt16 shape=(UInt16, Int) -> UInt16 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right; a signed type copies its sign bit; a negative count halts."
+  UInt16.shift_right(uint16: UInt16, count: Int) -> UInt16 shape=(UInt16, Int) -> UInt16 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right, filling with zeros; a negative count halts."
 builtin UInt16.shift_right_unsigned forms=1
   UInt16.shift_right_unsigned(uint16: UInt16, count: Int) -> UInt16 shape=(UInt16, Int) -> UInt16 rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Shift the bits of the width of UInt16 right, filling with zeros; a count of the width or more gives 0; a negative count halts."
 builtin UInt16.wrapping_add forms=1
@@ -1089,11 +1089,11 @@ builtin UInt32.bit_or forms=1
 builtin UInt32.bit_xor forms=1
   UInt32.bit_xor(uint32: UInt32, other: UInt32) -> UInt32 shape=(UInt32, UInt32) -> UInt32 rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or."
 builtin UInt32.bit_not forms=1
-  UInt32.bit_not(uint32: UInt32) -> UInt32 shape=(UInt32) -> UInt32 rule=Plain impl="UInt32.bit_not" effects=[] desc="Flip the bits within the width of UInt32: 255 - uint32 for UInt8."
+  UInt32.bit_not(uint32: UInt32) -> UInt32 shape=(UInt32) -> UInt32 rule=Plain impl="UInt32.bit_not" effects=[] desc="Flip the bits within the width of UInt32: 4294967295 - uint32."
 builtin UInt32.shift_left forms=1
   UInt32.shift_left(uint32: UInt32, count: Int) -> UInt32 shape=(UInt32, Int) -> UInt32 rule=Plain impl="UInt32.shift_left" effects=[] desc="Shift bits left; bits that leave the width of UInt32 are dropped, so it wraps; a count of the width or more gives 0; a negative count halts."
 builtin UInt32.shift_right forms=1
-  UInt32.shift_right(uint32: UInt32, count: Int) -> UInt32 shape=(UInt32, Int) -> UInt32 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right; a signed type copies its sign bit; a negative count halts."
+  UInt32.shift_right(uint32: UInt32, count: Int) -> UInt32 shape=(UInt32, Int) -> UInt32 rule=Plain impl="Int.shift_right" effects=[] desc="Shift bits right, filling with zeros; a negative count halts."
 builtin UInt32.shift_right_unsigned forms=1
   UInt32.shift_right_unsigned(uint32: UInt32, count: Int) -> UInt32 shape=(UInt32, Int) -> UInt32 rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Shift the bits of the width of UInt32 right, filling with zeros; a count of the width or more gives 0; a negative count halts."
 builtin UInt32.wrapping_add forms=1

@@ -18,9 +18,11 @@ NARROW_ROWS: List[Model.Builtin] = Types.NARROW_INTS.keys.flat_map do |name: Str
   not_from = "Int.bit_not"
   not_text = "Flip every bit; the same as -1 - #{word}."
   right_unsigned_from = "#{name}.shift_right_unsigned"
+  right_text = "Shift bits right; a signed type copies its sign bit; a negative count halts."
   if bounds[0] == 0
     not_from = "#{name}.bit_not"
-    not_text = "Flip the bits within the width of #{name}: 255 - #{word} for UInt8."
+    not_text = "Flip the bits within the width of #{name}: #{bounds[1]} - #{word}."
+    right_text = "Shift bits right, filling with zeros; a negative count halts."
     right_unsigned_from = "Int.shift_right_unsigned"
   end
 
@@ -153,7 +155,7 @@ NARROW_ROWS: List[Model.Builtin] = Types.NARROW_INTS.keys.flat_map do |name: Str
       rule: Model.Rule.Plain,
       implementation: "Int.shift_right",
       effects: [],
-      description: "Shift bits right; a signed type copies its sign bit; a negative count halts.",
+      description: right_text,
       alternatives: [],
     ),
     Model.Builtin(
