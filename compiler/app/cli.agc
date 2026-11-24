@@ -105,6 +105,21 @@ end
 
 private
 
+# The options of the commands that take the next word as their value (the forms of USAGE in cli_text.agc).
+VALUE_OPTIONS = [
+  "--steps",
+  "--only",
+  "--tags",
+  "--jobs",
+  "--max-steps",
+  "--tag",
+  "--ref",
+  "--version",
+  "--subdir",
+  "--group",
+  "-o",
+]
+
 # The deadline of each call that writes the output of `compile` or a file of `fmt`, in milliseconds.
 SAVE_TIMEOUT = 60_000
 # The name of the standard input in the diagnostics of `fmt -`.
@@ -201,12 +216,23 @@ def dispatch(session: Session) -> Int
   program(building(session, first), first, rest)
 end
 
-# Whether the command line is a command (not `run`, which the binary answers itself) with `--help` or `-h` after it.
+# Whether the command line is a command (not `run`, which the binary answers itself) with `--help` or `-h` after it: as
+# a word of its own, not the value of an option that takes one, and before a `--`.
 def asked_for_help?(words: List[String]) -> Bool
-  return false if words.size < 2 or words[0] == "run"
+  return false if words.size < 2 or words[0] == "run" or Texts.command_help_text(words[0]) == ""
 
-  asking = words.drop(1).any? do |word: String| word == "--help" or word == "-h" end
-  asking and Texts.command_help_text(words[0]) != ""
+  at = 1
+  while at < words.size
+    return false if words[at] == "--"
+    return true if words[at] == "--help" or words[at] == "-h"
+
+    at += 1
+    if VALUE_OPTIONS.include?(words[at - 1])
+      at += 1
+    end
+  end
+
+  false
 end
 
 # The session whose workspace builds the native modules of the project and its packages from their C sources

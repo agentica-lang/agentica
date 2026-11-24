@@ -230,7 +230,7 @@ static int run_program(agc_launch *launch, const agc_front_end *fe) {
   int option_count = (int)fe->option_count;
   agc_launch_status status = agc_launch_parse(name, option_count, fe->options, &at, &options);
   if (status == AGC_LAUNCH_BAD) return 2;
-  if (status == AGC_LAUNCH_VERSION || at != option_count) {
+  if (status == AGC_LAUNCH_VERSION || status == AGC_LAUNCH_HELP || at != option_count) {
     fprintf(stderr, "%s: the front end passed %s, which is not an option of a run\n", name, fe->options[at]);
     return 2;
   }
@@ -317,17 +317,15 @@ static bool session_ended(agc_vm *vm, agc_outcome *outcome) {
  * typed here instead of handed over: a start that fails is status 2. With `--embedded NAME` there is no file: the
  * program is one the binary carries, and every word after `--` is its argument. */
 static int run_command(agc_launch *launch, int argc, char **argv) {
-  for (int k = 2; k < argc && strcmp(argv[k], "--") != 0; k++) {
-    if (strcmp(argv[k], "--help") == 0 || strcmp(argv[k], "-h") == 0) {
-      fputs(usage, stdout);
-      return fflush(stdout) == 0 ? 0 : 1;
-    }
-  }
   agc_launch_options options;
   int i = 2;
   agc_launch_status status = agc_launch_parse(run_name, argc, argv, &i, &options);
   if (status == AGC_LAUNCH_VERSION) {
     print_version();
+    return fflush(stdout) == 0 ? 0 : 1;
+  }
+  if (status == AGC_LAUNCH_HELP) {
+    fputs(usage, stdout);
     return fflush(stdout) == 0 ? 0 : 1;
   }
   if (status == AGC_LAUNCH_BAD) return 2;

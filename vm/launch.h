@@ -40,7 +40,7 @@ typedef struct {
   bool session;
 } agc_launch_options;
 
-typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
+typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_HELP, AGC_LAUNCH_BAD } agc_launch_status;
 
 /* What the process keeps for all of its runtimes: the trace settings, the pipes it was started with, the std/ sources
  * of the binary (every runtime gets them), whether this process set UV_USE_IO_URING (libuv's setup runs once per
@@ -69,7 +69,8 @@ bool agc_launch_utf8_args(int *argc, char ***argv);
 
 /* Reads the options at argv[*at] and on, up to a "--" (skipped), the first word that is not an option, or argc.
  * *at is left on the first word that was not read. On AGC_LAUNCH_BAD the message is already on stderr, started
- * with NAME ("agentica run: ..."). AGC_LAUNCH_VERSION stops the read at --version, which only `agentica run` answers. */
+ * with NAME ("agentica run: ..."). AGC_LAUNCH_VERSION and AGC_LAUNCH_HELP stop the read at --version and at --help or -h
+ * (as options, not as the value of one, nor after the file or a "--"), which only `agentica run` answers. */
 agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int *at, agc_launch_options *options);
 
 /* The options of a run that has no flags. */
