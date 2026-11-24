@@ -222,10 +222,8 @@ end
 The body returns `Result[T]` and uses `try`. Convert once, at the boundary, with `case`.
 
 ```agentica
-def parse(text: String) -> Result[Int] = text.to_i
-
 def port(text: String) -> Result[Int]
-  number = try parse(text)
+  number = try text.to_i
   return error("port out of range: #{number}") if number < 1 or number > 65535
 
   ok(number)
@@ -253,23 +251,22 @@ bad port: cannot convert "web" to Int
 
 ## Resource with a block
 
-A helper opens the resource, calls the block and closes it. There is no `ensure`: the helper keeps the result in a variable and returns it after the close, so the close runs on every path. `try use.call(name)` would return before the close. `File.open` with a block is the builtin one.
+A helper opens the resource, calls the block and closes, even when the block returns an error. It keeps the result in a variable and returns it after the close, so it needs no `ensure`. `File.open` with a block is the builtin one.
 
 ```agentica
-def with_connection[T](name: String, use: Fn[String, Result[T]]) -> Result[T]
+def with_connection(name: String, use: Fn[String, Result[String]]) -> Result[String]
   puts("open #{name}")
   result = use.call(name)
   puts("close #{name}")
   result
 end
 
-def fetch(conn: String) -> Result[String] = ok("rows from #{conn}")
-
-def broken(conn: String) -> Result[String] = error("query failed on #{conn}")
-
 def main() -> Void
-  puts(with_connection("db", &fetch).unwrap!)
-  puts(with_connection("db", &broken).message)
+  rows = with_connection("db") do |conn| ok("rows from #{conn}") end
+  puts(rows.unwrap!)
+
+  failed = with_connection("db") do |conn| error("query failed on #{conn}") end
+  puts(failed.message)
 end
 ```
 
@@ -303,7 +300,7 @@ end
 
 def show(expr: Expr) -> String
   case expr
-    Expr.Num(n) -> n.to_s
+    Expr.Num(n) -> "#{n}"
     Expr.Add(left, right) -> "(#{show(left)} + #{show(right)})"
     Expr.Mul(left, right) -> "#{show(left)} * #{show(right)}"
   end
@@ -323,33 +320,25 @@ end
 
 ## Pipeline with channels
 
-A producer, workers and a consumer are tasks joined by channels. `close` is the end: a receiver stops when `recv` gives an error. The sum is the same in any order.
+A producer, workers and a consumer are tasks joined by channels. `close` on `jobs` ends the workers. The consumer takes the 6 results it expects, and `unwrap!` halts if one is missing, so a timeout never gives a short sum.
 
 ```agentica
 def produce(jobs: Channel[Int]) -> Void
-  (1..6).each do |n| _ = jobs.send(n, 1000) end
+  (1..6).each do |n| jobs.send(n, 1000).unwrap! end
   jobs.close
 end
 
 def work(jobs: Channel[Int], results: Channel[Int]) -> Void
   while true
     case jobs.recv(1000)
-      ok(n) -> _ = results.send(n * n, 1000)
+      ok(n) -> results.send(n * n, 1000).unwrap!
       error(_) -> break
     end
   end
 end
 
-def consume(results: Channel[Int]) -> Int
-  total = 0
-  while true
-    case results.recv(1000)
-      ok(n) -> total = total + n
-      error(_) -> break
-    end
-  end
-
-  total
+def consume(results: Channel[Int], count: Int) -> Int
+  (1..count).reduce(0) do |total, _| total + results.recv(1000).unwrap! end
 end
 
 def main() -> Void
@@ -357,10 +346,9 @@ def main() -> Void
   results: Channel[Int] = Channel.new(2)
   producer = Task.spawn do produce(jobs) end
   workers = [1, 2].map do |_| Task.spawn do work(jobs, results) end end
-  consumer = Task.spawn do consume(results) end
+  consumer = Task.spawn do consume(results, 6) end
   Task.await(producer)
   workers.each do |worker| Task.await(worker) end
-  results.close
   puts(Task.await(consumer))
 end
 ```

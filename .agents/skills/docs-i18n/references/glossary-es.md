@@ -84,6 +84,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | code point | punto de código |  |
 | code unit | unidad de código |  |
 | codec | códec | `T.codec` stays |
+| collaborator | colaborador | A part that a function is given |
 | command | comando | A CLI command; `command` in code stays |
 | comment | comentario | Code comments only |
 | comparison | comparación |  |
@@ -153,7 +154,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | expression | expresión |  |
 | facade | fachada |  |
 | factory | fábrica | The design pattern |
-| fake | doble | A stand-in that a test passes |
+| fake | doble de prueba | A stand-in that a test passes |
 | fallback | respaldo |  |
 | family | familia |  |
 | feature | característica | The BDD feature file |
@@ -474,6 +475,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | variant | variante | Of an enum |
 | version | versión |  |
 | view | vista | Of a buffer |
+| Visitor | Visitante | The design pattern |
 | VM | VM | Virtual machine; the acronym stays |
 | wall time | tiempo de reloj |  |
 | warning | advertencia |  |

@@ -2,7 +2,7 @@
 title: Patrones
 weight: 6
 description: Los patrones de diseño comunes, escritos sin clases, con estructuras, enums, funciones y bloques.
-source_hash: "94072d2f6c4a"
+source_hash: "f1f15678db22"
 ---
 
 ## Estrategia {#strategy}
@@ -192,7 +192,7 @@ end
 
 ## Raíz de composición {#composition-root}
 
-`main` construye los colaboradores, como el reloj y el `Store`, y los pasa. Una función nunca construye lo que llama, así que una prueba pasa un doble.
+`main` construye los colaboradores, como el reloj y el `Store`, y los pasa. Una función nunca construye lo que llama, así que una prueba pasa un doble de prueba.
 
 ```agentica
 struct Store
@@ -223,10 +223,8 @@ end
 El cuerpo devuelve `Result[T]` y usa `try`. Convierte una sola vez, en la frontera, con `case`.
 
 ```agentica
-def parse(text: String) -> Result[Int] = text.to_i
-
 def port(text: String) -> Result[Int]
-  number = try parse(text)
+  number = try text.to_i
   return error("port out of range: #{number}") if number < 1 or number > 65535
 
   ok(number)
@@ -254,23 +252,22 @@ bad port: cannot convert "web" to Int
 
 ## Recurso con un bloque {#resource-with-a-block}
 
-Un auxiliar abre el recurso, llama al bloque y lo cierra. No hay `ensure`: el auxiliar guarda el resultado en una variable y lo devuelve después del cierre, así que el cierre corre en todos los caminos. `try use.call(name)` volvería antes del cierre. `File.open` con un bloque es el integrado.
+Un auxiliar abre el recurso, llama al bloque y cierra, incluso cuando el bloque devuelve un error. Guarda el resultado en una variable y lo devuelve después del cierre, así que no necesita `ensure`. `File.open` con un bloque es el integrado.
 
 ```agentica
-def with_connection[T](name: String, use: Fn[String, Result[T]]) -> Result[T]
+def with_connection(name: String, use: Fn[String, Result[String]]) -> Result[String]
   puts("open #{name}")
   result = use.call(name)
   puts("close #{name}")
   result
 end
 
-def fetch(conn: String) -> Result[String] = ok("rows from #{conn}")
-
-def broken(conn: String) -> Result[String] = error("query failed on #{conn}")
-
 def main() -> Void
-  puts(with_connection("db", &fetch).unwrap!)
-  puts(with_connection("db", &broken).message)
+  rows = with_connection("db") do |conn| ok("rows from #{conn}") end
+  puts(rows.unwrap!)
+
+  failed = with_connection("db") do |conn| error("query failed on #{conn}") end
+  puts(failed.message)
 end
 ```
 
@@ -285,7 +282,7 @@ query failed on db
 
 ## Intérprete sobre un enum {#interpreter-over-an-enum}
 
-Un enum recursivo es el árbol y un `case` lo recorre. Cada recorrido es una función, como lo es un Visitor en otros lenguajes.
+Un enum recursivo es el árbol y un `case` lo recorre. Cada recorrido es una función, como lo es un Visitante en otros lenguajes.
 
 ```agentica
 enum Expr
@@ -304,7 +301,7 @@ end
 
 def show(expr: Expr) -> String
   case expr
-    Expr.Num(n) -> n.to_s
+    Expr.Num(n) -> "#{n}"
     Expr.Add(left, right) -> "(#{show(left)} + #{show(right)})"
     Expr.Mul(left, right) -> "#{show(left)} * #{show(right)}"
   end
@@ -324,33 +321,25 @@ end
 
 ## Pipeline con canales {#pipeline-with-channels}
 
-Un productor, trabajadores y un consumidor son tareas unidas por canales. `close` es el final: un receptor se detiene cuando `recv` da un error. La suma es la misma en cualquier orden.
+Un productor, trabajadores y un consumidor son tareas unidas por canales. `close` en `jobs` termina a los trabajadores. El consumidor toma los 6 resultados que espera, y `unwrap!` se detiene si falta uno, así que un tiempo de espera nunca da una suma corta.
 
 ```agentica
 def produce(jobs: Channel[Int]) -> Void
-  (1..6).each do |n| _ = jobs.send(n, 1000) end
+  (1..6).each do |n| jobs.send(n, 1000).unwrap! end
   jobs.close
 end
 
 def work(jobs: Channel[Int], results: Channel[Int]) -> Void
   while true
     case jobs.recv(1000)
-      ok(n) -> _ = results.send(n * n, 1000)
+      ok(n) -> results.send(n * n, 1000).unwrap!
       error(_) -> break
     end
   end
 end
 
-def consume(results: Channel[Int]) -> Int
-  total = 0
-  while true
-    case results.recv(1000)
-      ok(n) -> total = total + n
-      error(_) -> break
-    end
-  end
-
-  total
+def consume(results: Channel[Int], count: Int) -> Int
+  (1..count).reduce(0) do |total, _| total + results.recv(1000).unwrap! end
 end
 
 def main() -> Void
@@ -358,10 +347,9 @@ def main() -> Void
   results: Channel[Int] = Channel.new(2)
   producer = Task.spawn do produce(jobs) end
   workers = [1, 2].map do |_| Task.spawn do work(jobs, results) end end
-  consumer = Task.spawn do consume(results) end
+  consumer = Task.spawn do consume(results, 6) end
   Task.await(producer)
   workers.each do |worker| Task.await(worker) end
-  results.close
   puts(Task.await(consumer))
 end
 ```
