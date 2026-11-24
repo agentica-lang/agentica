@@ -21,6 +21,7 @@ enum Imm
   Nil
   Bool(Bool)
   Int(Int)
+  UInt64(Int)
   Float(Float)
   Text(String)
   Bytes(String)

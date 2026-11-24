@@ -667,7 +667,9 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
   agc_list_cursor_begin(&cursor, keys, 0);
   for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
     entries[k].item = carry ? agc_value_word(key) : k;
-    if (kind == SORT_INT)
+    if (kind == SORT_INT && agc_is(key, AGC_T_UINT64))
+      entries[k].key = agc_as_uint64(vm, key);
+    else if (kind == SORT_INT)
       entries[k].key = int_order(agc_is(key, AGC_T_REF) ? (int64_t)agc_as_ref(vm, key) : agc_as_int(vm, key));
     else if (kind == SORT_FLOAT)
       entries[k].key = float_order(agc_as_float(vm, key));
@@ -992,6 +994,7 @@ static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, c
 static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (tags_are(x, y, AGC_T_INT)) return agc_as_int(vm, *x) == agc_as_int(vm, *y);
   if (tags_are(x, y, AGC_T_FLOAT)) return agc_as_float(vm, *x) == agc_as_float(vm, *y);
+  if (tags_are(x, y, AGC_T_UINT64)) return agc_as_uint64(vm, *x) == agc_as_uint64(vm, *y);
   if (tags_are(x, y, AGC_T_NIL)) return 1;
   if (tags_are(x, y, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, *x), agc_as_string(vm, *y));
   if (tags_are(x, y, AGC_T_RANGE)) {
@@ -1118,6 +1121,59 @@ OP_HELPER agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a,
 OP_HELPER agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
   if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_bool(agc_as_float(vm, *a) <= agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
+}
+
+/* The operators of UInt64: no overflow wraps, and a result outside 0 to 2^64 - 1 is AGC_STATUS_OVERFLOW. */
+OP_HELPER agc_status agc_op_add_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_add_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_sub_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_sub_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_mul_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_mul_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_div_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  uint64_t divisor = agc_as_uint64(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  *dst = agc_uint64(agc_as_uint64(vm, *a) / divisor);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_mod_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  uint64_t divisor = agc_as_uint64(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  *dst = agc_uint64(agc_as_uint64(vm, *a) % divisor);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_lt_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_uint64(vm, *a) < agc_as_uint64(vm, *b));
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_le_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_uint64(vm, *a) <= agc_as_uint64(vm, *b));
   return AGC_STATUS_OK;
 }
 
@@ -1698,6 +1754,13 @@ reload:
         }
         break;
       }
+      case AGC_OP_ADD_U: BINARY(agc_op_add_u); break;
+      case AGC_OP_SUB_U: BINARY(agc_op_sub_u); break;
+      case AGC_OP_MUL_U: BINARY(agc_op_mul_u); break;
+      case AGC_OP_DIV_U: BINARY(agc_op_div_u); break;
+      case AGC_OP_MOD_U: BINARY(agc_op_mod_u); break;
+      case AGC_OP_LT_U: BINARY(agc_op_lt_u); break;
+      case AGC_OP_LE_U: BINARY(agc_op_le_u); break;
       case AGC_OP_NO_MATCH: agc_no_match(vm, R[in.a], SPAN);
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);

@@ -39,6 +39,34 @@ static void int_rules(void) {
   assert(agc_op_lt_i(&vm, &dst, &min, &max) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
 }
 
+/* UInt64 has no wrap-around: a sum or product past 2^64 - 1 and a difference below 0 are overflows, a zero divisor is
+   a division by zero, and the order is unsigned (2^63 is above 2^63 - 1, which as an Int it is not). */
+static void uint64_rules(void) {
+  agc_value max = agc_uint64(UINT64_MAX), top = agc_uint64((uint64_t)1 << 63), one = agc_uint64(1);
+  agc_value zero = agc_uint64(0), two = agc_uint64(2), mark = agc_nil(), dst = mark;
+  fails(agc_op_add_u(&vm, &dst, &max, &one), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_sub_u(&vm, &dst, &zero, &one), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_mul_u(&vm, &dst, &top, &two), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_div_u(&vm, &dst, &max, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  fails(agc_op_mod_u(&vm, &dst, &max, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  assert(agc_op_add_u(&vm, &dst, &top, &top) == AGC_STATUS_OVERFLOW);
+  assert(agc_op_sub_u(&vm, &dst, &max, &max) == AGC_STATUS_OK && same_bits(dst, zero));
+  assert(agc_op_div_u(&vm, &dst, &max, &top) == AGC_STATUS_OK && same_bits(dst, one));
+  assert(agc_op_mod_u(&vm, &dst, &max, &top) == AGC_STATUS_OK && same_bits(dst, agc_uint64(((uint64_t)1 << 63) - 1)));
+  assert(agc_op_lt_u(&vm, &dst, &top, &max) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_lt_u(&vm, &dst, &max, &top) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_le_u(&vm, &dst, &top, &top) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_eq(&vm, &dst, &max, &max) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_ne(&vm, &dst, &max, &top) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  /* An Int is no UInt64, even with the same bits, and the Int helpers refuse a UInt64. */
+  agc_value minus = agc_int(-1);
+  dst = mark;
+  fails(agc_op_add_u(&vm, &dst, &max, &minus), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_lt_u(&vm, &dst, &minus, &minus), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_add_i(&vm, &dst, &max, &max), AGC_STATUS_WRONG_TAG, &dst, mark);
+  assert(agc_op_same(&vm, &dst, &max, &minus) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+}
+
 static void float_rules(void) {
   agc_value x = agc_float(1.5), zero = agc_float(0.0), mark = agc_nil(), dst = mark;
   fails(agc_op_div_f(&vm, &dst, &x, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
@@ -211,6 +239,7 @@ int main(void) {
   agc_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   int_rules();
+  uint64_rules();
   float_rules();
   wrong_tags();
   lists();

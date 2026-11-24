@@ -20,7 +20,8 @@ OPCODES = {
   "le-f": 26, "concat": 27, "to-text": 28, "inspect": 29, "list": 30, "list-len": 31, "list-get": 32, "struct": 33,
   "field": 34, "enum": 35, "is-variant": 36, "payload": 37, "same": 38, "tail-call": 39, "try": 40, "is-ok": 41,
   "result-value": 42, "map": 43, "map-get": 44, "call-value": 45, "closure": 46, "range": 47, "range-bounds": 48,
-  "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52, "jump-variant": 53, "no-match": 54,
+  "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52, "jump-variant": 53, "no-match": 54, "add-u": 55,
+  "sub-u": 56, "mul-u": 57, "div-u": 58, "mod-u": 59, "lt-u": 60, "le-u": 61,
 }
 
 ## The opcodes a `step` moves up across (bytecode_function.gather_steps): no jump, call or label, and no failure on a

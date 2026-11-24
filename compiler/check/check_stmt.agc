@@ -678,20 +678,21 @@ def check_pattern(
   case pattern
     Ast.Pattern.Wildcard(_) -> ok(ArmDone(st: st, arms: arms.with(wildcard: true)))
     Ast.Pattern.Literal(literal) ->
-      try check_literal(cx, st, literal, value_type)
+      noted = try check_literal(cx, st, literal, value_type)
       if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value) end
         return error(duplicate(cx, st, "literal", "case arm", spot))
       end
 
-      ok(ArmDone(st: st, arms: arms.with(literals: arms.literals.push(literal.value))))
+      ok(ArmDone(st: noted, arms: arms.with(literals: arms.literals.push(literal.value))))
     Ast.Pattern.Variant(variant) -> check_variant(cx, st, variant, value_type, arms, spot)
     # The parser makes an or-pattern only at the top of an arm, out of the other kinds.
     Ast.Pattern.Or(_) -> ok(ArmDone(st: st, arms: arms))
   end
 end
 
-# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
-def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
+# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested. The
+# state has the type of the value recorded at the pattern: the lowering reads it for an integer pattern of a UInt64.
+def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[State.St]
   pattern_type = literal_type(pattern.value)
   message = "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}"
   if T.error?(value_type) and T.is?(pattern_type, "String")
@@ -700,13 +701,16 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     return error(State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help))
   end
 
-  return narrow_pattern(cx, st, pattern, value_type) if T.narrow_int?(value_type) and T.is?(pattern_type, "Int")
+  if T.sized_int?(value_type) and T.is?(pattern_type, "Int")
+    try narrow_pattern(cx, st, pattern, value_type)
+    return ok(State.record_type(st, pattern.id, value_type))
+  end
 
   if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
     return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span))
   end
 
-  ok(true)
+  ok(st)
 end
 
 # An integer pattern of a case on a narrow integer type takes that type: CHECK-INT-RANGE when it does not hold it.
@@ -715,6 +719,7 @@ def narrow_pattern(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, valu
     Ast.LitValue.Whole(value) if T.narrow_fits?(value_type, value) -> ok(true)
     Ast.LitValue.Whole(value) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, "#{value}"), pattern.span))
+    Ast.LitValue.Huge(digits) if T.uint64?(value_type) and T.uint64_digits_fit?(digits) -> ok(true)
     Ast.LitValue.Huge(digits) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, digits), pattern.span))
     _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "not an integer pattern", pattern.span))
@@ -817,9 +822,7 @@ end
 # A pattern in a payload position of the given type: a literal of that type, or a variant of the enum it has.
 def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -> Result[State.St]
   case inner
-    Ast.Pattern.Literal(pattern) ->
-      try check_literal(cx, st, pattern, type)
-      ok(st)
+    Ast.Pattern.Literal(pattern) -> check_literal(cx, st, pattern, type)
     Ast.Pattern.Variant(pattern) ->
       payload = payload_types(cx, pattern, type)
       return error(variant_mismatch(cx, st, pattern, type)) if !payload.ok?

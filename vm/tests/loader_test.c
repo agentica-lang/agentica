@@ -195,7 +195,7 @@ static buffer build(spec s) {
     u8(&b, 5);
     float_bits(&b, s.second_float);
   }
-  if (s.extra_kind == 4) {
+  if (s.extra_kind == 4 || s.extra_kind == 8) {
     u32(&b, (uint32_t)(uint64_t)s.extra_int);
     u32(&b, (uint32_t)((uint64_t)s.extra_int >> 32));
   }
@@ -546,7 +546,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 17 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 18 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -1558,7 +1558,7 @@ static void json_instance_tests(void) {
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
   buffer good = instance_tail(1, 0, one, 0);
   assert(loads_instances(AGC_TYPE_INSTANCE, 0, &good, NULL));
-  assert(!loads_instances(AGC_TYPE_UINT32 + 1, 0, &good, "unknown type kind"));
+  assert(!loads_instances(AGC_TYPE_UINT64 + 1, 0, &good, "unknown type kind"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 1, &good, "instance index out of range"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, NULL, "instance index out of range"));
   buffer range = instance_tail(1, 1, one, 0);
@@ -1641,19 +1641,26 @@ static void field_default_tests(void) {
   free(tail.data);
 }
 
-/* A narrow integer kind is a scalar with no operand, and a field default of one must be an Int in its range. */
+/* A narrow integer kind is a scalar with no operand, and a field default of one must be an Int in its range. A UInt64
+   is a scalar too, and its default is a constant of kind 8 (the 64 bits), which no other type takes. */
 static void narrow_default_tests(void) {
   static const struct {
     uint8_t field;
+    int kind;
     int64_t value;
     const char *reason;
   } cases[] = {
-    {AGC_TYPE_UINT16, 300, NULL},
-    {AGC_TYPE_UINT8, 300, "field default does not fit its type"},
-    {AGC_TYPE_INT8, -128, NULL},
-    {AGC_TYPE_INT8, -129, "field default does not fit its type"},
-    {AGC_TYPE_UINT32, 4294967295, NULL},
-    {AGC_TYPE_UINT32, -1, "field default does not fit its type"},
+    {AGC_TYPE_UINT16, 4, 300, NULL},
+    {AGC_TYPE_UINT8, 4, 300, "field default does not fit its type"},
+    {AGC_TYPE_INT8, 4, -128, NULL},
+    {AGC_TYPE_INT8, 4, -129, "field default does not fit its type"},
+    {AGC_TYPE_UINT32, 4, 4294967295, NULL},
+    {AGC_TYPE_UINT32, 4, -1, "field default does not fit its type"},
+    {AGC_TYPE_UINT64, 8, -1, NULL},
+    {AGC_TYPE_UINT64, 8, 0, NULL},
+    {AGC_TYPE_UINT64, 4, 1, "field default does not fit its type"},
+    {AGC_TYPE_INT, 8, 1, "field default does not fit its type"},
+    {AGC_TYPE_UINT32, 8, 1, "field default does not fit its type"},
   };
   for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
     buffer t = field_tables(cases[k].field, AGC_TYPE_INSTANCE, 0);
@@ -1661,7 +1668,7 @@ static void narrow_default_tests(void) {
     spec s = base();
     s.tables = &t;
     s.tail = &tail;
-    s.extra_kind = 4;
+    s.extra_kind = cases[k].kind;
     s.extra_int = cases[k].value;
     assert(loads(s, cases[k].reason) == (cases[k].reason == NULL));
     free(t.data);
@@ -1669,15 +1676,17 @@ static void narrow_default_tests(void) {
   }
 }
 
-/* The narrow integer kinds (11 to 16) are scalars with no operand in a file of this format; 17 is unknown. */
+/* The sized integer kinds (11 to 17) are scalars with no operand in a file of this format; 18 is unknown. */
 static void narrow_kind_tests(void) {
-  for (uint32_t kind = AGC_TYPE_INT8; kind <= AGC_TYPE_UINT32 + 1; kind++) {
+  for (uint32_t kind = AGC_TYPE_INT8; kind <= AGC_TYPE_UINT64 + 1; kind++) {
+    bool wide = kind == AGC_TYPE_UINT64;
     buffer t = field_tables((uint8_t)kind, AGC_TYPE_INSTANCE, 0);
-    buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 0);
+    buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, wide ? 2 : 0);
     spec s = base();
     s.tables = &t;
     s.tail = &tail;
-    const char *reason = kind > AGC_TYPE_UINT32 ? "unknown type kind 17" : NULL;
+    s.extra_kind = wide ? 8 : -1;
+    const char *reason = kind > AGC_TYPE_UINT64 ? "unknown type kind 18" : NULL;
     assert(loads(s, reason) == (reason == NULL));
     free(t.data);
     free(tail.data);
@@ -1748,6 +1757,8 @@ static void code_load_tests(void) {
     {"unknown_op", BASE, 0, 2, {{AGC_OP_COUNT, 0, 0, 0}, RETURN0}, {0}, "unknown opcode"},
     {"no_return", BASE, 0, 2, {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}}, {0}, "does not end with RETURN"},
     {"bad_float_op", BASE, 0, 2, {{AGC_OP_ADD_F, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_unsigned_add", BASE, 0, 2, {{AGC_OP_ADD_U, 0, 0, 2}, RETURN0}, {0}, "register out of range"},
+    {"bad_unsigned_less", BASE, 0, 2, {{AGC_OP_LE_U, 2, 0, 0}, RETURN0}, {0}, "register out of range"},
     {"bad_float_neg", BASE, 0, 2, {{AGC_OP_NEG_F, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
     {"bad_concat", BASE, 0, 2, {{AGC_OP_CONCAT, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
     {"bad_to_text", BASE, 0, 2, {{AGC_OP_TO_TEXT, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
@@ -1843,6 +1854,9 @@ static void code_load_tests(void) {
 static void internal_run_tests(void) {
   static const code_case cases[] = {
     {"int_as_float", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_ADD_F, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"int_as_unsigned", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_ADD_U, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"int_unsigned_divide", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_DIV_U, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
     {"int_concat", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONCAT, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
     {"void_text", BASE, 0, 2, {{AGC_OP_TO_TEXT, 0, 0, 0}, RETURN0}, {0}, NULL},
     {"void_inspect", BASE, 0, 2, {{AGC_OP_INSPECT, 0, 0, 0}, RETURN0}, {0}, NULL},
@@ -2171,7 +2185,11 @@ int main(void) {
   }
   s = base();
   s.extra_kind = 8;
-  assert(!loads(s, "unsupported constant kind"));
+  s.extra_int = -2;
+  agc_value u64 = loaded_constant(s);
+  assert(agc_is(u64, AGC_T_UINT64) && agc_as_uint64(NULL, u64) == UINT64_MAX - 1);
+  s.extra_kind = 9;
+  assert(!loads(s, "unsupported constant kind 9"));
   bytes_constant_tests();
   s = base();
   s.extra_kind = 6;
@@ -2501,7 +2519,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 17"));
+  assert(!loads_types(1, "unknown type kind 18"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));

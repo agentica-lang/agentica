@@ -95,9 +95,11 @@ def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Sp
   ok(true)
 end
 
-# True for the types that sort and sort_by order: Int, Float, String and Ref (in the order the Refs were made).
+# True for the types that sort and sort_by order: Int, the narrow integer types, UInt64, Float, String and Ref (in the
+# order the Refs were made).
 def sort_key?(type: T.Type) -> Bool
-  T.is?(type, "Int") or T.is?(type, "Float") or T.is?(type, "String") or CheckTypes.ref?(type)
+  numbers = T.is?(type, "Int") or T.is?(type, "Float") or T.sized_int?(type)
+  numbers or T.is?(type, "String") or CheckTypes.ref?(type)
 end
 
 # List.concat: both lists have one type; an empty literal takes the type of the other side.

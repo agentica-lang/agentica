@@ -1,0 +1,134 @@
+program 0:1:1-29:1 entry=3 globals=0
+source 0 "uint64.agc" chars=541
+struct s0 "Counter" ["total"]
+struct s1 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
+enum "Optional" v0="None"/0 v1="Some"/1
+fn0 "measure" params=2 captures=0 slots=7 @ 0:7:1-10:1
+    step @ 0:8:3-9:1
+    step @ 0:8:10-8:37
+    step @ 0:8:10-8:29
+    step @ 0:8:10-8:21
+    step @ 0:8:11-8:16
+    step @ 0:8:11-8:12
+    step @ 0:8:15-8:16
+    add-u r5 r0 r1 @ 0:8:13-8:14
+    step @ 0:8:20-8:21
+    const r6 uint64:2 @ 0:8:20-8:21
+    mul-u r4 r5 r6 @ 0:8:18-8:19
+    step @ 0:8:24-8:29
+    step @ 0:8:24-8:25
+    step @ 0:8:28-8:29
+    div-u r5 r0 r1 @ 0:8:26-8:27
+    sub-u r3 r4 r5 @ 0:8:22-8:23
+    step @ 0:8:32-8:37
+    step @ 0:8:32-8:33
+    step @ 0:8:36-8:37
+    mod-u r4 r0 r1 @ 0:8:34-8:35
+    add-u r2 r3 r4 @ 0:8:30-8:31
+    return r2 @ 0:8:3-9:1
+    const r2 void @ 0:7:1-10:1
+    return r2 @ 0:7:1-10:1
+fn1 "order" params=2 captures=0 slots=9 @ 0:11:1-14:1
+    step @ 0:12:3-12:49
+    step @ 0:12:3-12:49
+    step @ 0:12:4-12:9
+    step @ 0:12:4-12:5
+    step @ 0:12:8-12:9
+    lt-u r3 r0 r1 @ 0:12:6-12:7
+    step @ 0:12:11-12:17
+    step @ 0:12:11-12:12
+    step @ 0:12:16-12:17
+    le-u r4 r0 r1 @ 0:12:13-12:15
+    step @ 0:12:19-12:24
+    step @ 0:12:19-12:20
+    step @ 0:12:23-12:24
+    lt-u r5 r1 r0 @ 0:12:21-12:22
+    step @ 0:12:26-12:32
+    step @ 0:12:26-12:27
+    step @ 0:12:31-12:32
+    le-u r6 r1 r0 @ 0:12:28-12:30
+    step @ 0:12:34-12:40
+    step @ 0:12:34-12:35
+    step @ 0:12:39-12:40
+    eq r7 r0 r1 @ 0:12:36-12:38
+    step @ 0:12:42-12:48
+    step @ 0:12:42-12:43
+    step @ 0:12:47-12:48
+    ne r8 r0 r1 @ 0:12:44-12:46
+    list r2 r3 6 @ 0:12:3-12:49
+    return r2 @ 0:12:3-12:49
+    const r2 void @ 0:11:1-14:1
+    return r2 @ 0:11:1-14:1
+fn2 "label" params=1 captures=0 slots=2 @ 0:15:1-22:1
+    step @ 0:16:3-21:1
+    step @ 0:16:8-16:9
+    const r1 uint64:0 @ 0:17:5-17:6
+    same r1 r0 r1 @ 0:17:5-17:6
+    jump-if-false r1 L1 @ 0:17:5-17:6
+    step @ 0:17:10-17:16
+    step @ 0:17:10-17:16
+    const r1 "zero" @ 0:17:10-17:16
+    return r1 @ 0:17:10-17:16
+    jump L0 @ 0:16:3-21:1
+  L1:
+    const r1 uint64:-1 @ 0:18:5-18:25
+    same r1 r0 r1 @ 0:18:5-18:25
+    jump-if-false r1 L2 @ 0:18:5-18:25
+    step @ 0:18:29-18:34
+    step @ 0:18:29-18:34
+    const r1 "max" @ 0:18:29-18:34
+    return r1 @ 0:18:29-18:34
+    jump L0 @ 0:16:3-21:1
+  L2:
+    step @ 0:19:10-19:17
+    step @ 0:19:10-19:17
+    const r1 "other" @ 0:19:10-19:17
+    return r1 @ 0:19:10-19:17
+  L3:
+  L0:
+    const r1 void @ 0:15:1-22:1
+    return r1 @ 0:15:1-22:1
+fn3 "main" params=0 captures=0 slots=5 entry @ 0:23:1-29:1
+    step @ 0:24:3-25:1
+    step @ 0:24:18-24:20
+    step @ 0:24:19-24:20
+    const r0 uint64:0 @ 0:24:18-24:20
+    step @ 0:25:3-26:1
+    step @ 0:25:3-25:30
+    step @ 0:25:8-25:29
+    step @ 0:25:16-25:25
+    step @ 0:25:16-25:21
+    const r2 uint64:-9223372036854775808 @ 0:25:16-25:21
+    step @ 0:25:24-25:25
+    const r3 uint64:4 @ 0:25:24-25:25
+    div-u r1 r2 r3 @ 0:25:22-25:23
+    step @ 0:25:27-25:28
+    const r2 uint64:3 @ 0:25:27-25:28
+    call r1 fn0 @ 0:25:8-25:29
+    call-builtin r1 "puts" 1 @ 0:25:3-25:30 0:25:8-25:29
+    step @ 0:26:3-27:1
+    step @ 0:26:3-26:37
+    step @ 0:26:8-26:36
+    step @ 0:26:14-26:18
+    move r1 r0 @ 0:26:14-26:18
+    step @ 0:26:20-26:35
+    step @ 0:26:20-26:29
+    step @ 0:4:19-4:39
+    const r4 uint64:-1 @ 0:4:19-4:39
+    struct r3 r4 s0 @ 0:26:20-26:29
+    field r2 r3 0 @ 0:26:20-26:35
+    call r1 fn1 @ 0:26:8-26:36
+    call-builtin r1 "puts" 1 @ 0:26:3-26:37 0:26:8-26:36
+    step @ 0:27:3-28:1
+    step @ 0:27:3-27:31
+    step @ 0:27:8-27:30
+    step @ 0:27:14-27:29
+    step @ 0:27:14-27:23
+    step @ 0:4:19-4:39
+    const r3 uint64:-1 @ 0:4:19-4:39
+    struct r2 r3 s0 @ 0:27:14-27:23
+    field r1 r2 0 @ 0:27:14-27:29
+    call r1 fn2 @ 0:27:8-27:30
+    call-builtin r1 "puts" 1 @ 0:27:3-27:31 0:27:8-27:30
+    const r1 void @ 0:23:1-29:1
+    return r1 @ 0:23:1-29:1

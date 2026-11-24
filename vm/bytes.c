@@ -175,7 +175,8 @@ static agc_value builtin_string_bytes(agc_vm *vm, agc_value *args, uint32_t span
 
 /* The text of V in *DATA and its length: printed into PRINTED for an Int, Float, Bool or nil. */
 static size_t part_text(agc_vm *vm, agc_value v, char printed[AGC_SCALAR_TEXT], const void **data, uint32_t span) {
-  if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL)) {
+  if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL) ||
+      agc_is(v, AGC_T_UINT64)) {
     *data = printed;
     return agc_scalar_text(vm, v, printed);
   }

@@ -1,7 +1,7 @@
 ---
 title: Int and Float
 weight: 2
-description: Convert between Int, Float, String and the narrow integer types, round, clamp and other number helpers, and work on the bits of an Int or a Float.
+description: Convert between Int, Float, String, UInt64 and the narrow integer types, round, clamp and other number helpers, and work on the bits of an Int or a Float.
 ---
 
 Arithmetic never mixes `Int` and `Float`. Use these methods to convert: `n.to_f`, `x.to_i` and `x.to_i!`, and `to_s` for the text.
@@ -182,6 +182,48 @@ end
 ```
 
 A narrow type is a `Map` key and a `Set` element, like `Int`. In [JSON](/library/text-and-data/json/), `JSON.encode` writes it as a number, `JSON.decode` reads only an integer in its range (`r: expected UInt8 from 0 to 255` otherwise), and `JSON.schema` gives its range as `minimum` and `maximum`.
+
+## UInt64
+
+```signature
+Int.to_uint64(int: Int) -> Result[UInt64]
+Int.to_uint64!(int: Int) -> UInt64
+Int.wrap_uint64(int: Int) -> UInt64
+UInt64.to_i(uint64: UInt64) -> Result[Int]
+UInt64.to_i!(uint64: UInt64) -> Int
+UInt64.to_f(uint64: UInt64) -> Float
+UInt32.to_uint64(uint32: UInt32) -> UInt64
+```
+
+`UInt64` holds `0` to `18446744073709551615`. A literal of a `UInt64` place may be above the greatest `Int` (`x: UInt64 = 18446744073709551615`), and a larger one is `CHECK-INT-RANGE`. Unlike the narrow types it is not an `Int` at run time: `+`, `-`, `*`, `/`, `%` and the comparisons work on the unsigned value, so `2^63` is above `2^63 - 1`. A sum or product above the range and a difference below `0` stop the program with `RUNTIME-INTEGER-OVERFLOW`, a zero divisor with `RUNTIME-DIVISION-BY-ZERO`, and there is no unary minus. An `Int` never becomes a `UInt64` on its own: `n.to_uint64` is an error Result below `0` (`n.to_uint64!` halts there), and `n.wrap_uint64` takes the 64 bits of `n`, so `-1` gives `18446744073709551615`. `x.to_i` is an error Result above the greatest `Int` (`x.to_i!` halts), and `x.to_f` is the nearest `Float`. `UInt8`, `UInt16` and `UInt32` widen with `to_uint64`. The bit methods and `wrapping_add`, `wrapping_sub` and `wrapping_mul` work on all 64 bits, and a shift count of 64 or more gives `0`. A `UInt64` is a `Map` key and a `Set` element, `List.sort` orders it as an unsigned number, and in [JSON](/library/text-and-data/json/) it is a number up to `18446744073709551615`.
+
+```agentica
+def main() -> Void
+  top: UInt64 = 18446744073709551615
+  puts(top / 10)
+  puts(top > 9223372036854775807.to_uint64!)
+  puts(top.to_i.ok?)
+  puts((-1).wrap_uint64 == top)
+  puts(top.wrapping_add(2))
+  puts(top.shift_right(60))
+end
+```
+
+```output
+1844674407370955161
+true
+false
+true
+1
+15
+```
+
+```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
+def main() -> Void
+  top: UInt64 = 18446744073709551615
+  puts(top + 1)
+end
+```
 
 ## abs, pow and gcd
 

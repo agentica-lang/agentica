@@ -1,4 +1,4 @@
-"""The narrow integer types (Int8, Int16, Int32, UInt8, UInt16, UInt32) through the product CLI: literals typed by their
+"""The sized integer types (Int8 to UInt64) through the product CLI: literals typed by their
 context, the range of a literal, the conversions to and from Int, the operators, JSON, map keys and set elements, and
 the reserved names, with their diagnostic codes and spans.
 
@@ -112,6 +112,36 @@ RULES = {
                                            "CHECK-NOT-ENCODABLE", "m"),
     "a map with narrow keys is no decode target": (main('puts(JSON.decode("{}", Map[UInt8, Int]))'),
                                                    "CHECK-NOT-DECODABLE", "Map[UInt8, Int]"),
+    "UInt64 takes literals up to its greatest value, in a hex form too, and is a case value": (
+        PIXEL + main("a: UInt64 = 18446744073709551615", "b: UInt64 = 0xFFFFFFFFFFFFFFFF", "c: UInt64 = -0",
+                     "xs: List[UInt64] = [0, 9223372036854775808]", "puts(xs)", "case a", "  18446744073709551615 -> puts(a)",
+                     "  _ -> puts(b)", "end", "puts(a == b and c < a)"), None, None),
+    "a literal above UInt64": (main("x: UInt64 = 18446744073709551616"), "CHECK-INT-RANGE", "18446744073709551616"),
+    "a negative literal for UInt64": (main("x: UInt64 = -1"), "CHECK-INT-RANGE", "-1"),
+    "a case pattern above UInt64": (main("x: UInt64 = 1", "case x", '  18446744073709551616 -> puts("a")',
+                                         '  _ -> puts("b")', "end"), "CHECK-INT-RANGE", "18446744073709551616"),
+    "no Int becomes a UInt64": (main("n = 1", "x: UInt64 = n"), "CHECK-TYPE-MISMATCH", "n"),
+    "UInt64 and an Int variable in +": (main("a: UInt64 = 1", "n = 2", "puts(a + n)"), "CHECK-TYPE-MISMATCH", "+"),
+    "UInt64 and UInt32 in <": (main("a: UInt64 = 1", "b: UInt32 = 2", "puts(a < b)"), "CHECK-TYPE-MISMATCH", "<"),
+    "no unary minus on UInt64": (main("a: UInt64 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
+    "UInt64 operators, conversions, bit methods, sort and a map key": (
+        "struct Id\n  n: UInt64\nend\n\n" + main("a: UInt64 = 18446744073709551615", "b: UInt64 = 3", "n: Int = -1", "u: UInt32 = 7",
+                     "c: UInt64 = a / b % 10 + b * 2 - 1", "d: UInt64 = u.to_uint64", "e: UInt64 = n.wrap_uint64",
+                     "f: Result[UInt64] = n.to_uint64", "g: UInt64 = 5.to_uint64!", "h: Result[Int] = a.to_i",
+                     "i: Int = b.to_i!", "j: Float = a.to_f", "k: UInt64 = a.bit_not.bit_and(b).bit_or(1).bit_xor(b)",
+                     "l: UInt64 = a.shift_left(1).shift_right(1).wrapping_add(1).wrapping_sub(2).wrapping_mul(3)",
+                     "m: Map[UInt64, Int] = {18446744073709551615: 1}", "s: Set[UInt64] = Set.new([0])",
+                     "xs: List[UInt64] = [a, b].sort", "a += 1 - 1", "puts(a >= b and a > b or a <= b or a != b)",
+                     'puts("#{c} #{d} #{e} #{f} #{g} #{h} #{i} #{j} #{k} #{l} #{m} #{s} #{xs}")',
+                     "puts(JSON.encode(a))", "puts(JSON.schema(Id))", 'puts(JSON.decode("{\\"n\\": 1}", Id))'),
+        None, None),
+    "no widening of a signed type to UInt64": (main("a: Int8 = 1", "puts(a.to_uint64)"), "CHECK-UNKNOWN-METHOD",
+                                               "a.to_uint64"),
+    "UInt64 has no widening to a narrower type": (main("a: UInt64 = 1", "puts(a.to_uint32)"), "CHECK-UNKNOWN-METHOD",
+                                                  "a.to_uint32"),
+    "to_i of UInt64 is a Result": (main("a: UInt64 = 1", "n: Int = a.to_i"), "CHECK-TYPE-MISMATCH", "a.to_i"),
+    "a UInt64 field default above the type": ("struct Id\n  n: UInt64 = 18446744073709551616\nend\n\n" + main(),
+                                              "CHECK-INT-RANGE", "18446744073709551616"),
     "a field default out of range": ("struct Pixel\n  g: UInt8 = 300\nend\n\n" + main(), "CHECK-INT-RANGE", "300"),
     # The list sums of the narrow types come in a later pull request of #984.
     "no sum yet": (main("xs: List[UInt8] = [1]", "puts(xs.sum)"), "CHECK-TYPE-MISMATCH", "xs"),
@@ -148,6 +178,9 @@ BOUNDS = {
 }
 
 
+UINT64_MAX = (1 << 64) - 1
+
+
 def halting_cases() -> dict[str, tuple[str, str, str]]:
     """Per type, the operation at its edge that leaves the range: id -> (program, code, operator text)."""
     cases = {}
@@ -166,6 +199,23 @@ def halting_cases() -> dict[str, tuple[str, str, str]]:
         for operator in ("/", "%"):
             cases[f"{name} {operator} 0"] = (
                 main(f"a: {name} = 1", f"puts(a {operator} 0)"), "RUNTIME-DIVISION-BY-ZERO", operator)
+    for name, (program, operator) in {
+        "UInt64 +": (main(f"a: UInt64 = {UINT64_MAX}", "puts(a + 1)"), "+"),
+        "UInt64 - below zero": (main("a: UInt64 = 0", "puts(a - 1)"), "-"),
+        "UInt64 * just past": (main(f"a: UInt64 = {1 << 32}", "puts(a * a)"), "*"),
+        "UInt64 * at the top": (main(f"a: UInt64 = {1 << 63}", "puts(a * 2)"), "*"),
+        "UInt64 / 0": (main(f"a: UInt64 = {UINT64_MAX}", "puts(a / 0)"), "/"),
+        "UInt64 % 0": (main("a: UInt64 = 1", "puts(a % 0)"), "%"),
+    }.items():
+        code = "RUNTIME-DIVISION-BY-ZERO" if "0" == name[-1] and operator in "/%" else "RUNTIME-INTEGER-OVERFLOW"
+        cases[name] = (program, code, operator)
+    for method in ("shift_left", "shift_right"):
+        cases[f"UInt64 {method} -1"] = (
+            main("a: UInt64 = 1", f"puts(a.{method}(-1))"), "RUNTIME-INVALID-COUNT", "-1")
+    cases["UInt64 to_i! above Int"] = (
+        main("a: UInt64 = 9223372036854775808", "puts(a.to_i!)"), "RUNTIME-INTEGER-OVERFLOW", "a.to_i!")
+    cases["Int to_uint64! below zero"] = (
+        main("n = -1", "puts(n.to_uint64!)"), "RUNTIME-INTEGER-OVERFLOW", "n.to_uint64!")
     return cases
 
 

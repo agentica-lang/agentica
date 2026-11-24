@@ -359,6 +359,93 @@ UNSIGNED_BIT_NOT(uint8, 8)
 UNSIGNED_BIT_NOT(uint16, 16)
 UNSIGNED_BIT_NOT(uint32, 32)
 
+/* The builtins of UInt64, which has a tag of its own: conversions to and from Int and Float check the range, the bit
+   methods and the wrapping ones work on the 64 bits, and a shift of 64 or more drops every bit. */
+static agc_value uint64_out_of_range(agc_vm *vm, const char *name, const char *text, uint32_t span, bool bang) {
+  char message[128];
+  int len = snprintf(message, sizeof message, "%s is outside %s", text, name);
+  agc_string *error = agc_make_string(message, (size_t)len, (size_t)len);
+  if (bang) agc_fail_text(vm, "RUNTIME-INTEGER-OVERFLOW", error, span);
+  return agc_error_string(vm, AGC_KIND_NUMBER_RANGE, error);
+}
+
+static agc_value int_to_uint64(agc_vm *vm, agc_value value, uint32_t span, bool bang) {
+  int64_t n = agc_as_int(vm, value);
+  if (n >= 0) return bang ? agc_uint64((uint64_t)n) : agc_result_value(true, agc_uint64((uint64_t)n));
+  char text[32];
+  snprintf(text, sizeof text, "%" PRId64, n);
+  return uint64_out_of_range(vm, "UInt64, 0 to 18446744073709551615", text, span, bang);
+}
+
+static agc_value builtin_int_to_uint64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return int_to_uint64(vm, args[0], span, false);
+}
+
+static agc_value builtin_int_to_uint64_bang(agc_vm *vm, agc_value *args, uint32_t span) {
+  return int_to_uint64(vm, args[0], span, true);
+}
+
+static agc_value builtin_int_wrap_uint64(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_uint64((uint64_t)agc_as_int(vm, args[0]));
+}
+
+static agc_value uint64_to_int(agc_vm *vm, agc_value value, uint32_t span, bool bang) {
+  uint64_t n = agc_as_uint64(vm, value);
+  if (n <= (uint64_t)INT64_MAX) return bang ? agc_int((int64_t)n) : agc_result_value(true, agc_int((int64_t)n));
+  char text[32];
+  snprintf(text, sizeof text, "%" PRIu64, n);
+  return uint64_out_of_range(vm, "Int, -9223372036854775808 to 9223372036854775807", text, span, bang);
+}
+
+static agc_value builtin_uint64_to_int(agc_vm *vm, agc_value *args, uint32_t span) {
+  return uint64_to_int(vm, args[0], span, false);
+}
+
+static agc_value builtin_uint64_to_int_bang(agc_vm *vm, agc_value *args, uint32_t span) {
+  return uint64_to_int(vm, args[0], span, true);
+}
+
+static agc_value builtin_uint64_to_float(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float((double)agc_as_uint64(vm, args[0]));
+}
+
+/* The widening of UInt8, UInt16 and UInt32, which the VM holds as Ints and whose values all fit. */
+static agc_value builtin_uint64_from_narrow(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_uint64((uint64_t)agc_as_int(vm, args[0]));
+}
+
+#define UINT64_BINARY(name, expression)                                                      \
+  static agc_value builtin_uint64_##name(agc_vm *vm, agc_value *args, uint32_t span) {        \
+    (void)span;                                                                               \
+    uint64_t x = agc_as_uint64(vm, args[0]), y = agc_as_uint64(vm, args[1]);                  \
+    return agc_uint64(expression);                                                            \
+  }
+
+UINT64_BINARY(bit_and, x & y)
+UINT64_BINARY(bit_or, x | y)
+UINT64_BINARY(bit_xor, x ^ y)
+UINT64_BINARY(wrapping_add, x + y)
+UINT64_BINARY(wrapping_sub, x - y)
+UINT64_BINARY(wrapping_mul, x * y)
+
+static agc_value builtin_uint64_bit_not(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_uint64(~agc_as_uint64(vm, args[0]));
+}
+
+static agc_value builtin_uint64_shift_left(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t count = shift_count(vm, args, span);
+  return agc_uint64(count >= 64 ? 0 : agc_as_uint64(vm, args[0]) << count);
+}
+
+static agc_value builtin_uint64_shift_right(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t count = shift_count(vm, args, span);
+  return agc_uint64(count >= 64 ? 0 : agc_as_uint64(vm, args[0]) >> count);
+}
+
 static double float64_from_bits(uint64_t bits) {
   double x;
   memcpy(&x, &bits, sizeof x);
@@ -476,6 +563,22 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.to_int", 1, builtin_uint64_to_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.to_int!", 1, builtin_uint64_to_int_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.to_float", 1, builtin_uint64_to_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.from_narrow", 1, builtin_uint64_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint64", 1, builtin_int_to_uint64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_uint64!", 1, builtin_int_to_uint64_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.wrap_uint64", 1, builtin_int_wrap_uint64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.bit_and", 2, builtin_uint64_bit_and, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.bit_or", 2, builtin_uint64_bit_or, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.bit_xor", 2, builtin_uint64_bit_xor, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.bit_not", 1, builtin_uint64_bit_not, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.shift_left", 2, builtin_uint64_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.shift_right", 2, builtin_uint64_shift_right, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.wrapping_add", 2, builtin_uint64_wrapping_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.wrapping_sub", 2, builtin_uint64_wrapping_sub, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"UInt64.wrapping_mul", 2, builtin_uint64_wrapping_mul, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8", 1, builtin_int_to_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8!", 1, builtin_int_to_int8_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int16", 1, builtin_int_to_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

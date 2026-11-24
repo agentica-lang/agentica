@@ -104,10 +104,15 @@ static size_t key_bytes(agc_value key, const uint8_t **data) {
   return s->bytes;
 }
 
-/* The tag is the domain, so a String and a Bytes of the same bytes hash apart. A Ref hashes as the Int of its number:
-   typed code never mixes the two in one map, and keys of different tags are never the same. */
+/* A key held as one 64-bit word in as.i: an Int, a Ref or a UInt64. */
+static inline bool word_key(agc_value key) {
+  return key.tag == AGC_T_INT || key.tag == AGC_T_REF || key.tag == AGC_T_UINT64;
+}
+
+/* The tag is the domain, so a String and a Bytes of the same bytes hash apart. A Ref or a UInt64 hashes as the Int of
+   its number: typed code never mixes them in one map, and keys of different tags are never the same. */
 static uint64_t plain_hash(const uint64_t hash_key[2], agc_value key) {
-  if (agc_is(key, AGC_T_INT) || agc_is(key, AGC_T_REF)) return int_hash(hash_key[0], (uint64_t)key.as.i);
+  if (word_key(key)) return int_hash(hash_key[0], (uint64_t)key.as.i);
   const uint8_t *data;
   size_t len = key_bytes(key, &data);
   return siphash13(hash_key, (uint64_t)key.tag, data, len);
@@ -116,6 +121,7 @@ static uint64_t plain_hash(const uint64_t hash_key[2], agc_value key) {
 uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
   if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key[0], (uint64_t)agc_as_int(vm, key));
   if (agc_is(key, AGC_T_REF)) return int_hash(vm->rt->hash_key[0], agc_as_ref(vm, key));
+  if (agc_is(key, AGC_T_UINT64)) return int_hash(vm->rt->hash_key[0], agc_as_uint64(vm, key));
   if (!agc_is(key, AGC_T_BYTES)) (void)agc_as_string(vm, key);
   const uint8_t *data;
   agc_charge_bytes(vm, key_bytes(key, &data));
@@ -124,7 +130,7 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
 
 bool agc_key_same(agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
-  if (agc_is(a, AGC_T_INT) || agc_is(a, AGC_T_REF)) return a.as.i == b.as.i;
+  if (word_key(a)) return a.as.i == b.as.i;
   const uint8_t *x, *y;
   size_t n = key_bytes(a, &x);
   return n == key_bytes(b, &y) && (n == 0 || memcmp(x, y, n) == 0);
@@ -134,7 +140,7 @@ bool agc_key_same(agc_value a, agc_value b) {
 static inline bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (!vm) return agc_key_same(a, b);
   if (a.tag != b.tag) return false;
-  if (agc_is(a, AGC_T_INT) || agc_is(a, AGC_T_REF)) return a.as.i == b.as.i;
+  if (word_key(a)) return a.as.i == b.as.i;
   if (agc_is(a, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
   return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
 }
@@ -419,7 +425,7 @@ bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value) 
 
 bool agc_map_find(const uint64_t hash_key[2], const agc_map *m, agc_value key, agc_value *value, size_t *bytes) {
   const uint8_t *data;
-  if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_REF)) *bytes = agc_size_add(*bytes, key_bytes(key, &data));
+  if (!word_key(key)) *bytes = agc_size_add(*bytes, key_bytes(key, &data));
   const hamt_leaf *leaf = find(NULL, m->table, plain_hash(hash_key, key), key);
   if (leaf) *value = leaf->value;
   return leaf != NULL;
