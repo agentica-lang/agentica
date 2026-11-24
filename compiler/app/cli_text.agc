@@ -21,6 +21,19 @@ def usage_text() -> String = "#{USAGE.join("\n")}\n"
 ## a line feed.
 def summary_text() -> String = "#{SUMMARY.join("\n")}\n"
 
+## The help of `agentica COMMAND --help`: the usage lines of the command, as `agentica` prints them for a bad command
+## line but without the options that come before the command, then the part of the summary that describes it. "" for a
+## word that is no command with a help.
+def command_help_text(command: String) -> String
+  forms = usage_forms(command)
+  return "" if forms.size == 0
+
+  first = "usage: agentica #{forms[0]}"
+  more = forms.drop(1).map do |form: String| "       agentica #{form}" end
+  lines = [first].concat(more).concat([""]).concat(summary_block(command)).concat(["", HELP_MORE])
+  "#{lines.join("\n")}\n"
+end
+
 ## The help of `-h` and `--help`.
 def help_text() -> String
   lines = [HELP_FIRST_LINE].concat(SUMMARY.map do |line: String| "  #{line}" end).concat(OPTIONS)
@@ -28,6 +41,11 @@ def help_text() -> String
 end
 
 private
+
+# The words that start the usage lines of a command in USAGE, before the command, and the options that may follow them.
+USAGE_MARGIN = "       agentica "
+USAGE_OPTIONS = ["[--ai|--json] ", "[--seed N] [--no-cache] "]
+HELP_MORE = "Options that come before the command (--json, --ai, --max-steps, ...): agentica --help"
 
 # What a command line that names no source file gets on stderr (exit code 2), one line each.
 USAGE = [
@@ -258,3 +276,42 @@ OPTIONS = [
   " Multiple single-letter switches can be combined after",
   " one `-`. For example, `-h-` is the same as `-h --`.",
 ]
+
+# The forms of `command` in USAGE, each without the margin and the options before the command.
+def usage_forms(command: String) -> List[String]
+  forms: List[String] = []
+  for line in USAGE.drop(1)
+    form = line.slice(USAGE_MARGIN.length, line.length - USAGE_MARGIN.length)
+    for option in USAGE_OPTIONS
+      if form.start_with?(option)
+        form = form.slice(option.length, form.length - option.length)
+      end
+    end
+
+    if form == command or form.start_with?("#{command} ")
+      forms = forms.push(form)
+    end
+  end
+
+  forms
+end
+
+# The lines of SUMMARY that describe `command`: from each line `  agentica COMMAND ...` to the next line that starts
+# another command.
+def summary_block(command: String) -> List[String]
+  lines: List[String] = []
+  inside = false
+  for line in SUMMARY.drop(2)
+    break if line == "Core rules:"
+
+    if line.start_with?("  agentica ")
+      inside = line.strip.split(" ")[1] == command
+    end
+
+    if inside
+      lines = lines.push(line)
+    end
+  end
+
+  lines
+end

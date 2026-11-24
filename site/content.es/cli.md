@@ -5,7 +5,7 @@ description: Cada comando, opción y caché del programa agentica.
 source_hash: "b4d6cf55811d"
 ---
 
-El programa `agentica` ejecuta, comprueba y consulta programas de Agentica. Cada sección de abajo es un comando o un grupo de opciones. Para tu primer programa, mira [Primeros pasos](/getting-started/).
+El programa `agentica` ejecuta, comprueba y consulta programas de Agentica. Cada sección de abajo es un comando o un grupo de opciones. Para tu primer programa, mira [Primeros pasos](/getting-started/). `agentica COMMAND --help` (o `-h`) imprime el uso y las opciones de un comando, y `agentica --help` la lista de comandos y las opciones que van antes de ellos.
 
 ## Ejecutar {#run}
 

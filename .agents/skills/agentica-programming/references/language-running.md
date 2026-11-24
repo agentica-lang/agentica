@@ -1,7 +1,7 @@
 # Running
 
 Rules of the command line that `agentica --help` does not spell out; run it for
-the list of commands and flags.
+the list of commands and flags, and `agentica COMMAND --help` for one command.
 
 - `agentica FILE.agc ARGS` checks, then runs; `System.args()` returns ARGS (the
   words after the file are the program's). Exit 0 is success, 1 a diagnostic,

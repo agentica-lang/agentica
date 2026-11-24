@@ -761,6 +761,10 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       *at = i;
       return AGC_LAUNCH_VERSION;
     }
+    if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+      *at = i;
+      return AGC_LAUNCH_HELP;
+    }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
       bool json = arg[2] == 'j';
       if (!once(name, json ? &seen_json : &seen_ai, arg)) return AGC_LAUNCH_BAD;

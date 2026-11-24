@@ -4,7 +4,7 @@ weight: 3
 description: Every command, option and cache of the agentica program.
 ---
 
-The `agentica` program runs, checks and queries Agentica programs. Each section below is one command or one group of options. For a first program, see [Getting started](/getting-started/).
+The `agentica` program runs, checks and queries Agentica programs. Each section below is one command or one group of options. For a first program, see [Getting started](/getting-started/). `agentica COMMAND --help` (or `-h`) prints the usage and the options of one command, and `agentica --help` the list of commands and the options that come before them.
 
 ## Run
 

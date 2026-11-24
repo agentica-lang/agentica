@@ -332,14 +332,13 @@ def test_packages_that_ask_for_each_other_and_for_themselves_are_locked_once(ws,
     assert read(ws, "agentica.lock").count("[[package]]") == 2
 
     # `add` of a name that is locked as the dependency of a package says so, and `update` takes direct names only
-    # and no option.
+    # and no option (`--help` is the help of the command, tests/test_cli_help.py).
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     result = plain(ws, remotes, "add", "tools", remotes.url(TOOLS), "--tag", "v1")
     assert (result.code, result.stdout.splitlines()[0]) == (0, "added tools@v1"), result.stderr
     _, problem = command(ws, remotes, "update", "greeter")
     assert_at_key(problem, "PKG-DEPENDENCY-UNKNOWN", ws.project / "agentica.toml", "")
-    for word in ["--help", "-x"]:
-        assert plain(ws, remotes, "update", word).code == 2
+    assert plain(ws, remotes, "update", "-x").code == 2
 
 
 def git_shim(tmp_path, body):
