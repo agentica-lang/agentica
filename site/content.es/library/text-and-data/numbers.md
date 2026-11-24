@@ -144,6 +144,44 @@ def main() -> Void
 end
 ```
 
+```signature
+UInt8.bit_not(uint8: UInt8) -> UInt8
+UInt8.shift_left(uint8: UInt8, count: Int) -> UInt8
+UInt8.wrapping_add(uint8: UInt8, other: UInt8) -> UInt8
+Int.wrap_uint8(int: Int) -> UInt8
+Int.wrapping_add(int: Int, other: Int) -> Int
+UInt8.to_uint16(uint8: UInt8) -> UInt16
+UInt8.to_f(uint8: UInt8) -> Float
+```
+
+Cada tipo de menos bits tiene los métodos de bits de `Int` (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `shift_right_unsigned`), leídos con el ancho del tipo: el resultado son los bits bajos, leídos de nuevo en el tipo. `bit_not` de un valor sin signo invierte los bits dentro de su ancho (`UInt8` `0` da `255`), y de un valor con signo es `-1 - x`. `shift_left` descarta los bits que salen del ancho, y una cuenta igual o mayor que el ancho da `0`. `shift_right` copia el bit de signo de un tipo con signo y rellena con ceros uno sin signo; `shift_right_unsigned` siempre rellena con ceros, así que en `Int8` `-100` desplaza los 8 bits `156`. Una cuenta negativa detiene el programa con `RUNTIME-INVALID-COUNT`.
+
+Los operadores se detienen al desbordar; para una aritmética que da la vuelta, `wrapping_add`, `wrapping_sub` y `wrapping_mul` dejan en el tipo los bits bajos del resultado, en cada tipo de menos bits y en `Int` (los 64 bits bajos). `n.wrap_uint8` es el `UInt8` de los 8 bits bajos de un `Int`, y nunca falla: los otros cinco tipos tienen el mismo método (`wrap_int8`, `wrap_int16`, `wrap_int32`, `wrap_uint16` y `wrap_uint32`).
+
+Una conversión que no puede fallar es un método simple, sin Result: `x.to_uint16` en un `UInt8`, y lo mismo para cada ampliación que contiene todos los valores del origen (un tipo con signo a otro con signo más ancho, un tipo sin signo a otro sin signo o con signo más ancho). `to_f` da el `Float` de cualquier valor de menos bits. Cualquier otra conversión pasa por `Int`: `x.to_i.to_uint8!`.
+
+```agentica
+def main() -> Void
+  a: UInt8 = 200
+  b: Int8 = -100
+  puts(a.bit_not)
+  puts(a.shift_left(1))
+  puts(b.shift_right_unsigned(1))
+  puts(a.wrapping_add(100))
+  puts(300.wrap_uint8)
+  puts(a.to_uint16 + 1000)
+end
+```
+
+```output
+55
+144
+78
+44
+44
+1200
+```
+
 Un tipo de menos bits es una clave de `Map` y un elemento de `Set`, como `Int`. En [JSON](/library/text-and-data/json/), `JSON.encode` lo escribe como un número, `JSON.decode` solo lee un entero dentro de su rango (si no, `r: expected UInt8 from 0 to 255`), y `JSON.schema` da su rango como `minimum` y `maximum`.
 
 ## abs, pow y gcd {#abs-pow-and-gcd}
