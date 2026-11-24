@@ -116,7 +116,7 @@ AREAS = {
     "cli": (
         "the command line: options, diagnostics, run, compile, test, modules, the single binary",
         [
-            "tests/test_cli_forms.py", "tests/test_cli_check.py", "tests/test_cli_fmt.py", "tests/test_check_stdin.py",
+            "tests/test_cli_forms.py", "tests/test_cli_help.py", "tests/test_cli_check.py", "tests/test_cli_fmt.py", "tests/test_check_stdin.py",
             "tests/test_cli_repl.py",
             "tests/test_spec_doc.py", "tests/test_spec_help_std.py", "tests/test_spec_lint.py", "tests/test_spec_outline.py", "tests/test_spec_symbol.py",
             "tests/test_spec_type_at.py", "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",

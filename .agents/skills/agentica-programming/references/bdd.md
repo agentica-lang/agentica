@@ -1,7 +1,7 @@
 # BDD feature specifications
 
 `agentica test [PATH...]` runs `.feature` files and `*_test.agc` unit test files
-(flags: `agentica --help`). It searches directories in sorted order (folder
+(flags: `agentica test --help`). It searches directories in sorted order (folder
 links are not followed; a feature file is at most 1 MiB); the default paths are
 `specs/` and `test/`. `--steps FILE` names the one step program (repeating it
 is `RUNTIME-BDD-USAGE`); without it, a run with features uses the nearest

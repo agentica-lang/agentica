@@ -143,6 +143,7 @@ def dispatch(session: Session) -> Int
   end
 
   return program(building(session, first), first, words) if CliRun.file_run?(words)
+  return emit(Reply.printed(Texts.command_help_text(first))) if asked_for_help?(words)
 
   if first == "test"
     return test(session, words.drop(1))
@@ -198,6 +199,14 @@ def dispatch(session: Session) -> Int
   return emit(Reply.failed(2, Texts.usage_text())) if !usable
 
   program(building(session, first), first, rest)
+end
+
+# Whether the command line is a command (not `run`, which the binary answers itself) with `--help` or `-h` after it.
+def asked_for_help?(words: List[String]) -> Bool
+  return false if words.size < 2 or words[0] == "run"
+
+  asking = words.drop(1).any? do |word: String| word == "--help" or word == "-h" end
+  asking and Texts.command_help_text(words[0]) != ""
 end
 
 # The session whose workspace builds the native modules of the project and its packages from their C sources

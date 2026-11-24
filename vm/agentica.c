@@ -317,6 +317,12 @@ static bool session_ended(agc_vm *vm, agc_outcome *outcome) {
  * typed here instead of handed over: a start that fails is status 2. With `--embedded NAME` there is no file: the
  * program is one the binary carries, and every word after `--` is its argument. */
 static int run_command(agc_launch *launch, int argc, char **argv) {
+  for (int k = 2; k < argc && strcmp(argv[k], "--") != 0; k++) {
+    if (strcmp(argv[k], "--help") == 0 || strcmp(argv[k], "-h") == 0) {
+      fputs(usage, stdout);
+      return fflush(stdout) == 0 ? 0 : 1;
+    }
+  }
   agc_launch_options options;
   int i = 2;
   agc_launch_status status = agc_launch_parse(run_name, argc, argv, &i, &options);
