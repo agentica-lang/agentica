@@ -728,6 +728,41 @@ static void float32_constant_tests(void) {
   assert(!loads(s, "truncated file"));
 }
 
+/* The Float opcodes of the turn loop on Float32s (K2, a Float32 constant; K3, a Float): two Float32s run on, a zero
+   Float32 divisor fails at the operator, and a Float with a Float32 is a wrong tag, never a widening. */
+static agc_outcome float32_turn(const agc_instr *code, uint32_t count) {
+  static const uint32_t spans[] = {1, 0, 0, 2, 0, 0, 0, 0};
+  spec s = base();
+  s.extra_kind = 9;
+  s.extra_string = "1.5";
+  s.second_float = 2.5;
+  s.code = code;
+  s.code_spans = spans;
+  s.count = count;
+  s.registers = 3;
+  return run_spec(s, stdout);
+}
+
+static void float32_turn_tests(void) {
+  static const agc_instr runs[] = {STEP1,
+                                   {AGC_OP_CONST, 0, 2, 0},
+                                   {AGC_OP_ADD_F, 1, 0, 0},
+                                   {AGC_OP_NEG_F, 1, 1, 0},
+                                   {AGC_OP_LT_F, 2, 1, 0},
+                                   {AGC_OP_DIV_F, 2, 0, 1},
+                                   {AGC_OP_SAME, 2, 0, 0},
+                                   RETURN0};
+  assert(float32_turn(runs, 8).kind == AGC_DONE);
+  static const agc_instr zero[] = {
+    STEP1, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_SUB_F, 1, 0, 0}, {AGC_OP_DIV_F, 2, 0, 1}, RETURN0};
+  agc_outcome divided = float32_turn(zero, 5);
+  assert(divided.kind == AGC_FAILED && strcmp(divided.code, "RUNTIME-DIVISION-BY-ZERO") == 0 && divided.span == 2);
+  static const agc_instr mixed[] = {
+    STEP1, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CONST, 1, 3, 0}, {AGC_OP_ADD_F, 2, 0, 1}, RETURN0};
+  agc_outcome widened = float32_turn(mixed, 5);
+  assert(widened.kind == AGC_FAILED && strcmp(widened.code, "RUNTIME-INTERNAL") == 0);
+}
+
 /* TRY_STEP in the block (function 1) of the builtin that main calls: the block makes error(K[2]) and fails through
    TRY_STEP. Only a Lazy terminal may be the frame below it, so any other builtin is RUNTIME-INTERNAL. */
 static agc_outcome try_step_in_block(const char *builtin, uint32_t arity, const agc_instr *main_code, uint32_t count,
@@ -2221,6 +2256,7 @@ int main(void) {
   assert(!loads(s, "unsupported constant kind 10"));
   bytes_constant_tests();
   float32_constant_tests();
+  float32_turn_tests();
   s = base();
   s.extra_kind = 6;
   s.extra_string = "\xE2\x82";

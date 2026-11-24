@@ -128,9 +128,6 @@ struct agc_nested_stack {
   agc_native native;
 };
 
-/* An operator of float32_op. */
-typedef enum { F32_ADD, F32_SUB, F32_MUL, F32_DIV, F32_LT, F32_LE } f32_op;
-
 /* Where a failure or an exit jumps: the catch of a builtin that compiled code calls, which hands it on outside
    compiled code (run_compiled), else the turn's or the run's target. */
 static _Noreturn void unwind(agc_vm *vm) {
@@ -1008,14 +1005,22 @@ static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x
 
 /* equal_values for SAME: values of two tags are never the same, a NaN is the same as a NaN, and 0.0 is not the same
    as -0.0. */
+static inline int same_doubles(double a, double b) {
+  /* isnan and signbit return any nonzero int (mingw-w64's isnan gives -1), so each is turned into 0 or 1. */
+  return isnan(a) ? isnan(b) != 0 : a == b && (signbit(a) != 0) == (signbit(b) != 0);
+}
+
+/* same_values of two values of one tag that is not Float: Float32 as Float, the rest by equal_values. Out of line, so
+   that Float32 adds no code to SAME in the turn loop. */
+static __attribute__((noinline)) int same_other(agc_vm *vm, const agc_value *x, const agc_value *y) {
+  if (agc_is(*x, AGC_T_FLOAT32)) return same_doubles(x->as.f, y->as.f);
+  return equal_values(vm, x, y);
+}
+
 static int same_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (x->tag != y->tag) return 0;
-  if (agc_is(*x, AGC_T_FLOAT) || agc_is(*x, AGC_T_FLOAT32)) {
-    double a = x->as.f, b = y->as.f;
-    /* isnan and signbit return any nonzero int (mingw-w64's isnan gives -1), so each is turned into 0 or 1. */
-    return isnan(a) ? isnan(b) != 0 : a == b && (signbit(a) != 0) == (signbit(b) != 0);
-  }
-  return equal_values(vm, x, y);
+  if (agc_is(*x, AGC_T_FLOAT)) return same_doubles(agc_as_float(vm, *x), agc_as_float(vm, *y));
+  return same_other(vm, x, y);
 }
 
 OP_HELPER agc_status agc_op_add_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
@@ -1072,19 +1077,20 @@ OP_HELPER agc_status agc_op_neg_i(agc_vm *vm, agc_value *dst, const agc_value *a
    (Figueroa, 1995); a subnormal binary32 sum is exact, and a product or quotient is a normal double. Any other pair is
    the wrong tag, a Float with a Float32 too. */
 static __attribute__((noinline, cold)) agc_status float32_op(agc_value *dst, const agc_value *a, const agc_value *b,
-                                                             f32_op op) {
+                                                             agc_opcode op) {
   if (!agc_is(*b, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
   double y = b->as.f;
-  if (op == F32_DIV && y == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  if (op == AGC_OP_DIV_F && y == 0) return AGC_STATUS_DIVISION_BY_ZERO;
   if (!agc_is(*a, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
   double x = a->as.f;
   switch (op) {
-    case F32_ADD: *dst = agc_float32(agc_round_f32(x + y)); break;
-    case F32_SUB: *dst = agc_float32(agc_round_f32(x - y)); break;
-    case F32_MUL: *dst = agc_float32(agc_round_f32(x * y)); break;
-    case F32_DIV: *dst = agc_float32(agc_round_f32(x / y)); break;
-    case F32_LT: *dst = agc_bool(x < y); break;
-    case F32_LE: *dst = agc_bool(x <= y); break;
+    case AGC_OP_ADD_F: *dst = agc_float32(agc_round_f32(x + y)); break;
+    case AGC_OP_SUB_F: *dst = agc_float32(agc_round_f32(x - y)); break;
+    case AGC_OP_MUL_F: *dst = agc_float32(agc_round_f32(x * y)); break;
+    case AGC_OP_DIV_F: *dst = agc_float32(agc_round_f32(x / y)); break;
+    case AGC_OP_LT_F: *dst = agc_bool(x < y); break;
+    case AGC_OP_LE_F: *dst = agc_bool(x <= y); break;
+    default: return AGC_STATUS_WRONG_TAG;
   }
   return AGC_STATUS_OK;
 }
@@ -1095,27 +1101,31 @@ static __attribute__((noinline, cold)) agc_status float32_neg(agc_value *dst, co
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_add_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_ADD);
+static inline __attribute__((always_inline)) agc_status float_add(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                     const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_float(agc_as_float(vm, *a) + agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_sub_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_SUB);
+static inline __attribute__((always_inline)) agc_status float_sub(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                     const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_float(agc_as_float(vm, *a) - agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_mul_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_MUL);
+static inline __attribute__((always_inline)) agc_status float_mul(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                     const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_float(agc_as_float(vm, *a) * agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
 /* The divisor is checked first, so a zero divisor fails with RUNTIME-DIVISION-BY-ZERO whatever the left operand. */
-OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!agc_is(*b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_DIV);
+static inline __attribute__((always_inline)) agc_status float_div(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                 const agc_value *b) {
+  if (!agc_is(*b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   double divisor = agc_as_float(vm, *b);
   if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
   if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
@@ -1123,8 +1133,8 @@ OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
-  if (!agc_is(*a, AGC_T_FLOAT)) return float32_neg(dst, a);
+static inline __attribute__((always_inline)) agc_status float_neg(agc_vm *vm, agc_value *dst, const agc_value *a) {
+  if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_float(-agc_as_float(vm, *a));
   return AGC_STATUS_OK;
 }
@@ -1141,16 +1151,38 @@ OP_HELPER agc_status agc_op_le_i(agc_vm *vm, agc_value *dst, const agc_value *a,
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_LT);
+static inline __attribute__((always_inline)) agc_status float_lt(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                     const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_bool(agc_as_float(vm, *a) < agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
-OP_HELPER agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_LE);
+static inline __attribute__((always_inline)) agc_status float_le(agc_vm *vm, agc_value *dst, const agc_value *a,
+                                                                     const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_bool(agc_as_float(vm, *a) <= agc_as_float(vm, *b));
   return AGC_STATUS_OK;
+}
+
+/* The _F opcodes as a JIT calls them: two Floats inline, two Float32s on the cold path. The turn loop inlines the
+   float_* helpers alone and leaves the Float32s to float_failed, so its code is the code of Float alone. */
+#define FLOAT_ENTRY(name, helper, op)                                                                \
+  agc_status name(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {              \
+    agc_status status = helper(vm, dst, a, b);                                                       \
+    return status == AGC_STATUS_WRONG_TAG ? float32_op(dst, a, b, op) : status;                      \
+  }
+FLOAT_ENTRY(agc_op_add_f, float_add, AGC_OP_ADD_F)
+FLOAT_ENTRY(agc_op_sub_f, float_sub, AGC_OP_SUB_F)
+FLOAT_ENTRY(agc_op_mul_f, float_mul, AGC_OP_MUL_F)
+FLOAT_ENTRY(agc_op_div_f, float_div, AGC_OP_DIV_F)
+FLOAT_ENTRY(agc_op_lt_f, float_lt, AGC_OP_LT_F)
+FLOAT_ENTRY(agc_op_le_f, float_le, AGC_OP_LE_F)
+#undef FLOAT_ENTRY
+
+agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
+  agc_status status = float_neg(vm, dst, a);
+  return status == AGC_STATUS_WRONG_TAG ? float32_neg(dst, a) : status;
 }
 
 OP_HELPER agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
@@ -1280,6 +1312,21 @@ static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_
   const agc_value *R = t->regs + frame->base;
   bool operands = status == AGC_STATUS_INDEX_OUT_OF_RANGE || status == AGC_STATUS_KEY_NOT_FOUND;
   agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
+}
+
+/* A Float opcode of the turn loop whose operands are not Floats: two Float32s give their result, and anything else is
+   the failure of the instruction. The operands are read back as op_failed reads them. */
+static __attribute__((noinline, cold)) void float_failed(agc_vm *vm, agc_status status) {
+  if (status == AGC_STATUS_WRONG_TAG) {
+    const agc_task *t = vm->task;
+    const agc_frame *frame = &t->frames[t->frame_count - 1];
+    agc_instr in = vm->rt->program->functions[frame->function].code[frame->pc - 1];
+    agc_value *R = t->regs + frame->base;
+    status = in.op == AGC_OP_NEG_F ? float32_neg(&R[in.a], &R[in.b])
+                                   : float32_op(&R[in.a], &R[in.b], &R[in.c], (agc_opcode)in.op);
+    if (status == AGC_STATUS_OK) return;
+  }
+  op_failed(vm, status);
 }
 
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
@@ -1452,6 +1499,11 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
     if (__builtin_expect(status_ != AGC_STATUS_OK, 0)) op_failed(vm, status_);            \
   } while (0)
 #define BINARY(helper) CHECK(helper(vm, &R[in.a], &R[in.b], &R[in.c]))
+#define FLOAT_BINARY(helper)                                                                              \
+  do {                                                                                                    \
+    agc_status status_ = helper(vm, &R[in.a], &R[in.b], &R[in.c]);                                        \
+    if (__builtin_expect(status_ != AGC_STATUS_OK, 0)) float_failed(vm, status_);                         \
+  } while (0)
 #define UNARY(helper) CHECK(helper(vm, &R[in.a], &R[in.b]))
 
 /* The second instruction of a fused pair, fetched as the loop fetches one. */
@@ -1659,13 +1711,17 @@ reload:
       case AGC_OP_NEG_I:
         UNARY(agc_op_neg_i);
         break;
-      case AGC_OP_ADD_F: BINARY(agc_op_add_f); break;
-      case AGC_OP_SUB_F: BINARY(agc_op_sub_f); break;
-      case AGC_OP_MUL_F: BINARY(agc_op_mul_f); break;
-      case AGC_OP_DIV_F: BINARY(agc_op_div_f); break;
-      case AGC_OP_NEG_F: UNARY(agc_op_neg_f); break;
-      case AGC_OP_LT_F: BINARY(agc_op_lt_f); break;
-      case AGC_OP_LE_F: BINARY(agc_op_le_f); break;
+      case AGC_OP_ADD_F: FLOAT_BINARY(float_add); break;
+      case AGC_OP_SUB_F: FLOAT_BINARY(float_sub); break;
+      case AGC_OP_MUL_F: FLOAT_BINARY(float_mul); break;
+      case AGC_OP_DIV_F: FLOAT_BINARY(float_div); break;
+      case AGC_OP_NEG_F: {
+        agc_status status_ = float_neg(vm, &R[in.a], &R[in.b]);
+        if (__builtin_expect(status_ != AGC_STATUS_OK, 0)) float_failed(vm, status_);
+        break;
+      }
+      case AGC_OP_LT_F: FLOAT_BINARY(float_lt); break;
+      case AGC_OP_LE_F: FLOAT_BINARY(float_le); break;
       case AGC_OP_CONCAT:
         BINARY(agc_op_concat);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
