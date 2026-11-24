@@ -345,18 +345,13 @@ def test_add_with_a_tag_name_version_and_no_package_folder_takes_the_repository_
 def test_add_with_a_tag_name_version_fetches_once_and_locks_the_commit_it_chose_the_folder_from(
         ws, remotes, tmp_path, files, folder):
     remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
-    log = tmp_path / "fetches"
-    shim = tmp_path / "shim"
-    shim.mkdir()
-    script = shim / "git"
-    script.write_text('#!/bin/sh\ncase " $* " in *" fetch "*) echo fetch >> %s;; esac\nPATH=%s exec git "$@"\n'
-                      % (log, os.environ["PATH"]), encoding="utf-8")
-    script.chmod(0o755)
+    log = tmp_path / "git-trace"
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     result = run(cli() + ["add", "jobs", url(remotes), "--tag", "jobs-0.1.0"], cwd=ws.project,
-                 env=environment(ws, remotes, PATH=str(shim) + os.pathsep + os.environ["PATH"]))
+                 env=environment(ws, remotes, GIT_TRACE=str(log)))
     assert result.code == 0, result.stderr
-    assert log.read_text(encoding="utf-8") == "fetch\n"
+    fetches = [line for line in log.read_text(encoding="utf-8").splitlines() if "built-in: git fetch" in line]
+    assert len(fetches) == 1, fetches
     commit = remotes.git("rev-parse", "HEAD", cwd=remotes.work / REPOSITORY)
     lock_entry(ws, remotes, REPOSITORY, JOBS if folder else {"run.agc": "# root\n"}, commit, tag="jobs-0.1.0",
                name="jobs", subdir=folder or None)
