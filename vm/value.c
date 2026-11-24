@@ -1798,7 +1798,7 @@ static size_t integer_digits(uint64_t v, int last, char *digits, int *lead) {
 }
 
 /* 10^e for 0 <= e <= 66, with at most two roundings. */
-static double power_of_ten(int e) {
+static double power_of_ten(unsigned e) {
   static const double exact[] = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
                                  1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
   double p = 1;
@@ -1810,7 +1810,7 @@ static double power_of_ten(int e) {
    estimate, within a few roundings, decides unless it falls near the midpoint on either side of x; decimal_f32
    decides those. */
 static bool reads_as(uint64_t value, int last, double x, const char *digits, size_t count, int first) {
-  double v = last >= 0 ? (double)value * power_of_ten(last) : (double)value / power_of_ten(-last);
+  double v = last >= 0 ? (double)value * power_of_ten((unsigned)last) : (double)value / power_of_ten((unsigned)-last);
   float f = (float)x;
   double below = ((double)nextafterf(f, 0) + x) / 2;
   double above = f == FLT_MAX ? FLOAT32_OVERFLOW : ((double)nextafterf(f, INFINITY) + x) / 2;
