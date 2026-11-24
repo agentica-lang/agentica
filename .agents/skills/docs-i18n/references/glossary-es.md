@@ -22,8 +22,10 @@ One line per term, sorted. "stays" means the term is not translated.
 | assertion | aserción |  |
 | assignment | asignación |  |
 | attach | añadir | detach: quitar |
+| attempt | intento | A try of a retry |
 | await | esperar | Noun: espera; `Task.await` stays |
 | background | segundo plano |  |
+| backoff | espera creciente | A retry waits longer each time |
 | backpressure | contrapresión |  |
 | backtracking | retroceso |  |
 | bare | suelto | A bare call or value |
@@ -82,10 +84,12 @@ One line per term, sorted. "stays" means the term is not translated.
 | code point | punto de código |  |
 | code unit | unidad de código |  |
 | codec | códec | `T.codec` stays |
+| collaborator | colaborador | A part that a function is given |
 | command | comando | A CLI command; `command` in code stays |
 | comment | comentario | Code comments only |
 | comparison | comparación |  |
 | compiler | compilador | The program that turns source into bytecode |
+| composition root | raíz de composición | The place that builds the parts |
 | compute pool | grupo de hilos de cómputo | The threads of `compute def` calls |
 | constant | constante | Names like `TAX_PERCENT` stay |
 | constant time | tiempo constante |  |
@@ -150,6 +154,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | expression | expresión |  |
 | facade | fachada |  |
 | factory | fábrica | The design pattern |
+| fake | doble de prueba | A stand-in that a test passes |
 | fallback | respaldo |  |
 | family | familia |  |
 | feature | característica | The BDD feature file |
@@ -211,6 +216,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | instance | instancia |  |
 | integer | entero | The type `Int` stays |
 | interpolation | interpolación | `"#{...}"` stays in code |
+| interpreter | intérprete |  |
 | IV | stays |  |
 | JIT | stays |  |
 | job | trabajo |  |
@@ -469,6 +475,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | variant | variante | Of an enum |
 | version | versión |  |
 | view | vista | Of a buffer |
+| Visitor | Visitante | The design pattern |
 | VM | VM | Virtual machine; the acronym stays |
 | wall time | tiempo de reloj |  |
 | warning | advertencia |  |

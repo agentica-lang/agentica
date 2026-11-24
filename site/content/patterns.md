@@ -188,3 +188,211 @@ end
 ```output
 ["HELLO"]
 ```
+
+## Composition root
+
+`main` builds the collaborators, such as the clock and the `Store`, and passes them in. A function never builds what it calls, so a test passes a fake.
+
+```agentica
+struct Store
+  notes: List[String]
+end
+
+def note(store: Store, clock: Fn[Int], text: String) -> Store
+  store.with(notes: store.notes.push("#{clock.call()} #{text}"))
+end
+
+def main() -> Void
+  clock = &Time.now_ms
+  real = note(Store(notes: []), clock, "started")
+  puts(real.notes.size)
+
+  fake = -> { 1000 }
+  puts(note(Store(notes: []), fake, "started").notes)
+end
+```
+
+```output
+1
+["1000 started"]
+```
+
+## Result all the way
+
+The body returns `Result[T]` and uses `try`. Convert once, at the boundary, with `case`.
+
+```agentica
+def port(text: String) -> Result[Int]
+  number = try text.to_i
+  return error("port out of range: #{number}") if number < 1 or number > 65535
+
+  ok(number)
+end
+
+def describe(text: String) -> String
+  case port(text)
+    ok(n) -> "listening on #{n}"
+    error(e) -> "bad port: #{e.message}"
+  end
+end
+
+def main() -> Void
+  puts(describe("8080"))
+  puts(describe("99999"))
+  puts(describe("web"))
+end
+```
+
+```output
+listening on 8080
+bad port: port out of range: 99999
+bad port: cannot convert "web" to Int
+```
+
+## Resource with a block
+
+A helper opens the resource, calls the block and closes, even when the block returns an error. It keeps the result in a variable and returns it after the close, so it needs no `ensure`. `File.open` with a block is the builtin one.
+
+```agentica
+def with_connection(name: String, use: Fn[String, Result[String]]) -> Result[String]
+  puts("open #{name}")
+  result = use.call(name)
+  puts("close #{name}")
+  result
+end
+
+def main() -> Void
+  rows = with_connection("db") do |conn| ok("rows from #{conn}") end
+  puts(rows.unwrap!)
+
+  failed = with_connection("db") do |conn| error("query failed on #{conn}") end
+  puts(failed.message)
+end
+```
+
+```output
+open db
+close db
+rows from db
+open db
+close db
+query failed on db
+```
+
+## Interpreter over an enum
+
+A recursive enum is the tree and a `case` walks it. Each walk is one function, as a Visitor is in other languages.
+
+```agentica
+enum Expr
+  Num(Int)
+  Add(Expr, Expr)
+  Mul(Expr, Expr)
+end
+
+def eval(expr: Expr) -> Int
+  case expr
+    Expr.Num(n) -> n
+    Expr.Add(left, right) -> eval(left) + eval(right)
+    Expr.Mul(left, right) -> eval(left) * eval(right)
+  end
+end
+
+def show(expr: Expr) -> String
+  case expr
+    Expr.Num(n) -> "#{n}"
+    Expr.Add(left, right) -> "(#{show(left)} + #{show(right)})"
+    Expr.Mul(left, right) -> "#{show(left)} * #{show(right)}"
+  end
+end
+
+def main() -> Void
+  expr = Expr.Mul(Expr.Add(Expr.Num(1), Expr.Num(2)), Expr.Num(4))
+  puts(show(expr))
+  puts(eval(expr))
+end
+```
+
+```output
+(1 + 2) * 4
+12
+```
+
+## Pipeline with channels
+
+A producer, workers and a consumer are tasks joined by channels. `close` on `jobs` ends the workers. The consumer takes the 6 results it expects, and `unwrap!` halts if one is missing, so a timeout never gives a short sum.
+
+```agentica
+def produce(jobs: Channel[Int]) -> Void
+  (1..6).each do |n| jobs.send(n, 1000).unwrap! end
+  jobs.close
+end
+
+def work(jobs: Channel[Int], results: Channel[Int]) -> Void
+  while true
+    case jobs.recv(1000)
+      ok(n) -> results.send(n * n, 1000).unwrap!
+      error(_) -> break
+    end
+  end
+end
+
+def consume(results: Channel[Int], count: Int) -> Int
+  (1..count).reduce(0) do |total, _| total + results.recv(1000).unwrap! end
+end
+
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(2)
+  results: Channel[Int] = Channel.new(2)
+  producer = Task.spawn do produce(jobs) end
+  workers = [1, 2].map do |_| Task.spawn do work(jobs, results) end end
+  consumer = Task.spawn do consume(results, 6) end
+  Task.await(producer)
+  workers.each do |worker| Task.await(worker) end
+  puts(Task.await(consumer))
+end
+```
+
+```output
+91
+```
+
+## Retry with backoff
+
+A function takes an `Fn` that returns a `Result` and calls it again after a longer wait, up to a number of attempts. The waits are tiny here.
+
+```agentica
+def retry[T](attempts: Int, wait_ms: Int, action: Fn[Int, Result[T]]) -> Result[T]
+  result = action.call(1)
+  attempt = 1
+  delay = wait_ms
+  while not result.ok? and attempt < attempts
+    puts("attempt #{attempt} failed, waiting #{delay} ms")
+    Task.sleep(delay)
+    delay = delay * 2
+    attempt = attempt + 1
+    result = action.call(attempt)
+  end
+
+  result
+end
+
+def flaky(attempt: Int) -> Result[String]
+  return error("busy") if attempt < 3
+
+  ok("done on attempt #{attempt}")
+end
+
+def main() -> Void
+  puts(retry(5, 1, &flaky).unwrap!)
+  puts(retry(2, 1, &flaky).message)
+end
+```
+
+```output
+attempt 1 failed, waiting 1 ms
+attempt 2 failed, waiting 2 ms
+done on attempt 3
+attempt 1 failed, waiting 1 ms
+busy
+```
