@@ -185,6 +185,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked, roots: List[String], ev
     functions: by_name,
     bodies: checked.bodies,
     step_tries: checked.step_tries,
+    flat_safe: checked.flat_safe,
     slots: checked.slots,
     fills: fills_of(functions, index_of, values),
     field_fills: field_fills_of(structs, index_of, values),

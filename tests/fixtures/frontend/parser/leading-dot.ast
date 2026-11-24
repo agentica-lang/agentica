@@ -1,6 +1,6 @@
-program #24 0:1:1-267:12:1
-  declaration: export-decl #23 0:1:1-267:12:1
-    declaration: function-decl #22 0:1:1-267:12:1 name="main"
+program #28 0:1:1-307:15:1
+  declaration: export-decl #27 0:1:1-307:15:1
+    declaration: function-decl #26 0:1:1-307:15:1 name="main"
       result: type-ref #0 14:1:15-18:1:19 name="Void"
       body: binding #18 21:2:3-249:10:1 name="lines"
         value: struct-update #17 29:2:11-248:9:16
@@ -20,6 +20,10 @@ program #24 0:1:1-267:12:1
             arg: function-ref #13 226:8:13-231:8:18 name="big?"
           arg: named-arg #16 243:9:11-247:9:15 name="a"
             value: literal #15 246:9:14-247:9:15 value=int:1
-      body: expr-stmt #21 251:10:3-263:11:1
-        value: call #20 251:10:3-262:10:14 name="puts" piped=false
-          arg: name-ref #19 256:10:8-261:10:13 name="lines"
+      body: binding #22 251:10:3-289:13:1 name="safe"
+        value: field-access #21 258:10:10-288:12:13 name="upcase" safe
+          target: field-access #20 258:10:10-275:11:12 name="first" safe
+            target: name-ref #19 258:10:10-263:10:15 name="lines"
+      body: expr-stmt #25 291:13:3-303:14:1
+        value: call #24 291:13:3-302:13:14 name="puts" piped=false
+          arg: name-ref #23 296:13:8-301:13:13 name="lines"

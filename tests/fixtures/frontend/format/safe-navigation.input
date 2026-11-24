@@ -1,0 +1,17 @@
+struct Address
+  city: String
+  zip: Optional[String]
+end
+
+struct User
+  address: Optional[Address]
+end
+
+def city_of(user: Optional[User], fallback: String) -> String
+  text = user&.address&.city&.strip&.upcase&.downcase&.replace("a", "b")&.replace("c", "d")&.replace("e", "f").unwrap_or(fallback)
+  # The chain below is written over lines and fits on one.
+  other = user
+    &.address
+    &.zip
+  text + other.unwrap_or("")
+end

@@ -46,6 +46,7 @@ def take(
     bound: moved_bound(linked, before, old.bound, plan.stretches),
     bodies: moved_bodies(linked, before, old.bodies, plan.stretches),
     step_tries: moved_tries(linked, before, old.step_tries, plan.stretches),
+    flat_safe: moved_tries(linked, before, old.flat_safe, plan.stretches),
     slots: moved_slots(linked, before, old.slots, plan.stretches),
     type_args: moved_bound(linked, before, old.type_args, plan.stretches),
   )
