@@ -174,7 +174,9 @@ end
 ## nothing is ever deleted. bodies is the function of the prelude that each call of a prelude builtin runs, by the id
 ## of the call (the lowering reads it). step is true inside the block of a Lazy method, where a failed `try` ends the
 ## pipeline instead of returning from the block, and step_tries holds the id of each such `try` (the lowering emits
-## try-step for them). bound holds what each name binding introduced, by the id of its node (see record_bound); it is
+## try-step for them). flat_safe holds the id of each `o&.member` whose member is an Optional itself, so the result
+## is that Optional and not one more level (the lowering wraps in `some` the others). bound holds what each name
+## binding introduced, by the id of its node (see record_bound); it is
 ## for the queries (`agentica type-at`), and the lowering never reads it. probe is true while a block is checked only
 ## to learn its result type (Stmt.check_block_in): an error(...) with no expected type then has the type
 ## Result[Unknown] and does not fix the result of the block, and nothing checked in that run is kept. json_uses holds
@@ -198,6 +200,7 @@ struct St
   bodies: Map[Int, String]
   step: Bool
   step_tries: Set[Int]
+  flat_safe: Set[Int]
   bound: Map[Int, List[Types.Type]]
   probe: Bool
   json_uses: List[JsonUse]
@@ -248,6 +251,7 @@ end
 ## The state at the start of a function: no names, no types.
 def fresh() -> St
   no_tries: Set[Int] = Set.new([])
+  no_flat: Set[Int] = Set.new([])
   no_reads: Set[Int] = Set.new([])
   no_writes: Set[Int] = Set.new([])
   no_assigning: Set[Int] = Set.new([])
@@ -265,6 +269,7 @@ def fresh() -> St
     bodies: {},
     step: false,
     step_tries: no_tries,
+    flat_safe: no_flat,
     bound: {},
     probe: false,
     json_uses: [],

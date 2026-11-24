@@ -16,7 +16,7 @@
   Type names start with an uppercase letter. Identifiers are case-sensitive.
 - Spaces, tabs and indentation have no structural meaning. CRLF is read as LF.
 - A newline separates statements, except inside `(...)`, `[...]` and `{...}`,
-  and before a line that starts with `.name` (see below).
+  and before a line that starts with `.name` or `&.name` (see below).
 - The lexer emits one `NL` token for each newline outside those delimiters,
   including blank and comment lines. Inside a block that is itself within
   `(...)`, `[...]` or `{...}`, newlines are emitted too, so a multi-line block
@@ -28,7 +28,8 @@
   its `(...)`, opens the lambda's body.
 - If the file does not end with a newline, the lexer adds one before `EOF`.
 - A line whose first token is a `.` followed by a lowercase name (`.map`,
-  `.with(`; not `.Type` or a number) continues the expression of the line
+  `.with(`; not `.Type` or a number), or `&.` followed by a name (`&.city`),
+  continues the expression of the line
   before: the lexer drops the `NL` that ends that line, so a method chain can
   span lines without parentheses. The line before must end in a token that can
   end an expression (a name, a literal, a closing bracket or `end`; not a type
@@ -109,7 +110,9 @@ the form that halts the run with an error instead of returning a `Result`.
 Variables, fields and parameters cannot have the suffix.
 
 The pipe operator `|>` is one token (the longest match next to `|` and `||`), so
-block parameters `do |x|` and `||` are unchanged.
+block parameters `do |x|` and `||` are unchanged. `&.` (safe navigation,
+`06-semantics.md`, "Optional values") is one token too, kind `safe-dot`: the
+longest match next to `&` and `&&`.
 
 ### Doc comments
 

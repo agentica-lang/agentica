@@ -143,6 +143,7 @@ def block(line):
 CASES = [
     ("the module's functions and the public fields", {"main.agc": USES, "lib.agc": LIB}, None, None, None),
     ("read", outside("puts(c.secret)"), "CHECK-PRIVATE-FIELD", (5, 10), (5, 16)),
+    ("read through &.", outside("puts(some(c)&.secret)"), "CHECK-PRIVATE-FIELD", (5, 17), (5, 23)),
     ("read of a private field with a default", outside("puts(c.timeout_ms)"), "CHECK-PRIVATE-FIELD", (5, 10), (5, 20)),
     ("construct naming a private field", outside('puts(L.Conn(id: 1, peer: "p", secret: "s").id)'),
      "CHECK-PRIVATE-FIELD", (5, 33), (5, 39)),

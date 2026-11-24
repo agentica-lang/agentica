@@ -803,6 +803,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
           name_span: access.name_span,
           args: [block.node],
           span: span,
+          safe: access.safe,
         ),
       )
 
@@ -823,12 +824,17 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   links = 0
   while true
     kind = e.tokens[cursor].kind
-    if kind == "dot"
+    if kind == "dot" or kind == "safe-dot"
       links += 1
       inner = try Base.deepen(e, cursor, links)
       after_name = try Base.expect_used(e, cursor + 1, "a field or method name")
       name = e.tokens[cursor + 1].lexeme
-      if e.tokens[after_name].kind == "left-paren" and name == "with"
+      safe: Optional[Source.Span] = none
+      if kind == "safe-dot"
+        safe = some(e.tokens[cursor].span)
+      end
+
+      if e.tokens[after_name].kind == "left-paren" and name == "with" and safe.none?
         # `with` is only special before `(` after a dot; `x.with` still reads a field.
         args = try parse_update_arguments(inner, after_name + 1, next_id)
         close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
@@ -857,7 +863,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
               Base.hint("names are not part of an Fn type: write f.call(1, 2)"),
             ),
           )
-        elsif name == "call"
+        elsif name == "call" and safe.none?
           target = Ast.Expr.Invoke(Ast.Invoke(id: args.ids, target: target, args: args.args, span: span))
         else
           target = Ast.Expr.MethodCall(
@@ -869,6 +875,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
               args: args.args,
               span: span,
               named: args.named,
+              safe: safe,
             ),
           )
         end
@@ -883,6 +890,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
             name: name,
             name_span: e.tokens[cursor + 1].span,
             span: Base.span_from(e, pos, after_name),
+            safe: safe,
           ),
         )
 
@@ -1785,7 +1793,8 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
     return Base.hint("there is no << operator; add to a list with xs = xs.push(x)")
   end
 
-  if token.kind == "dot" and Base.kind_at(e, pos + 1) == "name" and pos > 0 and e.tokens[pos - 1].kind == "NL"
+  safe_start = token.kind == "dot" or token.kind == "safe-dot"
+  if safe_start and Base.kind_at(e, pos + 1) == "name" and pos > 0 and e.tokens[pos - 1].kind == "NL"
     return Base.hint(
       "a line that starts with .name continues the expression on the line above, which must end in a value; " +
       "a blank line ends it",

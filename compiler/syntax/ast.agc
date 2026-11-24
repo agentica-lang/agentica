@@ -593,17 +593,20 @@ struct MapLit
   span: Source.Span
 end
 
-## target.name without parentheses. `name_span` is the span of the name after the dot.
+## target.name without parentheses. `name_span` is the span of the name after the dot. `safe` is the span of the `&.`
+## of target&.name, which reads the member of the value inside an Optional target.
 struct FieldAccess
   id: Int
   target: Expr
   name: String
   name_span: Source.Span
   span: Source.Span
+  safe: Optional[Source.Span] = none
 end
 
 ## target.name(args), with a trailing block as the last argument. `name_span` is the span of the name after the dot.
-## named holds the `name: value` arguments after the positional ones.
+## named holds the `name: value` arguments after the positional ones. `safe` is the span of the `&.` of
+## target&.name(args).
 struct MethodCall
   id: Int
   target: Expr
@@ -612,6 +615,7 @@ struct MethodCall
   args: List[Expr]
   span: Source.Span
   named: List[NamedArg] = []
+  safe: Optional[Source.Span] = none
 end
 
 ## One part of an interpolated string: text, or an expression.

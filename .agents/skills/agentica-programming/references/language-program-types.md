@@ -46,8 +46,9 @@ and types. Builtin methods and `to_s`: `builtins.md`.
 - Blocks end with `end`; `#` starts a comment. A newline ends a statement.
   Inside `(...)`, `[...]` and `{...}` an expression may span lines (trailing
   commas allowed); wrap a long expression in parentheses to split it.
-- A line starting with `.name` continues the line before it, but not after the
-  `end` of a `do` block (`CHECK-CHAIN-AFTER-END`); a `#` comment may end a line
+- A line starting with `.name` or `&.name` continues the line before it, but
+  not after the `end` of a `do` block (`CHECK-CHAIN-AFTER-END`); a `#` comment
+  may end a line
   or sit between steps. These do not continue a line: a blank line, a `##`
   line, a line starting with `..`, `...` or `|>`, and a dot after the head of an
   `if`, `while`, `case` or `for`.
@@ -89,7 +90,12 @@ and types. Builtin methods and `to_s`: `builtins.md`.
 - `Result[T]`: `ok(value)` or `error(...)` holding an `Error` record
   (`language-blocks-results.md`); one type argument.
 - `Optional[T]`: `some(value)` or `none`, for a value that may be missing
-  (`language-blocks-results.md`).
+  (`language-blocks-results.md`). `o&.name` and `o&.name(args)` read a field or
+  call a method of the value inside `o` and give an Optional (flat: a member
+  that is an Optional gives it as is, and a Void member makes the whole Void: it
+  runs for `some` and does nothing for `none`); `none` skips the arguments; a
+  later `.` applies to the Optional (`o&.city.unwrap_or("?")`); a receiver that
+  is not an Optional is `CHECK-SAFE-NAV-RECEIVER`.
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints
   `1..5`.
 - `JSON.Value`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or

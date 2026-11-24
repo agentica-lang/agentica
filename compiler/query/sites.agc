@@ -348,12 +348,12 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
     Ast.Expr.FieldAccess(node) ->
       return [] if glue?(node.span, node.name_span)
 
-      access_sites(scan, node.id, node.target, node.name, node.name_span)
+      access_sites(scan, node.id, node.target, node.name, node.name_span, node.safe.some?)
     Ast.Expr.MethodCall(node) ->
       return [] if glue?(node.span, node.name_span)
 
       if State.field_call?(scan.resolved, node.id)
-        return field_read_sites(scan, node.target, node.name, node.name_span)
+        return field_read_sites(scan, node.target, node.name, node.name_span, node.safe.some?)
       end
 
       builtin_method_sites(scan, node.id, node.name_span)
@@ -376,15 +376,19 @@ def glue?(span: Source.Span, name_span: Source.Span) -> Bool
 end
 
 # `x.name`: a method that resolved to a builtin, else a field of the struct that the target is.
-def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
+def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span: Source.Span, safe: Bool) -> List[Site]
   return builtin_method_sites(scan, id, name_span) if scan.resolved.has_key?(id)
 
-  field_read_sites(scan, target, name, name_span)
+  field_read_sites(scan, target, name, name_span, safe)
 end
 
 # The read of a struct field of the program, or the call of an Fn field (`x.name(args)`).
-def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
+def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Source.Span, safe: Bool) -> List[Site]
   owner = struct_of(scan, target)
+  if safe
+    owner = struct_inside(scan, target)
+  end
+
   return [] if !known?(scan, owner)
 
   placed(scan, member("field", owner, name), "read", name_span, name_span)
@@ -407,6 +411,14 @@ end
 def struct_of(scan: Scan, target: Ast.Expr) -> String
   id = Ast.expr_id(target)
   return T.name(scan.types[id]) if id < scan.types.size
+
+  ""
+end
+
+# The linked name of the struct inside the Optional that the checker gave the expression as its type.
+def struct_inside(scan: Scan, target: Ast.Expr) -> String
+  id = Ast.expr_id(target)
+  return T.name(T.item(scan.types[id])) if id < scan.types.size
 
   ""
 end

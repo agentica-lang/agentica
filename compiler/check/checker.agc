@@ -29,7 +29,8 @@ import Prelude from "prelude_files"
 ## initialization order (the lowering reads that too, and does not order them again). prelude is the files of the
 ## compiler prelude that the program calls (prelude_files.agc), checked with it: the lowering adds them to the files of
 ## the program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is
-## the id of each `try` in the block of a Lazy method (State.St.step). bound is the types that each name binding
+## the id of each `try` in the block of a Lazy method (State.St.step), and flat_safe the id of each `&.` whose member
+## is an Optional (State.St.flat_safe). bound is the types that each name binding
 ## introduced, by node id (State.record_bound), for `agentica type-at` and `Analysis.bodies`, and the result type of
 ## each function at the id of its result annotation, for `Analysis.bodies`. type_args is the type arguments of each
 ## call of a generic function or builtin, by id of the call (State.record_type_args), for `Analysis.bodies`.
@@ -44,6 +45,7 @@ struct Checked
   prelude: List[Linker.LinkedModule]
   bodies: Map[Int, String]
   step_tries: Set[Int]
+  flat_safe: Set[Int]
   bound: Map[Int, List[T.Type]]
   slots: Map[Int, List[Int]] = {}
   type_args: Map[Int, List[T.Type]] = {}
@@ -443,6 +445,7 @@ def check_all(
     prelude: attached.modules,
     bodies: attached.st.bodies,
     step_tries: attached.st.step_tries,
+    flat_safe: attached.st.flat_safe,
     bound: attached.st.bound,
     slots: attached.st.slots,
     type_args: attached.st.type_args,
@@ -545,6 +548,7 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
         bound: before.checked.bound,
         bodies: before.checked.bodies,
         step_tries: before.checked.step_tries,
+        flat_safe: before.checked.flat_safe,
         slots: before.checked.slots,
         type_args: before.checked.type_args,
       )

@@ -199,7 +199,7 @@ end
 
 ## Chains over several lines
 
-A line that starts with a dot and a name continues the line before it, so a long chain of method calls and blocks in braces reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
+A line that starts with a dot (or `&.`, see [Optional](/library/data-structures/optional/)) and a name continues the line before it, so a long chain of method calls and blocks in braces reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
 
 ```agentica
 def main() -> Void

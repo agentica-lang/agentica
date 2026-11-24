@@ -97,10 +97,12 @@ def expr_uses(cx: State.Cx, structs: List[String], expr: Ast.Expr, name: String)
     Ast.Expr.EnumConstructor(variant) -> variant_uses(cx, variant, name)
     Ast.Expr.Construct(construct) -> construct_uses(cx, construct, name)
     Ast.Expr.MethodCall(call) ->
+      return [] if call.safe.some?
       return [member_use(cx, structs, call.name)] if named?(call.target, name)
 
       []
     Ast.Expr.FieldAccess(access) ->
+      return [] if access.safe.some?
       return [member_use(cx, structs, access.name)] if named?(access.target, name)
 
       []
