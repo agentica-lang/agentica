@@ -677,7 +677,7 @@ def test_a_pgroup_descendant_that_ignores_sigterm_gets_sigkill_after_the_grace(t
 @host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
 @pytest.mark.parametrize("ending", ["close", "end of run"])
 def test_a_pgroup_descendant_gets_the_whole_grace_after_its_leader_is_reaped(tmp_path, ending):
-    """The grandchild takes 300 ms on SIGTERM, then writes a marker: the end of the run waits for it within the grace
+    """The grandchild takes 100 ms on SIGTERM, then writes a marker: the end of the run waits for it within the grace
     instead of sending SIGKILL once the leader is reaped."""
     marker = tmp_path / "marker"
     pid = stopped_family(tmp_path, ending, "slow", str(marker))
