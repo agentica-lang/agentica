@@ -46,14 +46,14 @@ struct Entry
   locked: Lock.Locked
 end
 
-## One thing that a manifest asks of the tag of a package: a `version` requirement (`text`), or a `tag` pin that reads
-## as a version (an exact one), the package whose manifest asked (`by`, "" for the project's) and the commit of that
-## package that was read (`at`), so that the ask of a package that has moved to another tag can be told apart.
+## One thing that a manifest asks of the tag of a package: a `version` requirement (`text`), or a `tag` pin that
+## reads as a version (an exact one), the package whose manifest asked (`by`, "" for the project's) and that
+## manifest (`file`).
 struct Ask
   text: String
   tag: String
   by: String
-  at: String
+  file: String
 end
 
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
@@ -221,13 +221,13 @@ end
 
 ## What a dependency asks of the tag, or none when it asks nothing that other asks can meet: a `version`, or a `tag`
 ## that is a version of the repository or folder (`X.Y.Z`, `vX.Y.Z`, or `NAME-X.Y.Z` with a subdir).
-def ask_for(source: GitSource.Source, by: String, at: String) -> Optional[Ask]
-  return some(Ask(text: source.version, tag: "", by: by, at: at)) if source.version != ""
+def ask_for(source: GitSource.Source, by: String, file: String) -> Optional[Ask]
+  return some(Ask(text: source.version, tag: "", by: by, file: file)) if source.version != ""
 
   prefix = VersionRequirement.tag_prefix(source.subdir)
   return none if source.tag == "" or !VersionRequirement.tag_version(source.tag, prefix).some?
 
-  some(Ask(text: "", tag: source.tag, by: by, at: at))
+  some(Ask(text: "", tag: source.tag, by: by, file: file))
 end
 
 ## Whether the tag meets every ask: it is a version of the repository or folder, equal to each pinned tag and

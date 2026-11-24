@@ -330,6 +330,13 @@ def package(remotes, path, tag="v1", **needs):
     return remotes.publish(path, {path.split("/")[1] + ".agc": BANG, "agentica.toml": text}, tag=tag)
 
 
+def locked_tags(ws, remotes):
+    """Runs `update` and returns {name: tag} of what it locked."""
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    return {entry["name"]: entry["tag"] for entry in lock_of(ws)}
+
+
 def bond_tags(remotes, *tags):
     for tag in tags:
         remotes.publish(REPOSITORY, FILES, tag=tag)
@@ -419,11 +426,39 @@ def test_the_asks_of_a_package_that_moves_to_an_older_tag_are_left_behind(ws, re
     ws.write_manifest({"alpha": dependency(alpha, version=">= 1.0"),
                        "beta": dependency(remotes.url("owner/beta"), tag="v1")})
 
-    result = plain(ws, remotes, "update")
-    assert result.code == 0, result.stderr
-    locked = {entry["name"]: entry["tag"] for entry in lock_of(ws)}
+    locked = locked_tags(ws, remotes)
     assert (locked["alpha"], locked["gamma"]) == ("1.0.0", "1.0.0" if "tag" in old else "1.5.0")
     assert command(ws, remotes, "install")[0].code == 0
+
+
+def test_a_package_that_asks_nothing_at_an_older_tag_frees_the_name_that_its_newer_tag_held(ws, remotes):
+    """xx 2.0.0 asks yy ~> 2.0 and zz rules xx 2.0.0 out: xx 1.0.0 asks nothing of yy, so yy still takes its newest."""
+    for tag in ["1.0.0", "2.0.0", "2.1.0"]:
+        remotes.publish("owner/yy", {"yy.agc": BANG}, tag=tag)
+    yy, xx = remotes.url("owner/yy"), remotes.url("owner/xx")
+    package(remotes, "owner/xx", tag="1.0.0")
+    package(remotes, "owner/xx", tag="2.0.0", yy=dependency(yy, version="~> 2.0"))
+    package(remotes, "owner/zz", xx=dependency(xx, version="~> 1.0"))
+    ws.write_manifest({"yy": dependency(yy, version=">= 1.0"), "xx": dependency(xx, version=">= 1.0"),
+                       "zz": dependency(remotes.url("owner/zz"), tag="v1")})
+
+    locked = locked_tags(ws, remotes)
+    assert (locked["yy"], locked["xx"], locked["zz"]) == ("2.1.0", "1.0.0", "v1")
+
+
+def test_a_package_that_leaves_the_tree_takes_its_asks_with_it(ws, remotes):
+    """aa 2.0.0 brings in dd, which asks cc ~> 2.0; bb rules aa 2.0.0 out, and aa 1.0.0 asks cc ~> 1.0 and has no dd."""
+    for tag in ["1.0.0", "1.4.0", "1.9.0", "2.0.0"]:
+        remotes.publish("owner/cc", {"cc.agc": BANG}, tag=tag)
+    cc, aa = remotes.url("owner/cc"), remotes.url("owner/aa")
+    package(remotes, "owner/dd", cc=dependency(cc, version="~> 2.0"))
+    package(remotes, "owner/aa", tag="1.0.0", cc=dependency(cc, version="~> 1.0"))
+    package(remotes, "owner/aa", tag="2.0.0", dd=dependency(remotes.url("owner/dd"), tag="v1"))
+    package(remotes, "owner/bb", aa=dependency(aa, version="~> 1.0"))
+    ws.write_manifest({"aa": dependency(aa, version=">= 1.0"), "bb": dependency(remotes.url("owner/bb"), tag="v1")})
+
+    locked = locked_tags(ws, remotes)
+    assert locked == {"aa": "1.0.0", "bb": "v1", "cc": "1.9.0"}
 
 
 def test_an_override_ignores_the_asks_of_the_packages_even_when_another_name_makes_the_pass_start_again(ws, remotes):
@@ -440,9 +475,7 @@ def test_an_override_ignores_the_asks_of_the_packages_even_when_another_name_mak
         'other = { git = "%s", tag = "v1" }\n' % (bond, cc, remotes.url("owner/middle"), remotes.url("owner/other")),
         encoding="utf-8")
 
-    result = plain(ws, remotes, "update")
-    assert result.code == 0, result.stderr
-    locked = {entry["name"]: entry["tag"] for entry in lock_of(ws)}
+    locked = locked_tags(ws, remotes)
     assert (locked["bond"], locked["cc"]) == ("1.2.0", "1.2.0")
 
 

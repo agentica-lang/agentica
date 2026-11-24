@@ -442,24 +442,23 @@ import Sqlite from "pkg/sqlite/db"
   `tag` that is a version (`X.Y.Z`, `vX.Y.Z`, or `NAME-X.Y.Z` with a `subdir`),
   which counts as that exact version, are met together. `add` and `update` take
   the highest tag that meets them all. Two spellings of a requirement with the
-  same bounds are one (`~>0.8`, `~> 0.8` and `>= 0.8.0, < 1.0.0`). When a
-  package asks for something that the tag taken so far does not meet, the walk
-  over the tree starts again with that ask added, until one tag meets every
-  ask. The asks of a package belong to the tag of it that was read: when a pass
-  takes another tag of that package, its old asks are dropped, and a name that
-  was taken by them is taken again. There is no search over other combinations
-  of tags. The walk stops when a pass would start with asks it started with
-  before, or after 32 passes: `PKG-VERSION-UNSATISFIED` at
-  `dependencies.<name>` of the manifest of the last ask, `<name>` being the
-  name that kept moving. A name that the project overrides takes no asks.
-  No tag that meets them all is `PKG-VERSION-UNSATISFIED` too, at
-  `dependencies.<name>.version` of the manifest that took the name first (of
-  the manifest of the failing ask, at `.version` or `.tag`, when the taken tag
-  is a pin and cannot move); its message says who asked for what, in text and
-  not in a field. Two different pins of one name, or a source of another
-  repository or folder, is `PKG-SOURCE-CONFLICT`. The lock keeps the tag taken
-  and the requirement of the manifest that asked first; `install` and a build
-  check that the tag meets the `version` or the `tag` of each package.
+  same bounds are one (`~>0.8`, `~> 0.8` and `>= 0.8.0, < 1.0.0`). The tree is
+  walked in passes from the project: each pass reads the asks of the manifests
+  that the last pass reached, takes for each name the highest tag that meets
+  them and the asks it sees itself, and records the asks of the manifests it
+  reaches. The tags are right when a pass records the asks it started with. A
+  tree that keeps moving (a pass that starts with asks of an earlier one, or
+  the last of 32) is `PKG-VERSION-UNSATISFIED` at `dependencies.<name>` of the
+  last manifest that asked of the name that moved. There is no search over
+  other combinations of tags. A name that the project overrides takes no asks.
+  Asks that no tag meets are `PKG-VERSION-UNSATISFIED` too, at
+  `dependencies.<name>.version` of the manifest that asked first (of the
+  manifest of the failing ask, at `.version` or `.tag`, when the taken tag is a
+  pin and cannot move); its message says who asked for what, in text and not in
+  a field. Two different pins of one name, or a source of another repository or
+  folder, is `PKG-SOURCE-CONFLICT`. The lock keeps the tag taken and the
+  requirement of the manifest that asked first; `install` and a build check
+  that the tag meets the `version` or the `tag` of each package.
 - `path = "../sqlite"` is a dependency on a folder of this machine: relative to
   the folder of the manifest, or absolute; not empty, with no control
   character, at most 1024 characters. It excludes `git`, `tag`, `ref` and
