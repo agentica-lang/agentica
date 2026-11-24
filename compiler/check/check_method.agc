@@ -16,6 +16,7 @@ import CheckTypes from "check_types"
 
 ## Checks target.name(args).
 def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
+  try not_a_type(cx, st, node.target, node.safe)
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if node.name == "each" and foreach_call?(node.target)
     return error(
@@ -74,6 +75,7 @@ end
 
 ## Checks target.name: a struct field, or a method without arguments (to_s, size, ...).
 def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expected: T.Type) -> Result[State.Out]
+  try not_a_type(cx, st, node.target, node.safe)
   case node.target
     Ast.Expr.TypeName(type_name) ->
       if node.name == "members"
@@ -104,6 +106,12 @@ def check_safe_method(cx: State.Cx, target: State.Out, node: Ast.MethodCall) -> 
   end
 
   return safe_result(try check_field_call(cx, target.st, node, field.unwrap!), node.id, target, at) if field.some?
+
+  if node.name == "call" and T.is?(inner, "Fn")
+    message = "&.call is not defined: a function value inside an Optional is called after a case"
+    help = "write case f\n  some(g) -> g.call(...)\n  none -> ...\nend"
+    return error(State.fail_help(cx, target.st, "CHECK-UNKNOWN-METHOD", message, node.span, help))
+  end
 
   args = node.args
   made = try method_on(cx, opened, node.id, node.target, node.name, args, node.named, node.span, false, T.Type.Unknown)
@@ -261,6 +269,18 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
   ok(State.Out(st: st, type: field.unwrap!.type))
 end
 
+# A type name before `&.` (`Point&.members`, `HTTP.Client&.get(x)`) is not an Optional: CHECK-SAFE-NAV-RECEIVER.
+def not_a_type(cx: State.Cx, st: State.St, target: Ast.Expr, safe: Optional[Source.Span]) -> Result[Void]
+  return ok() if safe.none?
+
+  case target
+    Ast.Expr.TypeName(name) ->
+      message = "&. needs an Optional, and #{name.name} is a type"
+      error(State.fail_help(cx, st, "CHECK-SAFE-NAV-RECEIVER", message, safe.unwrap!, "write . for a type"))
+    _ -> ok()
+  end
+end
+
 # The type inside the Optional that `&.` is applied to; any other receiver is CHECK-SAFE-NAV-RECEIVER at the `&.`.
 def safe_receiver(cx: State.Cx, target: State.Out, dot: Source.Span) -> Result[T.Type]
   case target.type
@@ -273,10 +293,11 @@ def safe_receiver(cx: State.Cx, target: State.Out, dot: Source.Span) -> Result[T
 end
 
 # What `&.` gives: an Optional of the member's type, the member itself when it is an Optional (flat_safe tells the
-# lowering which). Checking the member with the value inside recorded that type for the target, so the Optional the
-# target has is recorded again.
+# lowering which), and Void for a member that gives nothing (it runs for `some` and does nothing for `none`). Checking
+# the member with the value inside recorded that type for the target, so the Optional the target has is recorded again.
 def safe_result(member: State.Out, id: Int, target: State.Out, at: Int) -> Result[State.Out]
   st = State.record_type(member.st, at, target.type)
+  return ok(State.Out(st: st, type: member.type)) if T.is?(member.type, "Void")
   if T.is?(member.type, "Optional")
     return ok(State.Out(st: st.with(flat_safe: st.flat_safe.add(id)), type: member.type))
   end

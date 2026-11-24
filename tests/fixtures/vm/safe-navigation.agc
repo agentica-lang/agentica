@@ -9,9 +9,18 @@ struct User
   greet: Fn[String, String]
 end
 
+struct Logger
+  log: Fn[String, Void]
+end
+
 def noisy(text: String) -> String
   puts("computed #{text}")
   text
+end
+
+def maybe(text: String) -> Optional[String]
+  puts("looked #{text}")
+  some(text)
 end
 
 def main() -> Void
@@ -39,4 +48,25 @@ def main() -> Void
 
   puts(some(ana)&.greet("you"))
   puts(some(ben)&.address&.city)
+
+  # A member that gives nothing runs for some and does nothing for none; the target runs once.
+  logger: Optional[Logger] = some(Logger(log: ->(line: String) { puts("log #{line}") }))
+  silent: Optional[Logger] = none
+  logger&.log("one")
+  silent&.log(noisy("never"))
+  some([1, 2])&.each do |n| puts("each #{n}") end
+  puts(maybe("target")&.size)
+
+  # A method that gives an Optional is flat.
+  table: Optional[Map[String, Int]] = some({"a": 1})
+  puts(table&.get("a"))
+  puts(table&.get("z"))
+  none_table: Optional[Map[String, Int]] = none
+  puts(none_table&.get("a"))
+
+  # Inside a lambda, and inside the block of another &.
+  size = ->(text: Optional[String]) { text&.size }
+  puts(size.call(some("four")))
+  puts(size.call(none))
+  puts(some(["ab", "c"])&.map do |text| some(text)&.size.unwrap_or(0) end)
 end

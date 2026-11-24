@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 146,
+  "steps": 276,
   "stdout": [
     "some(\"Lima\")",
     "none",
@@ -17,6 +17,17 @@
     "none",
     "some(\"hello you\")",
     "none",
+    "log one",
+    "each 1",
+    "each 2",
+    "looked target",
+    "some(6)",
+    "some(1)",
+    "none",
+    "none",
+    "some(4)",
+    "none",
+    "some([2, 1])",
     ""
   ],
   "stderr": []

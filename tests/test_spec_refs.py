@@ -187,6 +187,18 @@ def test_the_call_of_an_fn_field_is_a_read_of_the_field(tmp_path):
     ]
 
 
+def test_a_member_read_through_safe_navigation_is_a_read_of_the_field(tmp_path):
+    source = ("struct Address\n  city: String\nend\n\nstruct User\n  address: Optional[Address]\nend\n\n"
+              "def city_of(user: User) -> Optional[String]\n  return user.address&.city\nend\n")
+    (tmp_path / "user.agc").write_text(source, encoding="utf-8")
+    report = answer(("user.agc", where(source, "city: String")), cwd=tmp_path)
+    assert (report["definition"]["kind"], report["definition"]["struct"]) == ("field", "Address")
+    assert places(report) == [("user.agc", *where(source, "&.city", 2), "read", "city_of")]
+    # From the use the answer is the same field.
+    from_use = answer(("user.agc", where(source, "&.city", 2)), cwd=tmp_path)
+    assert (from_use["definition"]["kind"], from_use["definition"]["struct"]) == ("field", "Address")
+
+
 def test_a_name_that_nothing_uses_has_an_empty_list_and_exit_0(program):
     report = answer(("models.agc", where(MODELS, "unused", 2)), cwd=program)
     assert (report["definition"]["kind"], report["definition"]["name"], report["references"]) == (

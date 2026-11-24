@@ -957,12 +957,14 @@ end
   inside an Optional `o`. With `some(v)` the result is `some(v.name)`, and with
   `none` it is `none`, and the arguments are not run. The result is
   `Optional[U]` for a member of type `U`; when `U` is an Optional itself the
-  result is that `U`, never `Optional[Optional[V]]`. A plain `.` after `&.x`
-  applies to the Optional it gave (`o&.city.unwrap_or("?")`), with no
-  short-circuit of the rest of the chain; write `&.` at each step
-  (`a&.b&.c`). A receiver that is not an Optional is
-  `CHECK-SAFE-NAV-RECEIVER` at the `&.`. A block after `&.name` follows the usual
-  block rules. `&.` is not defined on `JSON.Value`.
+  result is that `U`, never `Optional[Optional[V]]`; when `U` is `Void` the
+  result is `Void`: the member runs for `some` and nothing happens for `none`. A
+  plain `.` after `&.x` applies to the Optional it gave
+  (`o&.city.unwrap_or("?")`), with no short-circuit of the rest of the chain;
+  write `&.` at each step (`a&.b&.c`). A receiver that is not an Optional is
+  `CHECK-SAFE-NAV-RECEIVER` at the `&.`, and so is a type or a module before it
+  (`Point&.members`, `OpenSSL.Digest&.sha256(x)`). A block after `&.name`
+  follows the usual block rules. `&.` is not defined on `JSON.Value`.
 - An Optional prints as `some(1)` or `none`. `none` may be the default of a
   parameter or field (`port: Optional[Int] = none`).
 - In JSON, `none` is `null` and `some(x)` is `x`; decode reads `null` or a

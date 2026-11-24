@@ -457,6 +457,13 @@ def pipe_method(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   )
 end
 
+# `Family.Member&.fn` and `Alias.Block&.fn`: the receiver is a group of functions, not an Optional.
+def safe_family_failure(cx: Resolve.Context, dot: Source.Span) -> String
+  site = Failure.Site(file: cx.me.file, span: dot)
+  message = "&. needs an Optional, and this receiver is a module"
+  Failure.fail_at(site, "CHECK-SAFE-NAV-RECEIVER", message, Failure.hint("write . for a module function"))
+end
+
 # Type.members and Type.codec, written without parentheses and not piped, on a type of this file or one it imports by
 # name is a field access on the type name, as for a type behind an alias (`Alias.Type.members`), which has no
 # parenthesized form either. The checker decides whether the type is a struct (or, for codec, can be decoded). The type
@@ -604,12 +611,20 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.ListLit(node) -> ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
     Ast.Expr.MapLit(node) -> rewrite_map(cx, node)
     Ast.Expr.FieldAccess(node) ->
+      if node.safe.some? and family_member(cx, node.target, node.name) != ""
+        return error(safe_family_failure(cx, node.safe.unwrap!))
+      end
+
       if family_member(cx, node.target, node.name) != ""
         return member_call(cx, node.target, node.id, node.name, [], [], false, node.span)
       end
 
       ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
     Ast.Expr.MethodCall(node) ->
+      if node.safe.some? and family_member(cx, node.target, node.name) != ""
+        return error(safe_family_failure(cx, node.safe.unwrap!))
+      end
+
       if family_member(cx, node.target, node.name) != ""
         return member_call(cx, node.target, node.id, node.name, node.args, node.named, true, node.span)
       end

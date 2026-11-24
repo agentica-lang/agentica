@@ -224,8 +224,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-BLOCK-TYPE`: a block or lambda parameter has no type from the call or
   the `Fn` type, and its uses leave no single type (`x * 2`: Int or String);
   annotate (`do |x: Int|`, `->(x: Int) { ... }`).
-- `CHECK-CHAIN-AFTER-END`: `.name`, `[i]` or `|>` after the `end` of a `do`
-  block; use a lambda, a one-line block in braces or bind the result first
+- `CHECK-CHAIN-AFTER-END`: `.name`, `&.name`, `[i]` or `|>` after the `end` of a
+  `do` block; use a lambda, a one-line block in braces or bind the result first
   (`language-blocks-results.md`).
 - `CHECK-SAFE-NAV-RECEIVER`: `&.` on a value that is not an Optional; write `.`.
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or

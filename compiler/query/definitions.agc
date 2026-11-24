@@ -56,10 +56,10 @@ def of_expr(
     Ast.Expr.TypeName(node) -> top_level(modules, node.name)
     Ast.Expr.ConstRef(node) -> top_level(modules, node.name)
     Ast.Expr.EnumConstructor(node) -> of_variant(modules, node.enum_name, node.variant_name)
-    Ast.Expr.FieldAccess(node) -> of_field(modules, T.name(target_type(types, node.target)), node.name)
+    Ast.Expr.FieldAccess(node) -> of_field(modules, owner_name(types, node.target, node.safe), node.name)
     Ast.Expr.MethodCall(node) ->
       if State.field_call?(resolved, node.id)
-        return of_field(modules, T.name(target_type(types, node.target)), node.name)
+        return of_field(modules, owner_name(types, node.target, node.safe), node.name)
       end
 
       none
@@ -126,6 +126,14 @@ struct Reexported
 end
 
 # The type recorded for the target of a field access; Unknown when there is none.
+# The struct that a member is read from: the type of the target, or the one inside its Optional for `&.`.
+def owner_name(types: List[T.Type], target: Ast.Expr, safe: Optional[Source.Span]) -> String
+  type = target_type(types, target)
+  return T.name(T.item(type)) if safe.some?
+
+  T.name(type)
+end
+
 def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   id = Ast.expr_id(target)
   return types[id] if id < types.size

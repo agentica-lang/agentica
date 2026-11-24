@@ -264,7 +264,7 @@ error("no even number")
 
 ## Safe navigation: o&.name
 
-`o&.name` reads a field or calls a method of the value inside an Optional, and gives an Optional: `some(value.name)` for `some(value)`, and `none` for `none`, where the arguments are not computed. A member that is an Optional itself gives that Optional, not one inside another. A plain `.` after it works on the Optional it gave, so chain `&.` at each step. A receiver that is not an Optional is `CHECK-SAFE-NAV-RECEIVER`: write `.`.
+`o&.name` reads a field or calls a method of the value inside an Optional, and gives an Optional: `some(value.name)` for `some(value)`, and `none` for `none`, where the arguments are not computed. A member that is an Optional itself gives that Optional, not one inside another, and a member that gives nothing (`logger&.log("x")`, `xs&.each do |x| ... end`) makes the whole expression `Void`: it runs for `some` and does nothing for `none`. A plain `.` after it works on the Optional it gave, so chain `&.` at each step. A receiver that is not an Optional (a value, a type or a module) is `CHECK-SAFE-NAV-RECEIVER`: write `.`. There is no `&.call`: call a function inside an Optional from a `case`.
 
 ```agentica
 struct Address

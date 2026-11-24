@@ -37,6 +37,10 @@ VALID = [
     '  puts(user.address&.zip&.size)',
     # A plain dot after &.x applies to the Optional it gave.
     '  puts(user.address&.city.unwrap_or("?"))',
+    # A member that gives nothing is Void, run for some and skipped for none; inside a lambda and a block.
+    "  words&.each do |w| puts(w) end",
+    '  f = ->(o: Optional[String]) { o&.size }\n  puts(f.call(some("a")))',
+    "  puts(words&.map do |w| some(w)&.size.unwrap_or(0) end)",
     # A line that starts with &.name continues the line before.
     "  n = user.address\n    &.city\n    &.size\n  puts(n)",
 ]
@@ -52,9 +56,17 @@ REJECTED = [
     ("  n = user&.name\n  puts(n)", "CHECK-SAFE-NAV-RECEIVER", "&."),
     ("  puts(user.name&.size)", "CHECK-SAFE-NAV-RECEIVER", "&."),
     ("  puts([1, 2]&.size)", "CHECK-SAFE-NAV-RECEIVER", "&."),
+    ('  puts(user.name&.start_with?("a"))', "CHECK-SAFE-NAV-RECEIVER", "&."),
+    # A type or a module before &. is no Optional either, and does not compile as `.`.
+    ("  puts(User&.members)", "CHECK-SAFE-NAV-RECEIVER", "&."),
+    ('  puts(OpenSSL.Digest&.sha256("x"))', "CHECK-SAFE-NAV-RECEIVER", "&."),
     # What `.` would report on the value inside.
     ("  puts(user.address&.street)", "CHECK-UNKNOWN-FIELD", "user.address&.street"),
     ("  puts(words&.nope(1))", "CHECK-UNKNOWN-METHOD", "words&.nope(1)"),
+    ('  puts(words&.join(",", 1))', "CHECK-ARITY", 'words&.join(",", 1)'),
+    # No &.call: the function inside an Optional is called after a case. A Void member has no value.
+    ("  cb: Optional[Fn[Int, Int]] = none\n  puts(cb&.call(1))", "CHECK-UNKNOWN-METHOD", "cb&.call(1)"),
+    ("  x = words&.each do |w| puts(w) end\n  puts(x)", "CHECK-VOID-VALUE", "words&.each do |w| puts(w) end"),
     # The result is an Optional, not the member.
     ("  city: String = user.address&.city\n  puts(city)", "CHECK-TYPE-MISMATCH", "user.address&.city"),
 ]

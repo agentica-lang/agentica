@@ -1285,6 +1285,10 @@ def lower_safe(
   test = fx.next - 1
   fx = Lowering.emit_at(fx, "is-variant", [test, source.slot, cx.variants["Optional.Some"]], span)
   fx = Lowering.emit_at(fx, "jump-if-false", [test, absent], span)
+  if Types.is?(Lowering.type_of(cx, member), "Void")
+    return lower_safe_void(cx, fx, id, source.slot, member, span, absent, test, dst, want, saved)
+  end
+
   inside = test
   fx = Lowering.emit_at(fx, "payload", [inside, source.slot, 0], span)
   names = fx.vars
@@ -1303,6 +1307,29 @@ def lower_safe(
   fx = Lowering.place(fx, absent)
   fx = Lowering.emit_at(fx, "enum", [dst, dst, cx.variants["Optional.None"]], span)
   fx = Lowering.place(fx, done)
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
+end
+
+# The `some` branch of a member that gives nothing: it runs, and the result is Void on both branches.
+def lower_safe_void(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  id: Int,
+  source: Int,
+  member: Ast.Expr,
+  span: Source.Span,
+  absent: Int,
+  inside: Int,
+  dst: Int,
+  want: Int,
+  saved: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.emit_at(fx, "payload", [inside, source, 0], span)
+  names = fx.vars
+  fx = fx.with(vars: names.put(safe_name(id), inside))
+  out = try lower_expression(cx, fx, member, -1, true, false)
+  fx = Lowering.place(out.fx.with(vars: names), absent)
+  fx = Lowering.emit_const(fx, dst, Ir.Imm.Void, span)
   ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
