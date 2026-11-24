@@ -1,14 +1,17 @@
 """The narrow integer types (Int8, Int16, Int32, UInt8, UInt16, UInt32) through the product CLI: literals typed by their
-context, the range of a literal, the conversions to and from Int, the operators and the reserved names, with their diagnostic codes
-and spans.
+context, the range of a literal, the conversions to and from Int, the operators and the reserved names, with their
+diagnostic codes and spans.
 
 A rule case is `(program, code, covered text)`: the code of the diagnostic and the source text its range covers. A
 program that must check clean has no code.
 """
 
+import json
+
 import pytest
 
-from tests.spec_support import assert_rule, check_many
+from tests.agentica_test import cli, run
+from tests.spec_support import assert_rule, check_many, covered
 
 
 def main(*lines: str) -> str:
@@ -67,12 +70,15 @@ RULES = {
     "two narrow types in <": (main("a: Int8 = 1", "b: Int16 = 2", "puts(a < b)"), "CHECK-TYPE-MISMATCH", "<"),
     "two narrow types in ==": (main("a: Int8 = 1", "b: UInt8 = 2", "puts(a == b)"), "CHECK-TYPE-MISMATCH", "=="),
     "a narrow type and an Int in %": (main("a: UInt8 = 1", "n = 2", "puts(a % n)"), "CHECK-TYPE-MISMATCH", "%"),
-    "a narrow type and an Int variable in +": (main("a: UInt8 = 1", "n = 2", "puts(n + a)"), "CHECK-TYPE-MISMATCH", "+"),
+    "a narrow type and an Int variable in +": (
+        main("a: UInt8 = 1", "n = 2", "puts(n + a)"), "CHECK-TYPE-MISMATCH", "+"),
     "a narrow type and a Float literal": (main("a: UInt8 = 1", "puts(a + 1.5)"), "CHECK-TYPE-MISMATCH", "+"),
     "a literal above the other side": (main("a: UInt8 = 1", "puts(a + 256)"), "CHECK-INT-RANGE", "256"),
     "a literal above the other side, on the left": (main("a: UInt8 = 1", "puts(300 < a)"), "CHECK-INT-RANGE", "300"),
     "a negative literal against an unsigned side": (main("a: UInt8 = 1", "puts(a == -1)"), "CHECK-INT-RANGE", "-1"),
+    "a compound assignment with a literal above the type": (main("a: UInt8 = 1", "a += 300"), "CHECK-INT-RANGE", "300"),
     "a literal tree above the context": (main("x: UInt8 = 200 + 300"), "CHECK-INT-RANGE", "300"),
+    "two narrow types in %": (main("a: UInt8 = 1", "b: UInt16 = 2", "puts(a % b)"), "CHECK-TYPE-MISMATCH", "%"),
     "no unary minus on an unsigned value": (main("a: UInt8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
     # JSON, keys and the list sums of the narrow types come in later pull requests of #984.
     "no JSON.encode yet": (main("a: UInt8 = 1", "puts(JSON.encode(a))"), "CHECK-NOT-ENCODABLE", "a"),
@@ -101,3 +107,47 @@ def batch(tmp_path_factory):
 def test_sized_rules(batch, name):
     program, code, text = RULES[name]
     assert_rule(batch(program), program, code, text)
+
+
+BOUNDS = {
+    "Int8": (-(1 << 7), (1 << 7) - 1),
+    "Int16": (-(1 << 15), (1 << 15) - 1),
+    "Int32": (-(1 << 31), (1 << 31) - 1),
+    "UInt8": (0, (1 << 8) - 1),
+    "UInt16": (0, (1 << 16) - 1),
+    "UInt32": (0, (1 << 32) - 1),
+}
+
+
+def halting_cases() -> dict[str, tuple[str, str, str]]:
+    """Per type, the operation at its edge that leaves the range: id -> (program, code, operator text)."""
+    cases = {}
+    for name, (low, high) in BOUNDS.items():
+        edges = {"+": (high, "a + 1"), "-": (low, "a - 1"), "*": (high, "a * 2")}
+        if low < 0:
+            edges["/"] = (low, "a / -1")
+            edges["neg"] = (low, "-a")
+        for operator, (start, expression) in edges.items():
+            shown = "-" if operator == "neg" else operator
+            cases[f"{name} {operator}"] = (
+                main(f"a: {name} = {start}", f"puts({expression})"), "RUNTIME-INTEGER-OVERFLOW", shown)
+        for operator in ("/", "%"):
+            cases[f"{name} {operator} 0"] = (
+                main(f"a: {name} = 1", f"puts(a {operator} 0)"), "RUNTIME-DIVISION-BY-ZERO", operator)
+    return cases
+
+
+HALTING = halting_cases()
+
+
+@pytest.mark.parametrize("name", list(HALTING))
+def test_sized_halts(tmp_path, name):
+    """An operation that leaves the type stops the program at the operator; a zero divisor is not an overflow."""
+    program, code, text = HALTING[name]
+    path = tmp_path / "program.agc"
+    path.write_text(program, encoding="utf-8")
+    result = run(cli() + ["--json", str(path)])
+    assert result.code == 1, result.stderr
+    found = json.loads(result.stderr)
+    assert found["code"] == code
+    assert covered(program, found["range"]) == text

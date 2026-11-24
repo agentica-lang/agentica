@@ -1004,7 +1004,13 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
     other = sides.left
   end
 
-  if T.narrow_int?(narrow) and (T.narrow_int?(other) or T.is?(other, "Int"))
+  if T.narrow_int?(narrow) and T.narrow_int?(other)
+    name = T.tag(narrow)
+    return (
+      "make both sides one type: x.to_i gives the Int of either side, " +
+      "n.to_#{name.downcase}! the #{name} of an Int"
+    )
+  elsif T.narrow_int?(narrow) and T.is?(other, "Int")
     name = T.tag(narrow)
     return "make both sides one type: x.to_i gives the Int of a #{name}, n.to_#{name.downcase}! the #{name} of an Int"
   elsif either_string and either_error
@@ -1071,7 +1077,10 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  return ok(sides.left) if T.narrow_int?(sides.left) and T.same?(sides.left, sides.right)
+  if T.narrow_int?(sides.left) or T.narrow_int?(sides.right)
+    try same_types(cx, sides, node, false)
+    return ok(sides.left)
+  end
 
   if !T.is?(sides.left, "Int") or !T.is?(sides.right, "Int")
     help = ""
