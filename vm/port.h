@@ -600,6 +600,13 @@ struct agc_task {
      reads keep their offsets. */
   uint64_t steps;
   struct agc_measure *measures;
+  /* Task.spawn_link (vm/task.c): `linked` says the task is linked to its tree parent, until either ends. The crash of
+     one end sets `link_origin` of the other (under rt->sync, the first one wins), which fails at the start of its next
+     turn with that diagnostic (`link_failed`) and so crashes without a notice or a count of its own; `crash_root` is
+     the task whose crash it repeats, the one whose observation counts for it. */
+  _Atomic(agc_task *) link_origin;
+  agc_task *crash_root;
+  bool linked, link_failed;
   /* The task whose end waits for this cancelled task to settle: a count in its `closing` (hold in vm/task.c), and the
      cancel walk (rt->cancel_walks) that last held it, so the walk does not climb its chain again (cancel_tree). */
   agc_task *holder;

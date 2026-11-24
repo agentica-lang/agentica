@@ -407,6 +407,7 @@ Task.monitor_ref
 Task.pending_count
 Task.sleep
 Task.spawn
+Task.spawn_link
 Task.spawn_owning
 Task.unobserved_crash
 Test.assert
