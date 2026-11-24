@@ -37,6 +37,18 @@ def parse(text: String) -> Result[Requirement]
   ok(Requirement(text: text, terms: terms))
 end
 
+## Whether two texts are the same requirement: the same text, or both have the same bounds (`~>0.8` and `~> 0.8`,
+## `~> 0.8` and `>= 0.8.0, < 1.0.0`).
+def same?(left: String, right: String) -> Bool
+  return true if left == right
+
+  a = parse(left)
+  b = parse(right)
+  return false if !a.ok? or !b.ok?
+
+  covers?(a.unwrap!.terms, b.unwrap!.terms) and covers?(b.unwrap!.terms, a.unwrap!.terms)
+end
+
 ## Why text is not a requirement, or "".
 def problem(text: String) -> String
   parsed = parse(text)
@@ -87,14 +99,19 @@ def tag_satisfies?(requirement: Requirement, tag: String, prefix: String) -> Boo
   found.some? and satisfied?(requirement, found.unwrap!)
 end
 
-## The tag with the highest version that satisfies the requirement, or none. Two tags of one version (`1.2.0` and
-## `v1.2.0`) are the same version: the first in text order wins, so the answer does not depend on git's listing.
-def highest(requirement: Requirement, tags: List[String], prefix: String) -> Optional[String]
+## The tag with the highest version that satisfies every requirement (each one decides for itself whether a
+## pre-release counts), or none. Two tags of one version (`1.2.0` and `v1.2.0`) are the same version: the first in text
+## order wins, so the answer does not depend on git's listing.
+def highest(requirements: List[Requirement], tags: List[String], prefix: String) -> Optional[String]
   best = ""
   best_version = AgenticaVersion.Version(core: ["0", "0", "0"], pre: [])
   for tag in tags.sort
     found = tag_version(tag, prefix)
-    next if !found.some? or !satisfied?(requirement, found.unwrap!)
+    next if !found.some?
+
+    version = found.unwrap!
+    fits = requirements.all? do |requirement: Requirement| satisfied?(requirement, version) end
+    next if !fits
 
     if best == "" or AgenticaVersion.compare(found.unwrap!, best_version) > 0
       best = tag
@@ -133,6 +150,13 @@ private
 MAX_LENGTH = 256
 MAX_TERMS = 8
 OPERATORS = ["~>", ">=", "<=", "==", ">", "<"]
+
+# Whether every term of `others` has a term in `terms` with the same operator and version.
+def covers?(terms: List[Term], others: List[Term]) -> Bool
+  others.all? do |other: Term|
+    terms.any? do |term: Term| term.op == other.op and AgenticaVersion.compare(term.bound, other.bound) == 0 end
+  end
+end
 
 # One written term as the bounds it means: `~>` gives a lower and an upper one, the others one.
 def term_of(word: String) -> Result[List[Term]]

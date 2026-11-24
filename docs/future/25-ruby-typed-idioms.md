@@ -69,7 +69,7 @@ one exists.
   `refs` gives the places); a package registry, private registries, publishing
   commands, signatures, branches, and semver beyond `version` requirements
   over tags (05b-modules.md: one name has one repository and folder, a pin or
-  one requirement, and two majors use two names); a
+  requirements that one tag satisfies, and two majors use two names); a
   template read at run time (it needs `eval`); raw string literals for regex;
   an Elixir-style `@doc` attribute and YARD-style `@param` tags.
 - **A musl (Alpine) build and the VM as a shared library:** the musl build stays

@@ -42,9 +42,10 @@ import Sqlite from "pkg/sqlite/db"
 - `version = "~> 0.8"` is a RubyGems-style requirement (terms joined by `,`:
   `~>`, `>=`, `>`, `<=`, `<`, `==`; `~> 0.8` is `>= 0.8.0, < 1.0.0`) over the
   tags `X.Y.Z` or `vX.Y.Z` (`NAME-X.Y.Z` with a `subdir`); `add` and `update`
-  lock the highest one (`tag` and `version` in the lock), none is
-  `PKG-VERSION-UNSATISFIED`. Not with `tag`, `ref`, `path` or `workspace`; one
-  requirement per name in the tree.
+  lock the highest one (`tag` and `version` in the lock). Not with `tag`, `ref`, `path` or `workspace`. The
+  requirements of the whole tree, and a `tag` that is a version (exact), must
+  meet in one tag; none is `PKG-VERSION-UNSATISFIED` (the message says who asked
+  for what).
 - `[style] max_line_width = N` makes a line of more than N characters (comments
   too) `CHECK-LINE-TOO-LONG`; `agentica fmt` lays out in N columns (default
   119). `[style] blank_line_after_end = true` (default false) makes a line with

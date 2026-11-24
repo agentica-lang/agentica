@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The `version` requirements and `tag` pins that several packages of one tree ask for the same repository meet in one tag: `add` and `update` take the highest tag that meets them all, and `PKG-VERSION-UNSATISFIED` says who asked for what (#1147).
 - `version = "~> 0.8"` in a dependency takes the highest git tag that satisfies a RubyGems-style requirement, with `agentica add NAME URL --version REQ`; `update` moves it, the lock keeps the chosen tag, and none is `PKG-VERSION-UNSATISFIED` (#1147).
 - `agentica fmt` writes a brace block in an `if`, `elsif`, guard, `while`, `for` or `case` head without parentheses (#1924).
 - A method call takes its `{ ... }` block in the head of an `if`, `elsif`, a guard, a `while`, a `for` or a `case`: `if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }` (#1924).

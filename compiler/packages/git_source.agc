@@ -4,6 +4,7 @@
 ## a rule changes in one place. Every check returns "" when the text is fine, else a reason for the diagnostic.
 
 import AgenticaVersion from "agentica_version"
+import VersionRequirement from "version_requirement"
 
 ## A source: a git URL as written, exactly one of tag, ref and version ("" for the others), and the folder of the
 ## repository that is the package ("" for the repository itself); or a local folder, `path` as written, with every
@@ -176,14 +177,33 @@ def identity(url: String) -> String
   url
 end
 
+## Whether two sources are the same repository and the same folder of it.
+def same_place?(left: Source, right: Source) -> Bool
+  identity(left.git) == identity(right.git) and left.subdir == right.subdir
+end
+
 ## Whether two sources are the same: the same repository, the same folder of it and the same pin, or the same path as
-## written. A `version` is the same when the requirement is: the tag that the lock chose is not part of the manifest.
+## written. A `version` is the same when the requirement is (`VersionRequirement.same?`): the tag that the lock
+## chose is not part of the manifest.
 def same?(left: Source, right: Source) -> Bool
-  same_place = identity(left.git) == identity(right.git) and left.subdir == right.subdir
-  return false if !same_place or left.path != right.path or left.version != right.version
-  return true if left.version != ""
+  return false if !same_place?(left, right) or left.path != right.path
+  return VersionRequirement.same?(left.version, right.version) if left.version != "" or right.version != ""
 
   left.tag == right.tag and left.ref == right.ref
+end
+
+## Whether the locked source has the tag that `wanted`, the dependency of a package, asks for when it is not the same
+## source: the same repository and folder, the tag a version of it, and `wanted` a `version` that the tag satisfies, or
+## a `tag` that the locked `version` chose.
+def meets?(locked: Source, wanted: Source) -> Bool
+  return false if !same_place?(locked, wanted) or locked.tag == "" or (wanted.version == "" and locked.version == "")
+
+  prefix = VersionRequirement.tag_prefix(locked.subdir)
+  return false if !VersionRequirement.tag_version(locked.tag, prefix).some?
+  return wanted.tag == locked.tag if wanted.version == ""
+
+  requirement = VersionRequirement.parse(wanted.version)
+  requirement.ok? and VersionRequirement.tag_satisfies?(requirement.unwrap!, locked.tag, prefix)
 end
 
 ## The pin as written: the tag, or the ref.

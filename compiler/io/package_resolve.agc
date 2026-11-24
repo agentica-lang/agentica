@@ -25,6 +25,7 @@ import Members from "../packages/members"
 import PackageCache from "../packages/package_cache"
 import Project from "../packages/project"
 import Reader from "../packages/toml_read"
+import VersionRequirement from "../packages/version_requirement"
 import Engine from "native_artifact"
 import NativeArtifact from "../packages/native_artifact"
 import PackageFetch from "package_fetch"
@@ -46,7 +47,10 @@ end
 
 ## The lock entries of `manifest` and everything it needs, with `old` as the lock to start from and `members` the
 ## workspace of the project. The first failure stops it. A failure names the manifest that asked for the package
-## (`dependencies.<name>`), or the lock entry that was kept.
+## (`dependencies.<name>`), or the lock entry that was kept. A package with a `version` takes one tag for the whole
+## tree: when a package asks for something that the tag taken so far does not meet, the pass starts again with that
+## ask added (the asks stay, whatever tags the next pass takes; there is no backtracking over the other tags), until
+## one tag meets every ask or none does (PKG-VERSION-UNSATISFIED).
 def resolve(
   settings: Env.Settings,
   manifest: Manifest.Manifest,
@@ -54,57 +58,17 @@ def resolve(
   old: Lock.Lock,
   refresh: Refresh,
 ) -> Result[Resolved]
-  # Only a package that is fetched needs the cache, so a manifest of workspace members and paths alone works with no
-  # HOME.
-  cache = ""
-  dir = Paths.directory_of(manifest.file)
-  queue = manifest.dependencies.map do |dependency|
-    Wanted(
-      name: dependency.name,
-      source: dependency.source,
-      asked_in: manifest.file,
-      by: "",
-      override: dependency.override,
-      workspace: dependency.workspace,
-    )
+  asks: Map[String, List[PackageFetch.Ask]] = {}
+  for _ in 0...MAX_PASSES
+    done = try pass(settings, manifest, members, old, refresh, asks)
+    return ok(done.resolved) if !done.again
+
+    asks = done.asks
   end
 
-  found: Map[String, Lock.Locked] = {}
-  asked: Map[String, List[String]] = {}
-  at = 0
-  # A name is settled once, so the queue grows only by the dependencies of a name seen for the first time.
-  while at < queue.size
-    wanted = queue[at]
-    at += 1
-    if found.has_key?(wanted.name)
-      if found[wanted.name].override
-        asked = note_asked(asked, found[wanted.name], wanted)
-      else
-        try agree(found[wanted.name], wanted)
-      end
-
-      next
-    end
-
-    if cache == "" and !in_place?(members, wanted.source)
-      cache = try PackageFetch.cache_root(settings.env, old.file)
-    end
-
-    settled = try settle(settings, cache, members, old, refresh, wanted)
-    for locked in settled
-      found = found.put(locked.name, locked)
-    end
-
-    # The siblings of a member are in `found` by now, so they are not asked for again.
-    here = Lock.Lock(file: old.file, packages: found.values, artifacts: [])
-    for locked in settled
-      next if Lock.root?(locked)
-
-      queue = queue.concat(try asked_by(settings, cache, dir, members, here, locked))
-    end
-  end
-
-  ok(Resolved(packages: found.values, asked: asked))
+  place = PackageFetch.Place(file: manifest.file, entry: "dependencies")
+  message = "the requirements of the packages move the tags for more than #{MAX_PASSES} passes"
+  error(PackageFetch.fail(place, "PKG-VERSION-UNSATISFIED", "", message, ""))
 end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
@@ -167,6 +131,8 @@ end
 private
 
 MANIFEST_FILE = "agentica.toml"
+# The most passes of `resolve`; each one but the last adds an ask, and the asks of a tree are few.
+MAX_PASSES = 32
 # The deadline of one downloaded artifact during resolve (the engine caps hops and bytes).
 NATIVE_TIMEOUT_MS = 300_000
 
@@ -188,6 +154,135 @@ struct Found_artifact
   artifact: Lock.Artifact
   file: String
   row: String
+end
+
+# What one pass found: whether it stopped to start again, the asks to start with, and what it resolved.
+struct Pass
+  again: Bool
+  asks: Map[String, List[PackageFetch.Ask]]
+  resolved: Resolved
+end
+
+# One walk over the dependencies of the project and of the packages it settles. It stops with `again` when a package
+# asks for a tag that the one taken for its name does not meet (`reconcile`).
+def pass(
+  settings: Env.Settings,
+  manifest: Manifest.Manifest,
+  members: Members.Members,
+  old: Lock.Lock,
+  refresh: Refresh,
+  start: Map[String, List[PackageFetch.Ask]],
+) -> Result[Pass]
+  asks = start
+  # Only a package that is fetched needs the cache, so a manifest of workspace members and paths alone works with no
+  # HOME.
+  cache = ""
+  dir = Paths.directory_of(manifest.file)
+  queue = manifest.dependencies.map do |dependency|
+    Wanted(
+      name: dependency.name,
+      source: dependency.source,
+      asked_in: manifest.file,
+      by: "",
+      override: dependency.override,
+      workspace: dependency.workspace,
+    )
+  end
+
+  found: Map[String, Lock.Locked] = {}
+  asked: Map[String, List[String]] = {}
+  at = 0
+  # A name is settled once, so the queue grows only by the dependencies of a name seen for the first time.
+  while at < queue.size
+    wanted = queue[at]
+    at += 1
+    asks = note_ask(asks, wanted)
+    if found.has_key?(wanted.name)
+      if found[wanted.name].override
+        asked = note_asked(asked, found[wanted.name], wanted)
+      else
+        again = try reconcile(found[wanted.name], wanted, asks)
+        return ok(Pass(again: true, asks: asks, resolved: Resolved(packages: [], asked: {}))) if again
+      end
+
+      next
+    end
+
+    if cache == "" and !in_place?(members, wanted.source)
+      cache = try PackageFetch.cache_root(settings.env, old.file)
+    end
+
+    settled = try settle(settings, cache, members, old, refresh, wanted, asks_of(asks, wanted.name))
+    for locked in settled
+      found = found.put(locked.name, locked)
+    end
+
+    # The siblings of a member are in `found` by now, so they are not asked for again.
+    here = Lock.Lock(file: old.file, packages: found.values, artifacts: [])
+    for locked in settled
+      next if Lock.root?(locked)
+
+      queue = queue.concat(try asked_by(settings, cache, dir, members, here, locked))
+    end
+  end
+
+  ok(Pass(again: false, asks: asks, resolved: Resolved(packages: found.values, asked: asked)))
+end
+
+# The asks of a name, in the order they were noted.
+def asks_of(asks: Map[String, List[PackageFetch.Ask]], name: String) -> List[PackageFetch.Ask]
+  return asks[name] if asks.has_key?(name)
+
+  []
+end
+
+# Notes what a dependency asks of the tag of its name (a package in place or a workspace dependency asks nothing), once
+# for each asker.
+def note_ask(asks: Map[String, List[PackageFetch.Ask]], wanted: Wanted) -> Map[String, List[PackageFetch.Ask]]
+  return asks if wanted.workspace or GitSource.local?(wanted.source)
+
+  ask = PackageFetch.ask_for(wanted.source, wanted.by)
+  return asks if !ask.some?
+
+  known = asks_of(asks, wanted.name)
+  return asks if known.any? do |each: PackageFetch.Ask| same_ask?(each, ask.unwrap!) end
+
+  asks.put(wanted.name, known.push(ask.unwrap!))
+end
+
+def same_ask?(left: PackageFetch.Ask, right: PackageFetch.Ask) -> Bool
+  left.tag == right.tag and left.by == right.by and VersionRequirement.same?(left.text, right.text)
+end
+
+# Whether the pass has to start again because `wanted` asks for something that the entry `locked` of its name does
+# not meet. One name stands for one source, but a `version` of a package, a `version` of another and a tag that is a
+# version are one source when one tag meets them all: the tag taken so far, or the one the next pass takes. A tag taken
+# from a pin cannot move, so what it does not meet is PKG-VERSION-UNSATISFIED, and two different pins are
+# PKG-SOURCE-CONFLICT, as everything else that differs.
+def reconcile(locked: Lock.Locked, wanted: Wanted, asks: Map[String, List[PackageFetch.Ask]]) -> Result[Bool]
+  return ok(false) if GitSource.same?(locked.source, wanted.source) and wanted.workspace == Lock.root?(locked)
+
+  asked = PackageFetch.ask_for(wanted.source, wanted.by)
+  held = PackageFetch.ask_for(locked.source, "")
+  versioned = locked.source.version != "" or wanted.source.version != ""
+  alike = GitSource.same_place?(locked.source, wanted.source) and !wanted.workspace and !Lock.root?(locked)
+  if !(versioned and alike and asked.some? and held.some? and !locked.member)
+    try agree(locked, wanted)
+    return ok(false)
+  end
+
+  known = asks_of(asks, wanted.name)
+  return ok(false) if PackageFetch.fits?(locked.source.subdir, locked.source.tag, known)
+  return ok(true) if locked.source.version != ""
+
+  key = "version"
+  if wanted.source.version == ""
+    key = "tag"
+  end
+
+  place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
+  help = "make the asks agree on one tag, or give the packages another name each"
+  error(PackageFetch.unsatisfied(place, key, wanted.name, wanted.source, known, help))
 end
 
 # A package that is read in place and never fetched: a `path`, or a member of the workspace.
@@ -261,6 +356,7 @@ def settle(
   old: Lock.Lock,
   refresh: Refresh,
   wanted: Wanted,
+  asks: List[PackageFetch.Ask],
 ) -> Result[List[Lock.Locked]]
   if GitSource.local?(wanted.source)
     return ok([
@@ -295,7 +391,7 @@ def settle(
   for index in 0...old.packages.size
     locked = old.packages[index]
     same = locked.name == wanted.name and GitSource.same?(locked.source, wanted.source)
-    if same and !locked.member and !Lock.root?(locked) and !moves?(refresh, wanted)
+    if same and !locked.member and !Lock.root?(locked) and !moves?(refresh, wanted) and keeps?(locked, asks)
       place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
       try PackageFetch.fill(settings.workspace, cache, place, locked)
       return ok([locked.with(override: wanted.override)])
@@ -305,7 +401,7 @@ def settle(
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   source = wanted.source
   if source.version != ""
-    source = try PackageFetch.choose_tag(settings.workspace, cache, place, source)
+    source = try PackageFetch.choose_tag(settings.workspace, cache, place, wanted.name, source, asks)
   end
 
   fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, source)
@@ -346,6 +442,11 @@ def settle_workspace(
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   fetched = try PackageFetch.resolve_workspace(settings.workspace, cache, place, wanted.name, wanted.source)
   ok([fetched[0].with(override: wanted.override)].concat(fetched.drop(1)))
+end
+
+# Whether a locked entry still meets the asks of its name: one that is not a `version` has nothing to meet.
+def keeps?(locked: Lock.Locked, asks: List[PackageFetch.Ask]) -> Bool
+  locked.source.version == "" or PackageFetch.fits?(locked.source.subdir, locked.source.tag, asks)
 end
 
 def moves?(refresh: Refresh, wanted: Wanted) -> Bool

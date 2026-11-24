@@ -436,10 +436,23 @@ import Sqlite from "pkg/sqlite/db"
   ignored, and a tag that is a SemVer pre-release counts only when a term names
   a pre-release. Versions are ordered as SemVer says. The key is exclusive with
   `tag`, `ref`, `path` and `workspace = true`, and a text that is no
-  requirement is `PKG-MANIFEST-INVALID` at `dependencies.<name>.version`. A
-  name has one requirement in the whole tree for now: another source of the
-  name, with another requirement as well, is `PKG-SOURCE-CONFLICT`, as for a
-  tag.
+  requirement is `PKG-MANIFEST-INVALID` at `dependencies.<name>.version`. A name
+  is one repository and folder for the whole tree, and one tag: the requirements
+  of every manifest that asks for it (the project's and the packages') and every
+  `tag` that is a version (`X.Y.Z`, `vX.Y.Z`, or `NAME-X.Y.Z` with a `subdir`),
+  which counts as that exact version, are met together. `add` and `update` take
+  the highest tag that meets them all, and `~>0.8` and `~> 0.8` are the same
+  requirement. When a package asks for something that the tag taken so far does
+  not meet, the walk over the tree starts again with that ask added, until one
+  tag meets every ask; the asks of a pass stay for the next, and no tag of a
+  package is tried again for the dependencies it brings. No tag that meets them
+  all is `PKG-VERSION-UNSATISFIED`, at `dependencies.<name>.version` of the
+  manifest that took the name first, and its message says who asked for what
+  (`the project asks version ~> 1.0, package middle asks version >= 2.0`); two
+  different pins of one name, or a source of another repository or folder, is
+  `PKG-SOURCE-CONFLICT`. The lock keeps the tag taken and the requirement of
+  the manifest that asked first; `install` and a build check that the tag meets
+  the `version` or the `tag` of each package.
 - `path = "../sqlite"` is a dependency on a folder of this machine: relative to
   the folder of the manifest, or absolute; not empty, with no control
   character, at most 1024 characters. It excludes `git`, `tag`, `ref` and
@@ -626,8 +639,9 @@ import Sqlite from "pkg/sqlite/db"
   manifest. One name with two different sources anywhere in the tree (the
   project and a package, or two packages) is `PKG-SOURCE-CONFLICT`, unless the
   project overrides the name (the item on `override`); the source is the `git`,
-  the `subdir` and the pin; there are no versions to compare and no ranges to
-  solve. Both checks run once for every command that loads code, before any
+  the `subdir` and the pin, and the requirements and tag pins that are
+  versions of one repository meet in one tag (the item on `version`). Both
+  checks run once for every command that loads code, before any
   file is read, so a conflict is reported whether or not an import reaches that
   package. A package that is not in `deps/`, one whose
   folder cannot be listed and one whose manifest is not a regular file are left

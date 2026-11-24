@@ -46,6 +46,14 @@ struct Entry
   locked: Lock.Locked
 end
 
+## One thing that a manifest asks of the tag of a package: a `version` requirement (`text`), or a `tag` pin that reads
+## as a version (an exact one), and the package whose manifest asked ("" for the project's).
+struct Ask
+  text: String
+  tag: String
+  by: String
+end
+
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
 ## environment leaves no place for it.
 def cache_root(env: Env.Env, file: String) -> Result[String]
@@ -209,20 +217,54 @@ def tag_subdir(
   found
 end
 
+## What a dependency asks of the tag, or none when it asks nothing that other asks can meet: a `version`, or a `tag`
+## that is a version of the repository or folder (`X.Y.Z`, `vX.Y.Z`, or `NAME-X.Y.Z` with a subdir).
+def ask_for(source: GitSource.Source, by: String) -> Optional[Ask]
+  return some(Ask(text: source.version, tag: "", by: by)) if source.version != ""
+
+  prefix = VersionRequirement.tag_prefix(source.subdir)
+  return none if source.tag == "" or !VersionRequirement.tag_version(source.tag, prefix).some?
+
+  some(Ask(text: "", tag: source.tag, by: by))
+end
+
+## Whether the tag meets every ask: it is a version of the repository or folder, equal to each pinned tag and
+## satisfying each requirement.
+def fits?(subdir: String, tag: String, asks: List[Ask]) -> Bool
+  prefix = VersionRequirement.tag_prefix(subdir)
+  return false if !VersionRequirement.tag_version(tag, prefix).some?
+
+  asks.all? do |ask: Ask| meets?(ask, tag, prefix) end
+end
+
 ## The tag that a `version` dependency takes now, for `add` and `update`: `git ls-remote --tags` of the repository (the
-## only place that lists tags, so install and the build stay offline), then the highest tag that satisfies the
-## requirement (VersionRequirement.highest). It gives the source with that `tag` besides its `version`. A repository
-## with no tag that satisfies it is PKG-VERSION-UNSATISFIED at `version` of the dependency that `place` names, with the
-## newest tags that read as a version in the help; a git that fails is PKG-FETCH.
+## only place that lists tags, so install and the build stay offline), then the highest tag that meets every ask for
+## the package, the requirements of the whole tree and the tags it pins (`asks`, which hold the one of `source`). It
+## gives the source with that `tag` besides its `version`. A repository with no such tag is PKG-VERSION-UNSATISFIED at
+## `version` of the dependency that `place` names, with who asked for what in the message and the newest tags that read
+## as a version in the help; a git that fails is PKG-FETCH.
 def choose_tag(
   workspace: Workspace.Workspace,
   cache: String,
   place: Place,
+  name: String,
   source: GitSource.Source,
+  asks: List[Ask],
 ) -> Result[GitSource.Source]
-  requirement = VersionRequirement.parse(source.version)
-  if !requirement.ok?
-    return error(fail(place, "PKG-MANIFEST-INVALID", "version", "not a version requirement", requirement.message))
+  requirements: List[VersionRequirement.Requirement] = []
+  pins: List[String] = []
+  for ask in asks
+    if ask.tag != ""
+      pins = pins.push(ask.tag)
+      next
+    end
+
+    requirement = VersionRequirement.parse(ask.text)
+    if !requirement.ok?
+      return error(fail(place, "PKG-MANIFEST-INVALID", "version", "not a version requirement", requirement.message))
+    end
+
+    requirements = requirements.push(requirement.unwrap!)
   end
 
   made = make_temp(cache)
@@ -237,17 +279,39 @@ def choose_tag(
   listing = try listed
   tags = tag_names(listing.scrub)
   prefix = VersionRequirement.tag_prefix(source.subdir)
-  chosen = VersionRequirement.highest(requirement.unwrap!, tags, prefix)
+  candidates = tags
+  if pins.size > 0
+    candidates = tags.select do |tag: String| pins.all? do |pin: String| pin == tag end end
+  end
+
+  chosen = VersionRequirement.highest(requirements, candidates, prefix)
   return ok(source.with(tag: chosen.unwrap!)) if chosen.some?
 
   seen = VersionRequirement.newest(tags, prefix, SEEN_TAGS)
-  message = "no tag of #{source.git} satisfies the version #{source.version}"
   help = "the repository has no tag that reads as a version (#{tag_shape(prefix)})"
   if seen.size > 0
     help = "the newest tags are #{seen.join(", ")}"
   end
 
-  error(fail(place, "PKG-VERSION-UNSATISFIED", "version", message, help))
+  error(unsatisfied(place, "version", name, source, asks, help))
+end
+
+## PKG-VERSION-UNSATISFIED at `key` of the dependency `place` names: no tag of the repository meets the asks, and the
+## message says who asked for what.
+def unsatisfied(
+  place: Place,
+  key: String,
+  name: String,
+  source: GitSource.Source,
+  asks: List[Ask],
+  help: String,
+) -> String
+  message = "no tag of #{source.git} satisfies the version #{source.version}"
+  if asks.size > 1
+    message = "no tag of #{source.git} meets what #{name} is asked for: #{who_asked(asks)}"
+  end
+
+  fail(place, "PKG-VERSION-UNSATISFIED", key, message, help)
 end
 
 ## The names of the tags in the output of `git ls-remote --tags --refs`: a line is a commit, a tab, `refs/tags/NAME`. A
@@ -804,6 +868,33 @@ def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[
   return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", "")) if !text.ok?
 
   ok(text.unwrap!)
+end
+
+# Whether the tag, a version of the repository, meets one ask.
+def meets?(ask: Ask, tag: String, prefix: String) -> Bool
+  return ask.tag == tag if ask.tag != ""
+
+  requirement = VersionRequirement.parse(ask.text)
+  requirement.ok? and VersionRequirement.tag_satisfies?(requirement.unwrap!, tag, prefix)
+end
+
+# "the project asks version ~> 1.0, package middle asks tag 1.2.0": every ask with its asker.
+def who_asked(asks: List[Ask]) -> String
+  words = asks.map do |ask: Ask|
+    asker = "the project"
+    if ask.by != ""
+      asker = "package #{ask.by}"
+    end
+
+    wanted = "version #{ask.text}"
+    if ask.tag != ""
+      wanted = "tag #{ask.tag}"
+    end
+
+    "#{asker} asks #{wanted}"
+  end
+
+  words.join(", ")
 end
 
 def brief(errors: String) -> String

@@ -322,19 +322,83 @@ def test_a_lock_tag_that_does_not_satisfy_its_version_is_invalid_and_a_changed_r
     assert_at_key(problem, "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.bond")
 
 
-def test_a_package_that_asks_for_a_version_is_resolved_and_two_requirements_of_one_name_are_a_conflict(ws, remotes):
-    remotes.publish(REPOSITORY, FILES, tag="1.0.0")
-    remotes.publish(REPOSITORY, FILES, tag="1.4.0")
-    middle = 'name = "middle"\n\n[dependencies]\nbond = %s\n' % inline_table(
-        dependency(remotes.url(REPOSITORY), version="~> 1.0"))
-    middle_commit = remotes.publish("owner/middle", {"middle.agc": BANG, "agentica.toml": middle}, tag="v1")
-    ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1")})
-    result = plain(ws, remotes, "update")
-    assert (result.code, result.stdout) == (0, "added bond@1.4.0\nadded middle@v1\n"), result.stderr
+def package(remotes, path, **needs):
+    """Publishes a package whose manifest asks for the dependencies `needs` (name -> inline table). Returns the commit."""
+    text = 'name = "%s"\n\n[dependencies]\n' % path.split("/")[1]
+    text += "".join("%s = %s\n" % (name, inline_table(entry)) for name, entry in needs.items())
+    return remotes.publish(path, {path.split("/")[1] + ".agc": BANG, "agentica.toml": text}, tag="v1")
 
-    # The project asks for the same name with another requirement: one source for a name, as before.
-    ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1"),
-                       "bond": dependency(remotes.url(REPOSITORY), version=">= 1.0")})
+
+def bond_tags(remotes, *tags):
+    for tag in tags:
+        remotes.publish(REPOSITORY, FILES, tag=tag)
+
+
+def test_the_requirements_of_a_tree_meet_in_one_tag_and_the_pass_starts_again_for_a_stricter_one(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0", "2.0.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, version="< 1.3"))
+    package(remotes, "owner/other", bond=dependency(url, version="~>1.0"))
+    ws.write_manifest({"bond": dependency(url, version="~> 1.0"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1"),
+                       "other": dependency(remotes.url("owner/other"), tag="v1")})
+
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    locked = {entry["name"]: entry for entry in lock_of(ws)}
+    assert (locked["bond"]["tag"], locked["bond"]["version"]) == ("1.2.0", "~> 1.0")
+    # The lock is what the manifest asks for, so the build stays offline, and a requirement spelled another way is no change.
+    assert command(ws, remotes, "install")[0].code == 0
+    ws.write_manifest({"bond": dependency(url, version="~>1.0"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1"),
+                       "other": dependency(remotes.url("owner/other"), tag="v1")})
+    assert command(ws, remotes, "install")[0].code == 0
+    assert plain(ws, remotes, "update").stdout == "nothing to update\n"
+
+    # A newer tag that satisfies every ask is taken by `update`; one that `middle` rules out is not.
+    bond_tags(remotes, "1.2.9", "1.3.1")
+    assert plain(ws, remotes, "update").stdout == "updated bond@1.2.9\n"
+
+
+def test_a_tag_pin_is_an_exact_version_that_the_requirements_of_the_tree_must_meet(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, tag="1.2.0"))
+    package(remotes, "owner/other", bond=dependency(url, version="~> 1.0"))
+    # A requirement first, then the pin of a package: the pass starts again and takes the pinned tag.
+    ws.write_manifest({"other": dependency(remotes.url("owner/other"), tag="v1"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1")})
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    assert {entry["name"]: entry["tag"] for entry in lock_of(ws)}["bond"] == "1.2.0"
+
+    # The pin first, then a requirement it meets: nothing moves, and the lock keeps the pin as the project wrote it.
+    ws.write_manifest({"bond": dependency(url, tag="1.2.0"), "other": dependency(remotes.url("owner/other"), tag="v1")})
+    assert plain(ws, remotes, "update").code == 0
+    entry = {entry["name"]: entry for entry in lock_of(ws)}["bond"]
+    assert (entry["tag"], "version" in entry) == ("1.2.0", False)
+
+
+def test_asks_that_no_tag_meets_are_pkg_version_unsatisfied_and_the_message_names_who_asked_for_what(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0", "2.0.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, version=">= 2.0"))
+    ws.write_manifest({"bond": dependency(url, version="~> 1.0"), "middle": dependency(remotes.url("owner/middle"), tag="v1")})
+    _, problem = command(ws, remotes, "update")
+    assert_at_key(problem, "PKG-VERSION-UNSATISFIED", ws.project / "agentica.toml", "dependencies.bond.version")
+    # The one thing about a message that the issue asks for: it names the askers and what each asked.
+    for word in ["the project", "~> 1.0", "package middle", ">= 2.0"]:
+        assert word in problem["message"]
+    assert not (ws.project / "agentica.lock").exists()
+
+    # A pinned tag that a requirement of a package rules out is the same failure, at that package's dependency.
+    middle_commit = package(remotes, "owner/middle", bond=dependency(url, version="< 1.3"))
+    ws.write_manifest({"bond": dependency(url, tag="1.4.0"), "middle": dependency(remotes.url("owner/middle"), tag="v1")})
     _, problem = command(ws, remotes, "update")
     folder = ws.folder(remotes.url("owner/middle"), middle_commit)
-    assert_at_key(problem, "PKG-SOURCE-CONFLICT", folder / "agentica.toml", "dependencies.bond")
+    assert_at_key(problem, "PKG-VERSION-UNSATISFIED", folder / "agentica.toml", "dependencies.bond.version")
+
+    # Two different pins of one name stay what they were.
+    package(remotes, "owner/middle", bond=dependency(url, tag="1.2.0"))
+    _, problem = command(ws, remotes, "update")
+    assert problem["code"] == "PKG-SOURCE-CONFLICT"
