@@ -584,7 +584,8 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
   end
 
   message = "\"#{name}\" expects #{wanted}, found #{node.args.size}"
-  callee = "#{name}(#{T.list_text(signature.params)}) -> #{T.to_text(signature.result)}"
+  params = signature.params.map do |type: T.Type| T.to_text_as(type, cx.std_written) end
+  callee = "#{name}(#{params.join(", ")}) -> #{T.to_text_as(signature.result, cx.std_written)}"
   State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end
 

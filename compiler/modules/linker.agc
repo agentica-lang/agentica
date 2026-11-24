@@ -2,6 +2,7 @@
 ## (rewrite.agc).
 
 import Ast from "../syntax/ast"
+import T from "../syntax/types"
 import Declarations from "declarations"
 import ImportUse from "import_use"
 import Env from "link_env"
@@ -124,6 +125,89 @@ def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
 
   ""
 end
+
+## The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file
+## is written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases
+## for one file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the
+## file that re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports
+## its own file under an alias. When two files re-export the same type, the alphabetically first alias is the one
+## written. The `focus` module (the first, for a query) may be a module block (At.focus): its own types are written
+## bare, as it writes them, and those of the other blocks of its file through their names (`Counter.Msg`). A block
+## of a file imported under an alias is written through both (`Agents.Counter.Msg`), unless the root file names the
+## block itself, and so is a block that such a file re-exports (`export Agents.Counter`). A builtin type that a std/
+## module re-exports maps to its whole text: the name of an import list (`Request`), else the alias and the member
+## (`H.Request`).
+def written_prefixes(linked: Linked, focus: LinkedModule) -> Map[String, String]
+  written: Map[String, String] = {}
+  aliases = focus.aliases
+  here = focus.key
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      named = module.key == aliases[alias] and module.key != here
+      if named and module.prefix != "" and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, alias)
+      end
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      inner = module.block != "" and home_key(module) == aliases[alias]
+      if inner and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, "#{alias}.#{module.block}")
+      end
+    end
+  end
+
+  blocks: Map[String, String] = {}
+  for module in linked.modules
+    if module.block != ""
+      blocks = blocks.put(block_name(linked.modules, module), module.prefix)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          block = blocks.get(module.reexported[name])
+          if block.some? and !written.has_key?(block.unwrap!)
+            written = written.put(block.unwrap!, "#{alias}.#{name}")
+          end
+        end
+      end
+    end
+  end
+
+  # A builtin type that a std/ module re-exports has no prefix: it is written as the root file imported it by name
+  # (`Request`), else through the alias of the std module (`HTTP.Request`).
+  named = focus.named
+  for local in named.keys.sort
+    if T.REEXPORTED_TYPES.has_key?(named[local]) and !written.has_key?(named[local])
+      written = written.put(named[local], local)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          original = module.reexported[name]
+          if T.REEXPORTED_TYPES.has_key?(original) and !written.has_key?(original)
+            written = written.put(original, "#{alias}.#{name}")
+          elsif !written.has_key?(original) and !written.has_key?(prefix_of(original))
+            written = written.put(original, alias)
+          end
+        end
+      end
+    end
+  end
+
+  written
+end
+
+## The prefix of a linked name: "@2::" of "@2::User", "" for a bare name.
+def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)
 
 ## Links several roots into one program with shared tables (docs/grammar/06b-builtins.md): a module that two
 ## roots reach is linked once, and every module, the roots too, has the prefix "@N::", so two roots may declare `main`.

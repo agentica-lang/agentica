@@ -477,6 +477,38 @@ class TestModuleRules:
              ((1, 10), (1, 25)), None, True),
         ])
 
+    def test_a_type_mismatch_writes_a_std_type_as_the_file_imported_it(self):
+        """A file that imports std/http as W reads `W.Request`, one that imports Request by name reads `Request`, and
+        one that binds HTTP to a module of its own never reads `HTTP.Request` for the builtin type: it reads the
+        builtin name. The type of a user file is written bare, as before."""
+        mine = "struct Request\n  n: Int\nend\n\ndef make() -> Request\n  return Request(n: 1)\nend\n"
+        through = 'import H from "std/http"\n\ndef client() -> H.Client\n  return H.client().unwrap!\nend\n'
+        take = "\ndef take(r: %s) -> Void\nend\n\ndef main() -> Void\n  take(HTTP.make())\nend\n"
+        clash = 'import HTTP from "mine"\nimport W from "std/http"\n' + take % "W.Request"
+        named = 'import HTTP from "mine"\nimport {Request} from "std/http"\n' + take % "Request"
+        builtin = 'import HTTP from "through"\n\ndef main() -> Void\n  x: Int = HTTP.client()\nend\n'
+        results = self.checks([
+            ({"root.agc": clash, "mine.agc": mine}, "root.agc", None),
+            ({"root.agc": named, "mine.agc": mine}, "root.agc", None),
+            ({"root.agc": builtin, "through.agc": through}, "root.agc", None)])
+        expected = [("W.Request", "Request", 8), ("Request", "Request", 8), ("Int", "HttpWire.Client", 4)]
+        for checked, (want, found, line) in zip(results, expected):
+            problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH", line=line)
+            assert (problem["expected"], problem["actual"]) == (want, found)
+
+    def test_an_arity_error_writes_the_types_of_a_std_callee_through_the_module(self):
+        """The callee of CHECK-ARITY writes the types that std/http declares itself (RequestBody, Answer) as the ones it
+        re-exports (Request, ServerOptions), through the name the file gave the module."""
+        call = "\ndef main() -> Void\n  %s.serve(\"h\")\nend\n"
+        results = self.checks([
+            ({"root.agc": 'import HTTP from "std/http"\n' + call % "HTTP"}, "root.agc", None),
+            ({"root.agc": 'import W from "std/http"\n' + call % "W"}, "root.agc", None)])
+        for checked, name, line in zip(results, ("HTTP", "W"), (4, 4)):
+            problem = self.assert_rejected(checked, "CHECK-ARITY", line=line)
+            assert problem["callee"] == (
+                "serve(String, Int, Fn[%s.Request, %s.RequestBody, Result[%s.Answer]], %s.ServerOptions) "
+                "-> Result[%s.Server]" % ((name,) * 5))
+
     def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown(self):
         """std/http re-exports the builtin HttpWire records and handles as HTTP.Request, HTTP.Response, HTTP.Header,
         HTTP.ClientOptions, HTTP.ServerOptions, HTTP.Client and HTTP.Server (import HTTP, or import {Request, ...}).

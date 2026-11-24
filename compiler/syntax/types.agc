@@ -15,6 +15,11 @@ REEXPORTED_TYPES: Map[String, String] = {
   "LogRegistry.Level": "Logger.Level",
 }
 
+## The std/ modules that re-export builtin types (REEXPORTED_TYPES), by file, with the name a program writes the
+## module as. Their own types are written through it too (`HTTP.App`), so a signature does not mix `HTTP.Request` with
+## a bare `App`.
+STD_TYPE_MODULES: Map[String, String] = {"std/http.agc": "HTTP", "std/logger.agc": "Logger"}
+
 ## The linked name of the builtin type Ref (Ref.new). Ref is not reserved, and the names of the root file keep no
 ## prefix, so the linker gives the builtin a name that no file can declare, as it does to the names of other files.
 REF_TYPE = "@Ref"
@@ -290,22 +295,26 @@ def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_na
 ## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
 ## of a std/ signature prints as `HTTP.ClientOptions()`. Only a whole name outside a string literal is a type: the
 ## default `"HttpWire.Client"` stays as written.
-def written_types_in(text: String) -> String
+def written_types_in(text: String) -> String = replaced_names(text, REEXPORTED_TYPES, true)
+
+## The text with each whole name that `names` has (not the start of a longer name, nor the end of `My.HttpWire.Client`)
+## written as `names` maps it. A string literal stays as written when `keep_strings` says so.
+def replaced_names(text: String, names: Map[String, String], keep_strings: Bool) -> String
   pieces: List[String] = []
   quoted = false
   at = 0
   while at < text.length
     character = text.at(at)
-    if quoted and character == "\\" and at + 1 < text.length
+    if keep_strings and quoted and character == "\\" and at + 1 < text.length
       pieces = pieces.push(text.slice(at, 2))
       at += 2
       next
-    elsif quoted or character == "\""
+    elsif keep_strings and (quoted or character == "\"")
       quoted = quoted != (character == "\"")
     else
-      name = type_name_at(text, at)
+      name = name_at(text, at, names)
       if name != ""
-        pieces = pieces.push(REEXPORTED_TYPES[name])
+        pieces = pieces.push(names[name])
         at += name.length
         next
       end
@@ -457,12 +466,12 @@ def reexported_name(name: String, written: Map[String, String]) -> String
   written.get(name, REEXPORTED_TYPES[name])
 end
 
-# The re-exported builtin type written as a whole name at `at` of `text` (not the start of `HttpWire.ClientOptions`
-# for HttpWire.Client, nor the end of `My.HttpWire.Client`), or "".
-def type_name_at(text: String, at: Int) -> String
+# The name of `names` written as a whole name at `at` of `text` (not the start of `HttpWire.ClientOptions` for
+# HttpWire.Client, nor the end of `My.HttpWire.Client`), or "".
+def name_at(text: String, at: Int, names: Map[String, String]) -> String
   return "" if at > 0 and (NAME_CHARACTERS.include?(text.at(at - 1)) or text.at(at - 1) == ".")
 
-  for name in REEXPORTED_TYPES.keys
+  for name in names.keys
     stop = at + name.length
     next if stop > text.length or text.slice(at, name.length) != name
     return name if stop == text.length or !NAME_CHARACTERS.include?(text.at(stop))
