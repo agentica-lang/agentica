@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, String y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "c5fece6a985b"
+source_hash: "c7d9bea8a5f9"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -105,7 +105,7 @@ Int.to_uint8!(int: Int) -> UInt8
 
 Los tipos enteros de menos bits que `Int`, cada uno con su rango: `Int8` va de `-128` a `127`, `Int16` de `-32768` a `32767`, `Int32` de `-2147483648` a `2147483647`, `UInt8` de `0` a `255`, `UInt16` de `0` a `65535` y `UInt32` de `0` a `4294967295`. `Int64` es otro nombre de `Int`, y `Float64` de `Float`.
 
-Un literal entero toma el tipo de menos bits que espera su lugar: una anotación, un parámetro, un campo de un struct, un tipo de retorno, un elemento de una lista o de un mapa, o un patrón de `case` sobre un valor de ese tipo. Un signo menos delante es parte del literal, así que `x: Int8 = -128` pasa la comprobación. Un literal fuera del tipo es `CHECK-INT-RANGE` en el literal. Un valor nunca se convierte solo: `to_i` da el `Int`, `n.to_uint8` da un Result que es un error cuando `n` está fuera de `0` a `255`, y `n.to_uint8!` detiene el programa ahí con `RUNTIME-INTEGER-OVERFLOW`. Los mismos tres métodos existen para cada tipo de menos bits: `to_int8`, `to_int16`, `to_int32`, `to_uint16` y `to_uint32`.
+Un literal entero toma el tipo de menos bits que espera su lugar: una anotación, un parámetro, un campo de un struct, un tipo de retorno, un elemento de una lista o de un mapa, o un patrón de `case` sobre un valor de ese tipo. Un signo menos delante es parte del literal, así que `x: Int8 = -128` pasa la comprobación. Un literal fuera del tipo es `CHECK-INT-RANGE` en el literal. Un valor nunca se convierte solo: `to_i` da el `Int`, `n.to_uint8` da un Result que es un error cuando `n` está fuera de `0` a `255`, y `n.to_uint8!` detiene el programa ahí con `RUNTIME-INTEGER-OVERFLOW`. Los mismos tres métodos existen para cada tipo de menos bits: `to_int8`, `to_int16`, `to_int32`, `to_uint16` y `to_uint32`. De los operadores, solo `==` y `!=` toman valores de menos bits, dos del mismo tipo; un literal ahí sigue siendo un `Int` y es `CHECK-TYPE-MISMATCH`, así que compara con `255.to_uint8!`.
 
 ```agentica
 struct Pixel

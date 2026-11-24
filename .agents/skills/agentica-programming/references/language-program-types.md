@@ -83,7 +83,9 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   literal takes the type its place expects (annotation, parameter, field,
   return, item, `case` pattern); `x: Int8 = -128` checks, `x: UInt8 = 256` is
   `CHECK-INT-RANGE`. No implicit conversion: `x.to_i`, `n.to_uint8` (a
-  Result), `n.to_uint8!` (halts). No operators on them yet. `Int64` and
+  Result), `n.to_uint8!` (halts). Of the operators only `==` and `!=` work,
+  between two values of one type; a literal there stays an `Int`
+  (`CHECK-TYPE-MISMATCH`), so write `a == 255.to_uint8!`. `Int64` and
   `Float64` are `Int` and `Float`; all ten names are reserved.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,

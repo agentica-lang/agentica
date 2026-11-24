@@ -17,6 +17,7 @@ def main(*lines: str) -> str:
 
 
 PIXEL = "struct Pixel\n  r: UInt8\nend\n\n"
+A_B = ("a: UInt8 = 1", "b: UInt8 = 2")
 
 RULES = {
     "a literal takes the type of an annotation, a field, a parameter, a return, an item and a case": (
@@ -53,6 +54,22 @@ RULES = {
     "no UInt8 becomes an Int": (main("x: UInt8 = 1", "n: Int = x"), "CHECK-TYPE-MISMATCH", "x"),
     "no float literal becomes a UInt8": (main("x: UInt8 = 1.5"), "CHECK-TYPE-MISMATCH", "1.5"),
     "to_<type> is a Result": (main("n = 5", "x: UInt8 = n.to_uint8"), "CHECK-TYPE-MISMATCH", "n.to_uint8"),
+    "a default out of range": ("def f(x: UInt8 = 256) -> UInt8 = x\n\n" + main("puts(f())"), "CHECK-INT-RANGE", "256"),
+    "a constant out of range": ("LIMIT: UInt8 = 256\n\n" + main("puts(LIMIT)"), "CHECK-INT-RANGE", "256"),
+    "a reassignment out of range": (main("x: UInt8 = 1", "x = 256", "puts(x)"), "CHECK-INT-RANGE", "256"),
+    "a nested item out of range": (main("xs: List[Optional[UInt8]] = [some(256)]", "puts(xs)"), "CHECK-INT-RANGE",
+                                   "256"),
+    # Operators, JSON, keys and the list sums of the narrow types come in later pull requests of #984.
+    "no + yet": (main(*A_B, "puts(a + b)"), "CHECK-TYPE-MISMATCH", "+"),
+    "no < yet": (main(*A_B, "puts(a < b)"), "CHECK-TYPE-MISMATCH", "<"),
+    "no unary minus yet": (main("a: Int8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
+    "no += yet": (main("a: UInt8 = 1", "a += 1", "puts(a)"), "CHECK-TYPE-MISMATCH", "+="),
+    "no literal on the other side of == yet": (main("a: UInt8 = 1", "puts(a == 255)"), "CHECK-TYPE-MISMATCH", "=="),
+    "no JSON.encode yet": (main("a: UInt8 = 1", "puts(JSON.encode(a))"), "CHECK-NOT-ENCODABLE", "a"),
+    "no JSON.decode yet": (PIXEL + main('puts(JSON.decode("{}", Pixel).ok?)'), "CHECK-NOT-DECODABLE", "Pixel"),
+    "no map key yet": (main("m: Map[UInt8, Int] = {}", "puts(m)"), "CHECK-MAP-KEY-TYPE", "UInt8"),
+    "no set element yet": (main("s: Set[UInt8] = Set.new([])", "puts(s)"), "CHECK-SET-ELEMENT-TYPE", "UInt8"),
+    "no sum yet": (main("xs: List[UInt8] = [1]", "puts(xs.sum)"), "CHECK-TYPE-MISMATCH", "xs"),
     "a struct may not take a narrow name": ("struct Int8\n  a: Int\nend\n\n" + main(), "CHECK-REDEFINED-NAME", None),
     "an enum may not take a sized name": ("enum UInt64\n  A\nend\n\n" + main(), "CHECK-REDEFINED-NAME", None),
     "an alias may not take a sized name": ("type Float32 = Int\n\n" + main(), "CHECK-REDEFINED-NAME", "Float32"),

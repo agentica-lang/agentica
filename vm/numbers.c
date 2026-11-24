@@ -109,9 +109,8 @@ INT_TO_NARROW(uint32, "UInt32", 0, UINT32_MAX)
 
 /* to_i on a narrow integer type: its value is an Int already. */
 static agc_value builtin_int_from_narrow(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
   (void)span;
-  return args[0];
+  return agc_int(agc_as_int(vm, args[0]));
 }
 
 /* floor, ceil and round give an Int, as Ruby's Float#floor gives an Integer; with no bignums a result outside Int

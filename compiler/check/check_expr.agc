@@ -163,9 +163,10 @@ def narrow_target(expected: T.Type) -> T.Type
   T.Type.Unknown
 end
 
-# An integer literal of the narrow type `target`: CHECK-INT-RANGE when its value is outside the type. `text` is the
-# literal as written (with the minus folded in); a huge literal, past the Int range, has only its text and fits
-# no type.
+# An integer literal of the narrow type `target`: CHECK-INT-RANGE when its value is outside the type. `text` is
+# what the
+# message shows: the decimal value, or for a huge literal, past the Int range, its digits, which fit no type; either
+# with the minus folded in.
 def narrow_literal(
   cx: State.Cx,
   st: State.St,
