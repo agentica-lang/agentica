@@ -428,9 +428,9 @@ additive_expr    = multiplicative_expr,
 multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
 unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
-postfix_expr     = primary, { ".", NAME
+postfix_expr     = primary, { ( "." | "&." ), NAME
                             | ".", "with", "(", named_arguments, ")"
-                            | ".", NAME, "(", [ call_arguments ], ")"
+                            | ( "." | "&." ), NAME, "(", [ call_arguments ], ")"
                             | "[", expression, "]"
                             | block | brace_block } ;
 block            = "do", [ "|", block_param, { ",", block_param }, "|" ],

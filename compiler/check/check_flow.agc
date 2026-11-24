@@ -205,6 +205,8 @@ def path_text(expr: Ast.Expr) -> String
 end
 
 def field_path(node: Ast.FieldAccess) -> String
+  return "" if node.safe.some?
+
   target = path_text(node.target)
   return "" if target == ""
 

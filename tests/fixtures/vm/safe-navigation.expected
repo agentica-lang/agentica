@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 146,
+  "stdout": [
+    "some(\"Lima\")",
+    "none",
+    "Lima",
+    "?",
+    "some(\"15001\")",
+    "some(5)",
+    "none",
+    "computed a",
+    "some(true)",
+    "none",
+    "some([2, 4, 6])",
+    "none",
+    "some(\"hello you\")",
+    "none",
+    ""
+  ],
+  "stderr": []
+}

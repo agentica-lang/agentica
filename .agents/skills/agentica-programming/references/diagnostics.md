@@ -227,6 +227,7 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-CHAIN-AFTER-END`: `.name`, `[i]` or `|>` after the `end` of a `do`
   block; use a lambda, a one-line block in braces or bind the result first
   (`language-blocks-results.md`).
+- `CHECK-SAFE-NAV-RECEIVER`: `&.` on a value that is not an Optional; write `.`.
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
 - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,

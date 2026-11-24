@@ -51,7 +51,7 @@ OPERATOR_KINDS = {
   "%=": "modulo-assign", "(": "left-paren", ")": "right-paren", "[": "left-bracket", "]": "right-bracket",
   "{": "left-brace", "}": "right-brace", ",": "comma", ":": "colon", ".": "dot", "..": "dot-dot", "...": "dot-dot-dot",
   "=": "assign", "+": "plus", "-": "minus", "*": "multiply", "/": "divide", "%": "modulo", "<": "less", ">": "greater",
-  "&": "ampersand", "|": "pipe", "|>": "pipe-forward",
+  "&": "ampersand", "|": "pipe", "|>": "pipe-forward", "&.": "safe-dot",
 }
 
 ## What a word does: 1 for a keyword, 2 for a keyword that opens a block (`end` closes it), 3 for `end`. A name is
@@ -134,7 +134,7 @@ end
 SINGLE_LEXEMES = ["(", ")", "[", "]", "{", "}", ",", ":", ".", "=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "!"]
 
 ## The operators of two characters.
-PAIR_LEXEMES = ["->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=", "..", "|>"]
+PAIR_LEXEMES = ["->", "==", "!=", "<=", ">=", "&&", "||", "&.", "+=", "-=", "*=", "/=", "%=", "..", "|>"]
 
 ## The operator or bracket that a character writes alone, by that character.
 SINGLE_OPS: Map[String, Op] = SINGLE_LEXEMES.reduce({}) do |ops, lexeme|
@@ -1512,8 +1512,8 @@ def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
 end
 
 # Whether the first line that is not a plain `#` comment line starts, after its indentation, with a dot and a name
-# (`.map`, `.with(`), not `..`, `...` or a number. A blank line stops the look-ahead (it ends the statement) and so
-# does a `##` doc line. `from` is the start of the line after a line break.
+# (`.map`, `.with(`, `&.name`), not `..`, `...` or a number. A blank line stops the look-ahead (it ends the statement)
+# and so does a `##` doc line. `from` is the start of the line after a line break.
 def dot_follows?(chars: List[String], from: Int) -> Bool
   index = from
   while true
@@ -1523,6 +1523,7 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
 
     char = chars[index]
     return NAME_STARTS.include?(chars[index + 1]) if char == "."
+    return chars[index + 1] == "." and NAME_STARTS.include?(chars[index + 2]) if char == "&"
 
     return false if char != "#" or chars[index + 1] == "#"
 

@@ -89,7 +89,11 @@ and types. Builtin methods and `to_s`: `builtins.md`.
 - `Result[T]`: `ok(value)` or `error(...)` holding an `Error` record
   (`language-blocks-results.md`); one type argument.
 - `Optional[T]`: `some(value)` or `none`, for a value that may be missing
-  (`language-blocks-results.md`).
+  (`language-blocks-results.md`). `o&.name` and `o&.name(args)` read a field or
+  call a method of the value inside `o` and give an Optional (flat: a member
+  that is an Optional gives it as is); `none` skips the arguments; a later `.`
+  applies to the Optional (`o&.city.unwrap_or("?")`); a receiver that is not an
+  Optional is `CHECK-SAFE-NAV-RECEIVER`.
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints
   `1..5`.
 - `JSON.Value`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or

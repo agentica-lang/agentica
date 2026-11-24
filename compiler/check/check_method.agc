@@ -31,6 +31,8 @@ def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.T
     )
   end
 
+  return check_safe_method(cx, target, node) if node.safe.some?
+
   # A pipe step resolves only to methods: `h |> run(4)` on an Fn field `run` would drop `h`.
   piped = Calls.piped_method?(node)
   field = fn_field(cx, target.type, node.name)
@@ -84,9 +86,41 @@ def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expect
   end
 
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
+  return check_safe_field(cx, target, node) if node.safe.some?
   return check_struct_field(cx, target.st, node, target.type) if field_target?(cx, target.type, node.name)
 
   method_on(cx, target, node.id, node.target, node.name, [], [], node.span, false, expected)
+end
+
+## target&.name(args): the method (or Fn field) of the value inside an Optional target, as `.` would take it on that
+## value. The result is an Optional of what it gives, or that Optional itself when it is one already.
+def check_safe_method(cx: State.Cx, target: State.Out, node: Ast.MethodCall) -> Result[State.Out]
+  inner = try safe_receiver(cx, target, node.safe.unwrap!)
+  at = Ast.expr_id(node.target)
+  opened = State.Out(st: target.st, type: inner)
+  field = fn_field(cx, inner, node.name)
+  if field.some? and State.private_fields(cx, T.name(inner)).include?(node.name)
+    return error(State.private_field(cx, target.st, T.name(inner), node.name, node.name_span))
+  end
+
+  return safe_result(try check_field_call(cx, target.st, node, field.unwrap!), node.id, target, at) if field.some?
+
+  args = node.args
+  made = try method_on(cx, opened, node.id, node.target, node.name, args, node.named, node.span, false, T.Type.Unknown)
+  safe_result(made, node.id, target, at)
+end
+
+## target&.name: the field or the method without arguments of the value inside an Optional target.
+def check_safe_field(cx: State.Cx, target: State.Out, node: Ast.FieldAccess) -> Result[State.Out]
+  inner = try safe_receiver(cx, target, node.safe.unwrap!)
+  at = Ast.expr_id(node.target)
+  opened = State.Out(st: target.st, type: inner)
+  if field_target?(cx, inner, node.name)
+    return safe_result(try check_struct_field(cx, target.st, node, inner), node.id, target, at)
+  end
+
+  made = try method_on(cx, opened, node.id, node.target, node.name, [], [], node.span, false, T.Type.Unknown)
+  safe_result(made, node.id, target, at)
 end
 
 private
@@ -225,6 +259,29 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
   end
 
   ok(State.Out(st: st, type: field.unwrap!.type))
+end
+
+# The type inside the Optional that `&.` is applied to; any other receiver is CHECK-SAFE-NAV-RECEIVER at the `&.`.
+def safe_receiver(cx: State.Cx, target: State.Out, dot: Source.Span) -> Result[T.Type]
+  case target.type
+    T.Type.Optional(inner) -> ok(inner)
+    _ ->
+      message = "&. needs an Optional, and this is #{T.to_text(target.type)}"
+      help = "write . for a value that is not an Optional"
+      error(State.fail_help(cx, target.st, "CHECK-SAFE-NAV-RECEIVER", message, dot, help))
+  end
+end
+
+# What `&.` gives: an Optional of the member's type, the member itself when it is an Optional (flat_safe tells the
+# lowering which). Checking the member with the value inside recorded that type for the target, so the Optional the
+# target has is recorded again.
+def safe_result(member: State.Out, id: Int, target: State.Out, at: Int) -> Result[State.Out]
+  st = State.record_type(member.st, at, target.type)
+  if T.is?(member.type, "Optional")
+    return ok(State.Out(st: st.with(flat_safe: st.flat_safe.add(id)), type: member.type))
+  end
+
+  ok(State.Out(st: st, type: T.Type.Optional(member.type)))
 end
 
 # What the method is: "self", "text" (to_s) or "inspect" for a data value, the full name of a builtin, or "" when there

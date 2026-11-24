@@ -1443,7 +1443,7 @@ def dotted?(c: Context, expr: Ast.Expr) -> Bool
       at += 1
     end
 
-    if at > 0 and at < c.tokens.size and c.tokens[at].kind == "dot"
+    if at > 0 and at < c.tokens.size and (c.tokens[at].kind == "dot" or c.tokens[at].kind == "safe-dot")
       found = found or c.tokens[at].span.start.line > c.tokens[at - 1].span.stop.line
     end
 
@@ -1819,7 +1819,8 @@ end
 def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
   case expr
     Ast.Expr.MethodCall(node) -> some(method_link(c, node))
-    Ast.Expr.FieldAccess(node) -> some(Link(doc: text(".#{node.name}"), block: [], call: false, breaks: true))
+    Ast.Expr.FieldAccess(node) ->
+      some(Link(doc: text("#{dot_of(node.safe)}#{node.name}"), block: [], call: false, breaks: true))
     Ast.Expr.Invoke(node) ->
       shown = Docs.Doc.Concat([text(".call"), arguments(c, node.args, Comments.key_of("Invoke", node.span))])
       some(Link(doc: shown, block: [], call: true, breaks: true))
@@ -1862,6 +1863,13 @@ def target_of(expr: Ast.Expr) -> Ast.Expr
   end
 end
 
+# The dot a member is written with: `&.` when the source had it.
+def dot_of(safe: Optional[Source.Span]) -> String
+  return "&." if safe.some?
+
+  "."
+end
+
 # `.name(args)`, with a trailing block. A call whose only argument is a block drops the empty `()`.
 def method_link(c: Context, node: Ast.MethodCall) -> Link
   args = node.args
@@ -1875,7 +1883,7 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
     end
   end
 
-  name = text(".#{node.name}")
+  name = text("#{dot_of(node.safe)}#{node.name}")
   if args.size == 0 and node.named.size == 0 and block.size > 0
     return Link(doc: name, block: block, call: true, breaks: true)
   end
