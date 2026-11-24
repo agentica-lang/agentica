@@ -153,6 +153,17 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")` for a `Result`). A task that cancels itself
   finishes its builtin and then ends. A cancel spends no step and charges one
   turn unit per cancelled task, to the caller.
+- **Links.** `Task.spawn_link` links the new task to its tree parent before it
+  is queued (`linked`), until either ends. The crash of one end sets
+  `link_origin` of the other, under `rt->sync` (the first crash wins), and
+  takes it out of its wait as a cancel does if it is parked. That task fails
+  with the diagnostic of the crash at the start of its next turn, so the end of
+  a task that was in a turn, or that a cancel has not reached, sees the mark
+  there. A task that failed this way repeats the crash (`crash_root`): it
+  prints nothing, counts nothing and is on no list, and observing it observes
+  the crash it repeats. The linked children of a crashed task fail instead of
+  being cancelled, and hold the crashed task as a cancelled child does. A
+  return or a cancel sends nothing.
 - **Task.map (`vm/task_map.c`, core layer).** The builtin checks `limit` (1 to
   1024, `RUNTIME-INVALID-COUNT`), then `timeout_ms` (above 0,
   `RUNTIME-INVALID-DURATION`), then the empty list. Otherwise it installs a

@@ -419,6 +419,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
+    child->linked = false;
     if (t->parent) adopt(vm, t->parent, child);
   }
   leave_parent(t);
@@ -653,6 +654,46 @@ static agc_task **quiet_slot(agc_vm *vm, const agc_task *t) {
   return t->test ? &t->test->quiet : &vm->rt->quiet;
 }
 
+/* The crash of T goes on the list of those no await has seen, and counts once; a task that repeats the crash of its link
+   (link_deliver) is on no list and has no count, so one failure is one entry however far the links carry it. */
+static void note_crash(agc_vm *vm, agc_task *t) {
+  vm->rt->crash_count++;
+  agc_task **quiet = quiet_slot(vm, t);
+  if (quiet && *quiet) {
+    (*quiet)->quiet_more++;
+    return;
+  }
+  if (quiet) *quiet = t;
+  t->crash_prev = vm->rt->crashes_tail;
+  if (vm->rt->crashes_tail)
+    vm->rt->crashes_tail->crash_next = t;
+  else
+    vm->rt->crashes = t;
+  vm->rt->crashes_tail = t;
+}
+
+/* The crash of ORIGIN reaches PEER, the other end of a link: PEER fails with its diagnostic at the start of its next
+   turn (run_turn), whichever scheduler runs it. The first crash to arrive wins. A task in a turn finds the mark at
+   the end of it (agc_task_end_turn), a READY one at the start of the next, and a PARKED one is taken out of its wait
+   here, as a cancel does, and queued. False when the peer has ended or another crash got there first. Under
+   rt->sync. */
+static bool link_deliver(agc_vm *vm, agc_task *peer, agc_task *origin) {
+  agc_sync_assert(vm);
+  agc_task *none = NULL;
+  if (peer->state == AGC_TASK_DONE ||
+      !atomic_compare_exchange_strong_explicit(&peer->link_origin, &none, origin, memory_order_seq_cst,
+                                               memory_order_seq_cst))
+    return false;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "link task=%" PRIu64 " from=%" PRIu64, peer->id, origin->id);
+  while (atomic_load_explicit(&peer->state, memory_order_seq_cst) == AGC_TASK_PARKED) {
+    if (!agc_task_claim(peer)) continue;
+    unlink_task(vm, peer);
+    enqueue(vm, peer);
+    break;
+  }
+  return true;
+}
+
 /* Runs under the run-level target: a failure here ends the run. */
 static void crash(agc_vm *vm, agc_task *t) {
   agc_outcome *o = vm->outcome;
@@ -666,20 +707,13 @@ static void crash(agc_vm *vm, agc_task *t) {
     *t->crash_stack = o->stack;
   }
   t->crashed = true;
-  vm->rt->crash_count++;
-  agc_task **quiet = quiet_slot(vm, t);
-  if (quiet && *quiet) {
-    (*quiet)->quiet_more++;
+  if (t->link_failed) {
+    agc_task *origin = atomic_load_explicit(&t->link_origin, memory_order_acquire);
+    t->crash_root = origin->crash_root ? origin->crash_root : origin;
   } else {
-    if (quiet) *quiet = t;
-    t->crash_prev = vm->rt->crashes_tail;
-    if (vm->rt->crashes_tail)
-      vm->rt->crashes_tail->crash_next = t;
-    else
-      vm->rt->crashes = t;
-    vm->rt->crashes_tail = t;
+    note_crash(vm, t);
   }
-  if (!t->session) {
+  if (!t->session && !t->link_failed) {
     agc_notice notice;
     agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
     agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
@@ -688,8 +722,14 @@ static void crash(agc_vm *vm, agc_task *t) {
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {
     next = child->next_sibling;
-    cancel_tree(vm, child, NULL, t);
+    if (!child->linked)
+      cancel_tree(vm, child, NULL, t);
+    else {
+      link_deliver(vm, child, t);
+      hold(vm, child, t);
+    }
   }
+  if (t->linked && t->parent) link_deliver(vm, t->parent, t);
   finish_task(vm, t);
 }
 
@@ -725,6 +765,15 @@ static bool fatal(const agc_vm *vm, const agc_task *t) {
          strcmp(o->code, "RUNTIME-INTERNAL") == 0;
 }
 
+/* The turn of a task that a link reached begins with the failure of the crash that did, before the wait it was taken
+   out of is looked at again. */
+static void link_fail(agc_vm *vm, agc_task *t) {
+  agc_task *origin = atomic_load_explicit(&t->link_origin, memory_order_acquire);
+  if (!origin || t->link_failed) return;
+  t->link_failed = true;
+  agc_fail_again(vm, origin->crash_code, origin->crash_message, origin->crash_span, origin->crash_stack);
+}
+
 static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
   if (AGC_CATCH(vm->turn)) {
     vm->in_turn = false;
@@ -732,6 +781,7 @@ static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
     return false;
   }
   vm->in_turn = true;
+  link_fail(vm, t);
   resume(vm, t);
   *r = agc_turn_charge(vm) ? AGC_TURN_YIELD : agc_run_turn(vm);
   vm->in_turn = false;
@@ -755,6 +805,7 @@ bool agc_report_unobserved(agc_vm *vm) {
 }
 
 void agc_task_observe(agc_vm *vm, agc_task *t) {
+  if (t->crash_root) t = t->crash_root;
   if (t->observed) return;
   t->observed = true;
   vm->rt->observed_count += 1 + t->quiet_more;
@@ -877,6 +928,11 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
     requeue(vm, t);
   } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && agc_task_claim(t)) {
     end_cancelled_locked(vm, t);
+  } else if (atomic_load_explicit(&t->link_origin, memory_order_seq_cst) && agc_task_claim(t)) {
+    agc_sync_take(vm);
+    unlink_task(vm, t);
+    agc_sync_drop(vm);
+    enqueue(vm, t);
   }
   return main_done;
 }
@@ -1399,6 +1455,22 @@ static agc_value builtin_spawn_bare(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], NULL, 0, span));
 }
 
+/* Task.spawn_link: the child is linked to the caller before it can run. */
+static agc_task *spawn_linked(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
+  agc_task *child = make_child(vm, vm->task, fn, args, argc, span);
+  agc_random_seed(&child->random, agc_random_next(&vm->task->random));
+  child->linked = true;
+  return start_child(vm, vm->task, child, NULL, 0);
+}
+
+static agc_value builtin_spawn_link(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(spawn_linked(vm, args[0], &args[1], 1, span));
+}
+
+static agc_value builtin_spawn_link_bare(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(spawn_linked(vm, args[0], NULL, 0, span));
+}
+
 static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_owning(vm, vm->task, args[0], args[1], span));
 }
@@ -1427,6 +1499,7 @@ static bool awaits_caller(agc_vm *vm, const agc_task *target) {
 
 static agc_value outcome(agc_vm *vm, agc_task *target, uint32_t span, bool result) {
   if (target->crashed) {
+    link_fail(vm, vm->task);
     agc_task_observe(vm, target);
     if (result) return agc_error_string(vm, AGC_KIND_TASK_CRASHED, target->crash);
     agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);
@@ -1653,6 +1726,8 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Task.spawn_link", 2, builtin_spawn_link, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Task.spawn_link", 1, builtin_spawn_link_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Task.monitor", 3, builtin_monitor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},

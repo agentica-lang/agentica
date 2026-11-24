@@ -116,6 +116,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the top of its holder chain hold instead. `settle` gives the count back, so a
   crashed or cancelled task is observed only after its cancelled descendants
   have closed their handles.
+- Links (`Task.spawn_link`, `shared`): `spawn_linked` sets `linked` before
+  `start_child` queues the child, so the link is to its tree parent only.
+  `crash` hands its diagnostic to the linked parent and to each linked child
+  through `link_deliver` (a child that took it is `hold`-held by the crashed
+  task; the others are cancelled); the receiver fails in `link_fail`, at the
+  start of its turn, in the normal crash path, so `main` ends the run through
+  `fatal`. `link_failed` marks that crash: no notice, no `crash_count`, not on
+  the `crashes` list, and `crash_root` is the crash it repeats, which
+  `agc_task_observe` follows. The end of a turn re-reads `link_origin` after the
+  park commit, as it does `cancelled`.
 - Monitors (`Task.monitor`, `shared`): an `agc_monitor` on the target's
   `monitors` list, fired by `settle` (so after the target's file closes, as an
   await sees it) or at once for a settled target. `monitor_fire` runs

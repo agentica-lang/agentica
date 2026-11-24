@@ -109,6 +109,33 @@ ROWS: List[Model.Builtin] = [
     ],
   ),
   Model.Builtin(
+    name: "Task.spawn_link",
+    parameters: [Model.Named(name: "function", type: Types.Type.Fn([], Types.Type.Var("R")))],
+    result: Types.Type.Task(Types.Type.Var("R")),
+    rule: Model.Rule.TaskSpawn,
+    implementation: "Task.spawn_link",
+    effects: ["concurrency"],
+    description: (
+      "Like Task.spawn, and links the new task to the caller before it runs: a crash of either ends the other with " +
+      "the same diagnostic; a return or a cancel leaves the other running; VM only."
+    ),
+    alternatives: [
+      Model.Builtin(
+        name: "Task.spawn_link",
+        parameters: [
+          Model.Named(name: "function", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("R"))),
+          Model.Named(name: "argument", type: Types.Type.Var("A")),
+        ],
+        result: Types.Type.Task(Types.Type.Var("R")),
+        rule: Model.Rule.TaskSpawn,
+        implementation: "Task.spawn_link",
+        effects: ["concurrency"],
+        description: "Start a function with one argument in a lightweight task linked to the caller.",
+        alternatives: [],
+      ),
+    ],
+  ),
+  Model.Builtin(
     name: "Task.spawn_owning",
     parameters: [
       Model.Named(name: "function", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("R"))),

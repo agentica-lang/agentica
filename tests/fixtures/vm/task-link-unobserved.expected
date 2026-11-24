@@ -1,0 +1,15 @@
+{
+  "exit": 1,
+  "code": null,
+  "steps": 49,
+  "stdout": [
+    "down TaskExit.Crashed RUNTIME-DIVISION-BY-ZERO",
+    "true",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-link-unobserved.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":25,\"line\":3},\"start\":{\"column\":24,\"line\":3}},\"spawned_at\":{\"column\":12,\"file\":\"@fixtures/vm/task-link-unobserved.agc\",\"line\":7},\"stack\":[{\"column\":24,\"file\":\"@fixtures/vm/task-link-unobserved.agc\",\"function\":\"boom\",\"line\":3}],\"task\":true}",
+    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/task-link-unobserved.agc:3:24: division by zero\"}",
+    ""
+  ]
+}

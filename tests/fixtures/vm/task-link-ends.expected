@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 68,
+  "stdout": [
+    "returned 7",
+    "cancelled false",
+    "parent runs on",
+    "1",
+    "ok(5)",
+    "0",
+    ""
+  ],
+  "stderr": []
+}

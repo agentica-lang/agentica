@@ -1,0 +1,13 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-DIVISION-BY-ZERO",
+  "steps": 19,
+  "stdout": [
+    "waiting",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-link-main.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":25,\"line\":2},\"start\":{\"column\":24,\"line\":2}},\"spawned_at\":{\"column\":12,\"file\":\"@fixtures/vm/task-link-main.agc\",\"line\":6},\"stack\":[{\"column\":24,\"file\":\"@fixtures/vm/task-link-main.agc\",\"function\":\"boom\",\"line\":2}],\"task\":true}",
+    ""
+  ]
+}
