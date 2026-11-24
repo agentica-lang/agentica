@@ -18,14 +18,38 @@ struct Step
   handler: Fn[Context, List[String], Context]
 end
 
+## The feature that a scenario belongs to, as the hooks of `run` see it: its name and its own tags.
+struct Feature
+  ## The name after `Feature:`.
+  name: String
+  ## The tags written above the `Feature` line, with the `@`.
+  tags: List[String]
+end
+
+## The hooks of a feature, for `run`. They run in the worker that runs the scenarios (`agentica test` keeps one
+## worker per `--jobs` lane), so once for each feature and each worker, not once for each run: with `--jobs 4` a
+## feature may start up to four times.
+struct Hooks
+  ## Runs before the first scenario of the feature that the worker takes, in a task that stays until `after_all`, so
+  ## the handles it opens (a server program, a listener) belong to it and outlive the scenarios. What it returns is
+  ## what `feature_state` gives every scenario of the feature on that worker. An error, a crash or a time out is
+  ## `RUNTIME-BDD-BEFORE-ALL`: that scenario fails, and the others of the feature on that worker are not executed.
+  before_all: Fn[Feature, Result[JSON.Value]]
+  ## Runs when the worker leaves the feature (the next scenario is of another feature, or the lane has no more),
+  ## with what `before_all` returned, in the task that ran `before_all`. A worker that a failed scenario ended runs
+  ## none: its handles close with it. An error or a crash is `RUNTIME-BDD-AFTER-ALL`, at the file of the feature.
+  after_all: Fn[Feature, JSON.Value, Result[Void]]
+end
+
 ## Returns a step that runs `handler` for the steps whose text matches `pattern`.
 def step(pattern: String, handler: Fn[Context, List[String], Context]) -> Step
   Step(pattern: pattern, handler: handler)
 end
 
 ## Serves the steps that `agentica test` asks for, with the built-in steps added in front of `steps`. It never returns.
-## Run any other way, it prints how to run the step program and exits with code 2.
-def run(steps: List[Step]) -> Void
+## Run any other way, it prints how to run the step program and exits with code 2. `hooks` set a feature up once for
+## the scenarios of a worker and take it down after them.
+def run(steps: List[Step], hooks: Optional[Hooks] = none) -> Void
   all = predefined().concat(steps)
   args = System.args()
   mode = ""
@@ -43,14 +67,17 @@ def run(steps: List[Step]) -> Void
     System.exit(0)
   elsif mode == "scenario"
     check_start()
-    single(all)
+    single(all, hooks)
   elsif mode == "worker"
     check_start()
-    work(all)
+    work(all, hooks)
   end
   IO.warn("run this step program with agentica test --steps FILE")
   System.exit(2)
 end
+
+## Returns what `before_all` returned for the feature of this scenario, `null` when `run` has no hooks.
+def feature_state(ctx: Context) -> JSON.Value = JSON.parse(ctx.scenario.settings.feature_state).unwrap_or(JSON.null())
 
 ## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
 def doc_string(ctx: Context) -> String
@@ -295,6 +322,19 @@ struct Settings
   programs: String
   # The step budget of the scenario.
   steps: Int
+  # The feature of the scenario: its file, name and tags, and what `before_all` returned, as JSON text.
+  feature: String = ""
+  feature_name: String = ""
+  feature_tags: List[String] = []
+  feature_state: String = "null"
+end
+
+# A feature that a worker has set up: its `before_all` task waits on `stop` and then runs `after_all`.
+struct Live
+  key: String
+  state: JSON.Value
+  stop: Channel[Bool]
+  task: Task[Result[Void]]
 end
 
 struct StepLine
@@ -355,12 +395,20 @@ def predefined() -> List[Step]
 end
 
 # One scenario, then the child exits.
-def single(all: List[Step]) -> Void
+def single(all: List[Step], hooks: Optional[Hooks]) -> Void
   init = Process.parent_read_line(idle_ms())
   if not init.ok?
     System.exit(0)
   end
-  serve(all, init.unwrap!)
+  live = open_feature(hooks, init.unwrap!)
+  serve(all, init.unwrap!, live)
+  if live.some?
+    ended = close_feature(live.unwrap!)
+    if not ended.ok?
+      deliver(hook_record("RUNTIME-BDD-AFTER-ALL", ended.message))
+      System.exit(1)
+    end
+  end
   System.exit(0)
 end
 
@@ -368,13 +416,33 @@ end
 # among them. As in a child of its own, the task is not in Task.pending_count.
 # `done` tells the runner whether the next scenario may run here: not when a task of this one is still running or
 # crashed unobserved. Any other end of a scenario (a failure, a skip, a crash) ends the worker, as it ends a child.
-def work(all: List[Step]) -> Void
+# `done` also says whether a feature is set up (`live`). The runner sends `stop` when the worker leaves that feature
+# or the lane ends: `after_all` runs and `stopped` (or a failure) answers.
+def work(all: List[Step], hooks: Optional[Hooks]) -> Void
+  live: Optional[Live] = none
   init = Process.parent_read_line(idle_ms())
   while init.ok?
     text = init.unwrap!
+    if text == "stop"
+      answer = "{\"event\":\"stopped\"}\n"
+      if live.some?
+        ended = close_feature(live.unwrap!)
+        live = none
+        if not ended.ok?
+          answer = hook_record("RUNTIME-BDD-AFTER-ALL", ended.message)
+        end
+      end
+      deliver(answer)
+      init = Process.parent_read_line(idle_ms())
+      next
+    end
+
+    if live.none?
+      live = open_feature(hooks, text)
+    end
     played: Task[Result[Void]] = Task.spawn do
       BddScenario.uncount()
-      serve(all, text)
+      serve(all, text, live)
       ok()
     end
 
@@ -384,24 +452,96 @@ def work(all: List[Step]) -> Void
     # The scenario's budget may be spent: what is left of this one is the worker's own.
     BddScenario.budget(1000000)
     reuse = Task.pending_count() == 0 and not Task.unobserved_crash().ok?
-    fields: Map[String, JSON.Value] = {"event": JSON.from("done"), "reuse": JSON.from(reuse)}
+    fields: Map[String, JSON.Value] = {
+      "event": JSON.from("done"),
+      "reuse": JSON.from(reuse),
+      "live": JSON.from(live.some?),
+    }
+
     deliver(record_text(fields))
     if not reuse
       System.exit(0)
     end
     init = Process.parent_read_line(idle_ms())
   end
+  if live.some?
+    _ = close_feature(live.unwrap!)
+  end
   System.exit(0)
+end
+
+# Runs `before_all` of `hooks` for the feature that the settings line `text` names, in a task of its own that
+# BddScenario.uncount leaves out of Task.pending_count and that stays on `stop`. A failure of the hook ends the
+# scenario at once (`abort`); a line that is not settings is left to `serve`, which reports it.
+def open_feature(hooks: Optional[Hooks], text: String) -> Optional[Live]
+  settings = JSON.decode(text, Settings)
+  return none if hooks.none? or not settings.ok?
+
+  feature = Feature(name: settings.unwrap!.feature_name, tags: settings.unwrap!.feature_tags)
+  made: Channel[Result[JSON.Value]] = Channel.new(2)
+  stop: Channel[Bool] = Channel.new(1)
+  before = hooks.unwrap!.before_all
+  after = hooks.unwrap!.after_all
+  task: Task[Result[Void]] = Task.spawn do
+    BddScenario.uncount()
+    state = before.call(feature)
+    _ = made.send(state, send_ms())
+    outcome: Result[Void] = ok()
+    if state.ok?
+      _ = stop.recv(idle_ms())
+      outcome = after.call(feature, state.unwrap!)
+    end
+    outcome
+  end
+
+  Task.monitor(task, made) do |down|
+    gone: Result[JSON.Value] = error("the hook crashed: #{down.code} #{down.message}", kind: "task.crashed")
+    gone
+  end
+
+  first = made.recv(25000)
+  if not first.ok? or not first.unwrap!.ok?
+    reason = first.message
+    if first.ok?
+      reason = first.unwrap!.message
+    elsif reason == "channel: timed out"
+      reason = "it did not finish within 25 seconds"
+    end
+    Task.cancel(task)
+    _ = Task.await(task)
+    abort("RUNTIME-BDD-BEFORE-ALL", clip("before_all of the feature failed: #{reason}"))
+  end
+  some(Live(key: settings.unwrap!.feature, state: first.unwrap!.unwrap!, stop: stop, task: task))
+end
+
+# Tells the `before_all` task to run `after_all` and gives what it returned: an error when it failed or crashed.
+def close_feature(live: Live) -> Result[Void]
+  _ = live.stop.send(true, send_ms())
+  Task.await(live.task)
+end
+
+def hook_record(code: String, message: String) -> String
+  fields: Map[String, JSON.Value] = {
+    "event": JSON.from("fail"),
+    "code": JSON.from(code),
+    "message": JSON.from(clip("after_all of the feature failed: #{message}")),
+  }
+
+  record_text(fields)
 end
 
 # One step per channel line until the runner closes the channel or sends `end`; a failure has already ended the run
 # with a fail record. The after hooks run at the end, so a hook that fails turns a passing scenario into a failed one.
 # Whether it runs in a child or a worker, and whatever `main` did before `BDD.run`, a scenario starts with the random
 # numbers of the run's seed and its own step budget.
-def serve(all: List[Step], init: String) -> Void
-  settings = JSON.decode(init, Settings)
-  if not settings.ok?
-    abort("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
+def serve(all: List[Step], init: String, live: Optional[Live]) -> Void
+  decoded = JSON.decode(init, Settings)
+  if not decoded.ok?
+    abort("RUNTIME-BDD-INFRA", "invalid scenario settings: #{decoded.message}")
+  end
+  settings = decoded
+  if live.some?
+    settings = ok(decoded.unwrap!.with(feature_state: JSON.encode(live.unwrap!.state)))
   end
   BddScenario.srand(Random.seed())
   BddScenario.budget(settings.unwrap!.steps)

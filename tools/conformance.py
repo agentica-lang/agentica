@@ -77,7 +77,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # ::1 case of tests/test_vm_http_connect_to.py.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
-    "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
+    "tests/test_bdd_feature_hooks.py", "tests/test_bdd_integration.py", "tests/test_bdd_posix.py",
+    "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
     "tests/test_filesystem.py", "tests/test_process.py", "tests/test_process_pty.py", "tests/test_source_paths.py",
     "tests/test_spec_packages.py",
     "tests/test_spec_package_native.py", "tests/test_spec_package_native_build.py",
@@ -121,7 +122,8 @@ AREAS = {
             "tests/test_spec_doc.py", "tests/test_spec_help_std.py", "tests/test_spec_lint.py", "tests/test_spec_outline.py", "tests/test_spec_symbol.py",
             "tests/test_spec_type_at.py", "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
-            "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
+            "tests/test_bdd_feature_hooks.py", "tests/test_bdd_integration.py", "tests/test_unit_test.py",
+            "tests/test_vm_diff_8.py",
             "tests/test_single_binary.py", "tests/test_stdlib_distribution.py", "tests/test_bytecode_cache.py",
             "tests/test_prop_cache_compiler.py", "tests/test_check_cache.py", "tests/test_cli_coverage.py",
             "tests/test_cli_compile.py",

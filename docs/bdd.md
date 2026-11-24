@@ -284,6 +284,30 @@ A step program is a normal program: its `main` builds the list of steps with
   deadline) runs no hook: that state is gone with the process. The hooks run
   before the program under test is stopped, and a hook belongs to the context
   `BDD.after` returned, so a `BDD` failure on an older context does not see it.
+- `BDD.run(steps, hooks: Optional[Hooks] = none)` takes `Hooks(before_all:,
+  after_all:)`, a feature's setup and teardown for the scenarios of one worker
+  (`before(:all)` and `after(:all)` of RSpec). The init line of each scenario
+  names its feature (`feature`, `feature_name`, `feature_tags`). When the worker
+  takes a scenario of a feature it has not set up, it runs `before_all(Feature)`
+  in a task of its own that `BddScenario.uncount` leaves out of
+  `Task.pending_count`, so the handles it opens (a server program) belong to it,
+  not to a scenario, and live until `after_all(Feature, state)`. What
+  `before_all` returns (JSON) reaches each scenario as `BDD.feature_state(ctx)`
+  (the `feature_state` of its settings). The `done` record says whether a
+  feature is `live`; the runner sends the line `stop` when the next job is of
+  another feature and at the end of the lane, and the worker answers `stopped`
+  after `after_all`, or a `fail` record with `RUNTIME-BDD-AFTER-ALL`, which the
+  runner keeps as an error of the feature file (at its `Feature` line, exit 1).
+  A `before_all` that returns an error, crashes or takes 25 seconds sends a
+  `fail` record with `RUNTIME-BDD-BEFORE-ALL` and the worker exits: the scenario
+  fails at its first step, and the runner marks the feature broken for that
+  lane, so its other scenarios there are `not_executed`. A worker that ends for
+  another reason (a failed scenario, a left task) runs no `after_all`; its
+  handles close with it, and the next scenario gets a new worker and a new
+  `before_all`. The runner resets nothing between scenarios: they leave the
+  feature state as found. In `--isolate` and `--coverage` the hooks run in the
+  child of each scenario, so for each scenario. With `--jobs N` a feature runs
+  `before_all` once for each worker that takes one of its scenarios.
 - `BDD.read_line(ctx, timeout_ms)` is `Process.read_line` of the program under
   test as a `Result[String]`: the ended output and the timeout are errors the
   step can handle; the output limit and an I/O failure still fail the step. A
