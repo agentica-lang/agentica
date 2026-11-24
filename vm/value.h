@@ -20,10 +20,6 @@
 /* The first four bytes of every .agcb file. */
 #define AGC_MAGIC "AGCB"
 #define AGC_FORMAT_VERSION 6
-/* The format before the prelude flag of the functions (version 6). The loader still reads it, so that the first binary of
-   the bootstrap (checked-in bootstrap/stage0.agcb, which writes it) works until stage0 is refreshed; it has no prelude
-   function. Remove it with the refresh. */
-#define AGC_FORMAT_PREVIOUS 5
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)

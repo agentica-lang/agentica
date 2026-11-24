@@ -511,8 +511,7 @@ header and the entry.
   and 8 are reserved by the sized numeric types (issue #984) and the builtin
   `Time` types (issue #985).
 - The C loader is the only reader of this format and has no compatibility
-  shims, with one exception: it still reads format 5, which has no prelude flag
-  (`AGC_FORMAT_PREVIOUS`).
+  shims.
 
 ### 4.7 The prelude
 
