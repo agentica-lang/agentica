@@ -750,6 +750,11 @@ end
 # - and not. -9223372036854775808 is the one literal that only fits under a minus.
 def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
   target = narrow_target(expected)
+  if node.op == "minus"
+    # -1e39 past the largest Float32 is the error of the whole literal, minus included.
+    try negative_real(cx, st, node, target)
+  end
+
   inner = T.Type.Unknown
   if node.op == "minus" and !integer_literal?(node.operand)
     # -(1 + 2) and -1.5: the tree under the minus takes the sized type too.
@@ -813,6 +818,25 @@ def integer_literal?(node: Ast.Expr) -> Bool
 end
 
 # -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
+# CHECK-FLOAT-RANGE at a minus and the float literal after it, in Float32 when that is the target, else in Float.
+def negative_real(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[Void]
+  type = T.Type.Float
+  if T.is?(target, "Float32")
+    type = T.Type.Float32
+  end
+
+  case node.operand
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Real(number, text) if T.float_overflow?(type, number, text) ->
+          error(State.fail(cx, st, "CHECK-FLOAT-RANGE", T.float_outside(type, "-#{text}"), node.span))
+        _ -> ok()
+      end
+
+    _ -> ok()
+  end
+end
+
 def negative_literal(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[State.Out]
   case node.operand
     Ast.Expr.Literal(found) ->

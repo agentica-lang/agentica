@@ -679,7 +679,8 @@ def check_pattern(
     Ast.Pattern.Wildcard(_) -> ok(ArmDone(st: st, arms: arms.with(wildcard: true)))
     Ast.Pattern.Literal(literal) ->
       typed = try check_literal(cx, st, literal, value_type)
-      if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value) end
+      float32 = T.is?(value_type, "Float32")
+      if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value, float32) end
         return error(duplicate(cx, typed, "literal", "case arm", spot))
       end
 
@@ -1127,12 +1128,13 @@ def literal_type(value: Ast.LitValue) -> T.Type
   end
 end
 
-# equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ.
-def same_literal?(a: Ast.LitValue, b: Ast.LitValue) -> Bool
+# equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ; in a case on a Float32, on the bits of the
+# Float32 it gives.
+def same_literal?(a: Ast.LitValue, b: Ast.LitValue, float32: Bool) -> Bool
   case a
     Ast.LitValue.Whole(x) -> whole_is?(b, x)
     Ast.LitValue.Huge(x) -> huge_is?(b, x)
-    Ast.LitValue.Real(x, _) -> real_is?(b, x)
+    Ast.LitValue.Real(x, text) -> real_is?(b, x, text, float32)
     Ast.LitValue.Text(x) -> text_is?(b, x)
     Ast.LitValue.Flag(x) -> flag_is?(b, x)
     Ast.LitValue.Nothing -> nothing?(b)
@@ -1153,11 +1155,21 @@ def huge_is?(b: Ast.LitValue, x: String) -> Bool
   end
 end
 
-def real_is?(b: Ast.LitValue, x: Float) -> Bool
+def real_is?(b: Ast.LitValue, x: Float, text: String, float32: Bool) -> Bool
   case b
+    Ast.LitValue.Real(y, other) if float32 -> same_float32?(x, text, y, other)
     Ast.LitValue.Real(y, _) -> Float.to_bits(x) == Float.to_bits(y)
     _ -> false
   end
+end
+
+# Two float literals that give one Float32; when the bits of one cannot be told from its Float, only the same text.
+def same_float32?(x: Float, text: String, y: Float, other: String) -> Bool
+  a = T.float32_bits(x, text)
+  b = T.float32_bits(y, other)
+  return a == b if a.some? and b.some?
+
+  text == other
 end
 
 def text_is?(b: Ast.LitValue, x: String) -> Bool

@@ -6,6 +6,9 @@ A rule case is `(program, code, covered text)`: the code of the diagnostic and t
 program that must check clean has no code.
 """
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
 from tests.spec_support import assert_rule, check_many, covered, halted
@@ -40,7 +43,15 @@ RULES = {
         "340282356779733661637539395458142568448.0"),
     "a Float32 literal just under the halfway point is the largest Float32": (
         main("x: Float32 = 340282356779733661637539395458142568447.9", "puts(x)"), None, None),
-    "a negative Float32 literal past the largest": (main("x: Float32 = -1e39"), "CHECK-FLOAT-RANGE", "1e39"),
+    "a negative Float32 literal past the largest, minus included": (main("x: Float32 = -1e39"), "CHECK-FLOAT-RANGE",
+                                                                    "-1e39"),
+    "a negative Float literal past the largest, minus included": (main("x = -1e309"), "CHECK-FLOAT-RANGE", "-1e309"),
+    "two case arms that give one Float32": (
+        main("x: Float32 = 1.0", "case x", '  16777216.0 -> puts("a")', '  16777217.0 -> puts("b")',
+             '  _ -> puts("c")', "end"), "CHECK-UNREACHABLE-CASE-ARM", None),
+    "two arms on either side of a Float32 halfway give two Float32s": (
+        main("x: Float32 = 1.0", "case x", '  16777217.0000000001 -> puts("a")', '  16777216.9999999999 -> puts("b")',
+             '  _ -> puts("c")', "end"), None, None),
     "a Float32 argument past the largest": ("def f(x: Float32) -> Float32 = x\n\n" + main("puts(f(1e39))"),
                                             "CHECK-FLOAT-RANGE", "1e39"),
     "a Float32 field default past the largest": ("struct S\n  x: Float32 = 1e39\nend\n\n" + main(),
@@ -80,3 +91,12 @@ def test_float32_divided_by_zero_halts_at_the_operator(tmp_path):
     found = halted(program, tmp_path)
     assert found["code"] == "RUNTIME-DIVISION-BY-ZERO"
     assert covered(program, found["range"]) == "/"
+
+
+def test_the_float32_vectors_are_what_the_peer_writes():
+    path = Path(__file__).resolve().parent / "fixtures" / "float32-vectors.py"
+    spec = importlib.util.spec_from_file_location("float32_vectors", path)
+    peer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(peer)
+    assert (peer.HERE / "float32-vectors.stdin").read_text() == peer.stdin_text()
+    assert (peer.HERE / "float32-literals.agc").read_text() == peer.literals_text()

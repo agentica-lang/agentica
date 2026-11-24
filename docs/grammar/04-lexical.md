@@ -216,10 +216,12 @@ never becomes a `Float` or a `Float32` (`x: Float32 = 1` is
 `CHECK-TYPE-MISMATCH`). A `Float32` literal is kept as its decimal text and
 rounded once, to the nearest `Float32` (ties to even), when the program loads,
 never through a `Float`. A float literal that rounds to an infinity in its type
-is `CHECK-FLOAT-RANGE` with the literal as the span: in `Float` from
-`1.7976931348623158e308` up, in `Float32` from `2^128 - 2^103`
-(`3.4028235677973366e38`, halfway past the largest `Float32`) up. A literal too
-small for its type rounds to zero.
+is `CHECK-FLOAT-RANGE` with the literal as the span (a minus before it
+included): in `Float` from `2^1024 - 2^970` (about `1.7976931348623158e308`,
+halfway past the largest `Float`) up, in `Float32` from `2^128 - 2^103` (about
+`3.4028235677973366e38`, halfway past the largest `Float32`) up. A literal too
+small for its type rounds to zero. In a `case` on a `Float32`, two literals that
+give one `Float32` (`16777216.0` and `16777217.0`) are the same pattern.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

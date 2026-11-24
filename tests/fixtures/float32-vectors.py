@@ -11,7 +11,8 @@ tests/fixtures/vm/float32-vectors.stdin, which float32-vectors.agc reads, has on
 
 tests/fixtures/vm/float32-literals.agc checks the same decimal texts written as Float32 literals.
 
-Run by hand: python3 tests/fixtures/float32-vectors.py. CI does not run it; commit the files it writes.
+Run by hand: python3 tests/fixtures/float32-vectors.py, and commit the files it writes. tests/test_spec_float32.py
+checks that the committed files are what it writes.
 """
 
 import random
@@ -243,6 +244,14 @@ end
 """
 
 
+def stdin_text() -> str:
+    return "\n".join([f"# float32-vectors.stdin: {HEADER}", *lines()]) + "\n"
+
+
+def literals_text() -> str:
+    return LITERALS.format(header=HEADER, lines="\n".join(literal_lines()))
+
+
 if __name__ == "__main__":
-    (HERE / "float32-vectors.stdin").write_text("\n".join([f"# float32-vectors.stdin: {HEADER}", *lines()]) + "\n")
-    (HERE / "float32-literals.agc").write_text(LITERALS.format(header=HEADER, lines="\n".join(literal_lines())))
+    (HERE / "float32-vectors.stdin").write_text(stdin_text())
+    (HERE / "float32-literals.agc").write_text(literals_text())

@@ -97,7 +97,9 @@ and types. Builtin methods and `to_s`: `builtins.md`.
 - `Float32`: binary32. A float literal takes it from its place, as above
   (`x: Float32 = 0.1`; `x: Float32 = 1` is `CHECK-TYPE-MISMATCH`). A literal
   that rounds to an infinity is `CHECK-FLOAT-RANGE` (`Float32` from about
-  `3.4028235677973366e38`, `Float` past `1.7976931348623157e308`). `+ - * /`
+  `3.4028235677973366e38`, `Float` from about `1.7976931348623158e308`).
+  `sum`, `min`, `max`, `sort` and `sort_by` refuse `List[Float32]`
+  (`xs.map { |x| x.to_f }.sum`). `+ - * /`
   and the comparisons take two `Float32`s, never one and a `Float`; no `%`.
   Each result is the nearest `Float32`; past the largest is an infinity.
   `to_s` is the shortest text (`0.1`). `x.to_f`, `f.to_float32`,
