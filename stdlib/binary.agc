@@ -8,13 +8,13 @@
 ## may be too big first (`try n.to_uint16`) and join many with `Bytes.concat`. `_be` is big-endian (most significant
 ## byte first, network order) and `_le` is little-endian. Signed types use two's complement.
 
-## Reads a unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`.
+## Reads an unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`.
 def read_u8(data: Bytes, offset: Int) -> Result[UInt8]
   value = try load8(data, offset, "u8")
   ok(value.wrap_uint8)
 end
 
-## Reads a signed 8-bit integer at `offset` as a `Int8`. Returns an error when the bytes are outside `data`.
+## Reads a signed 8-bit integer at `offset` as an `Int8`. Returns an error when the bytes are outside `data`.
 def read_i8(data: Bytes, offset: Int) -> Result[Int8]
   value = try load8(data, offset, "i8")
   ok(value.wrap_int8)
@@ -34,14 +34,14 @@ def read_u16_le(data: Bytes, offset: Int) -> Result[UInt16]
   ok(value.wrap_uint16)
 end
 
-## Reads a big-endian signed 16-bit integer at `offset` as a `Int16`. Returns an error when the bytes are outside
+## Reads a big-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside
 ## `data`.
 def read_i16_be(data: Bytes, offset: Int) -> Result[Int16]
   value = try load16_be(data, offset, "i16")
   ok(value.wrap_int16)
 end
 
-## Reads a little-endian signed 16-bit integer at `offset` as a `Int16`. Returns an error when the bytes are outside
+## Reads a little-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside
 ## `data`.
 def read_i16_le(data: Bytes, offset: Int) -> Result[Int16]
   value = try load16_le(data, offset, "i16")
@@ -62,14 +62,14 @@ def read_u32_le(data: Bytes, offset: Int) -> Result[UInt32]
   ok(value.wrap_uint32)
 end
 
-## Reads a big-endian signed 32-bit integer at `offset` as a `Int32`. Returns an error when the bytes are outside
+## Reads a big-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside
 ## `data`.
 def read_i32_be(data: Bytes, offset: Int) -> Result[Int32]
   value = try load32_be(data, offset, "i32")
   ok(value.wrap_int32)
 end
 
-## Reads a little-endian signed 32-bit integer at `offset` as a `Int32`. Returns an error when the bytes are outside
+## Reads a little-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside
 ## `data`.
 def read_i32_le(data: Bytes, offset: Int) -> Result[Int32]
   value = try load32_le(data, offset, "i32")
@@ -120,7 +120,7 @@ def read_f64_le(data: Bytes, offset: Int) -> Result[Float]
   ok(Float.from_bits(bits.wrap_uint64))
 end
 
-## Returns the 1 byte of `value` as a unsigned 8-bit integer.
+## Returns the 1 byte of `value` as an unsigned 8-bit integer.
 def write_u8(value: UInt8) -> Bytes = pack([value.to_i])
 
 ## Returns the 1 byte of `value` as a signed 8-bit integer.
