@@ -5,6 +5,7 @@ the argument, and stops when it is killed.
 """
 import http.server
 import os
+import socketserver
 import sys
 
 count = 0
@@ -27,7 +28,14 @@ class Counter(http.server.BaseHTTPRequestHandler):
         pass
 
 
-server = http.server.HTTPServer(("127.0.0.1", 0), Counter)
+class Server(http.server.HTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind looks the host up with socket.getfqdn, which takes about 35 s on the macOS runners.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
+server = Server(("127.0.0.1", 0), Counter)
 with open(sys.argv[1], "a") as log:
     log.write("start %d %d\n" % (server.server_address[1], os.getpid()))
 print(server.server_address[1], flush=True)
