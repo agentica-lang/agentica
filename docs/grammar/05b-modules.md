@@ -445,7 +445,9 @@ import Sqlite from "pkg/sqlite/db"
   same bounds are one (`~>0.8`, `~> 0.8` and `>= 0.8.0, < 1.0.0`). The tree is
   walked in passes from the project: each pass reads the asks of the manifests
   that the last pass reached, takes for each name the highest tag that meets
-  them and the asks it sees itself, and records the asks of the manifests it
+  them and the asks it sees itself (when the earlier and the current asks cannot
+  be met together, the current ones decide, and the check at the end of the
+  pass catches a real conflict), and records the asks of the manifests it
   reaches. The tags are right when a pass records the asks it started with. A
   tree that keeps moving (a pass that starts with asks of an earlier one, or
   the last of 32) is `PKG-VERSION-UNSATISFIED` at `dependencies.<name>` of the

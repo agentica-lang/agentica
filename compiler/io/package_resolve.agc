@@ -62,6 +62,8 @@ def resolve(
   asks: Map[String, List[PackageFetch.Ask]] = {}
   listings: Map[String, List[String]] = {}
   starts = [fingerprint(asks)]
+  name = ""
+  file = manifest.file
   for _ in 0...MAX_PASSES
     done = try pass(settings, manifest, members, old, refresh, asks, listings)
     if fingerprint(done.asks) == fingerprint(asks)
@@ -78,7 +80,7 @@ def resolve(
     starts = starts.push(fingerprint(asks))
   end
 
-  error(moving(manifest.file, "", "is still moving after #{MAX_PASSES} passes"))
+  error(moving(file, name, "is still moving after #{MAX_PASSES} passes"))
 end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
@@ -141,7 +143,7 @@ end
 private
 
 MANIFEST_FILE = "agentica.toml"
-# The most passes of `resolve`; each one but the last adds an ask, and the asks of a tree are few.
+# The most passes of `resolve`: a tree whose asks settle needs a few, one that keeps moving is an error.
 MAX_PASSES = 32
 # The deadline of one downloaded artifact during resolve (the engine caps hops and bytes).
 NATIVE_TIMEOUT_MS = 300_000
