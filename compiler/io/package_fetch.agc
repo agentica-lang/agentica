@@ -232,10 +232,10 @@ def choose_tag(
 
   temp = made.unwrap!
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  listed = git_text(place, scratch, ["ls-remote", "--tags", "--refs", "--", source.git])
+  listed = git(place, scratch, ["ls-remote", "--tags", "--refs", "--", source.git])
   remove_temp(temp)
   listing = try listed
-  tags = tag_names(listing)
+  tags = tag_names(listing.scrub)
   prefix = VersionRequirement.tag_prefix(source.subdir)
   chosen = VersionRequirement.highest(requirement.unwrap!, tags, prefix)
   return ok(source.with(tag: chosen.unwrap!)) if chosen.some?
@@ -250,7 +250,8 @@ def choose_tag(
   error(fail(place, "PKG-VERSION-UNSATISFIED", "version", message, help))
 end
 
-## The names of the tags in the output of `git ls-remote --tags --refs`: a line is a commit, a tab, `refs/tags/NAME`.
+## The names of the tags in the output of `git ls-remote --tags --refs`: a line is a commit, a tab, `refs/tags/NAME`. A
+## name that is not UTF-8 comes scrubbed, so it reads as no version and the other tags still count.
 def tag_names(listing: String) -> List[String]
   names: List[String] = []
   for line in listing.split("\n")

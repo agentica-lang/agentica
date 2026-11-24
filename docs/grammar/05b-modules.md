@@ -420,7 +420,7 @@ import Sqlite from "pkg/sqlite/db"
   dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
   tags (`postgres-0.1.0`).
 - `version = "~> 0.8"` takes the highest tag of the repository that satisfies a
-  requirement, as `~>` of RubyGems and Mix does; `agentica add` and `agentica
+  requirement, as `~>` of RubyGems does; `agentica add` and `agentica
   update` choose it, and the lock keeps the chosen `tag` (below), so a build
   stays exact and offline. A requirement is terms joined by `,`, and a tag
   satisfies it when it satisfies every term. A term is an operator and a
@@ -428,9 +428,11 @@ import Sqlite from "pkg/sqlite/db"
   version has one to three numbers (the missing ones are 0) and may end in a
   pre-release (`1.2.3-rc.1`, only with all three numbers); `~> 0.8` means `>=
   0.8.0, < 1.0.0`, `~> 0.8.1` means `>= 0.8.1, < 0.9.0` and `~> 1` means `>=
-  1.0.0, < 2.0.0`. At most 256 characters and 8 terms. The tags that count are
-  `X.Y.Z` and `vX.Y.Z` for a repository, and `NAME-X.Y.Z` for a `subdir`, NAME
-  being the last folder of it (`lib-1.2.0` for `libs/lib`); every other tag is
+  1.0.0, < 2.0.0`. With a pre-release `~>` keeps the bound of RubyGems:
+  `~> 0.8.0-rc.1` is `>= 0.8.0-rc.1, < 0.9.0`, which `0.9.0-rc.1` is under. At
+  most 256 characters and 8 terms. The tags that count are `X.Y.Z` and `vX.Y.Z`
+  for a repository, and `NAME-X.Y.Z` for a `subdir`, NAME being the last folder
+  of it (`lib-1.2.0` for `libs/lib`); every other tag is
   ignored, and a tag that is a SemVer pre-release counts only when a term names
   a pre-release. Versions are ordered as SemVer says. The key is exclusive with
   `tag`, `ref`, `path` and `workspace = true`, and a text that is no
@@ -592,7 +594,10 @@ import Sqlite from "pkg/sqlite/db"
   (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
-  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. So is a `version` that is no requirement or that comes with a `ref`, at `package[n].version`, and a `tag` that the `version` of its entry does not accept, at `package[n].tag`. A
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. So is a
+  `version` that is no requirement or that comes with a `ref`, at
+  `package[n].version`, and a `tag` that the `version` of its entry does not
+  accept, at `package[n].tag`. A
   workspace dependency (`workspace = true`) has one entry with its name, the
   `git` and the pin, the `commit` and `repository`, the `[workspace]`
   `repository` of that commit (a `git` URL), and no `hash` and no `subdir`,
@@ -610,7 +615,8 @@ import Sqlite from "pkg/sqlite/db"
   `[[native-artifact]]` follows the rule of a name or a namespaced name. Every
   dependency of the manifest must be in the lock with the same `git` (with or
   without a `.git` at the end), the same `subdir` (or none) and the same `tag`
-  or `ref` (or the same `version`: the tag of the lock is not compared), or the same `path`, and the same `override`, and `workspace` (a
+  or `ref` (or the same `version` text: the tag of the lock is not compared), or
+  the same `path`, and the same `override`, and `workspace` (a
   workspace dependency has the entry of a workspace, and any other a package),
   or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of every
   locked package that is in `deps/`, where a sibling is looked up under the
@@ -738,13 +744,15 @@ import Sqlite from "pkg/sqlite/db"
   when it is empty), in the layout above, so it has the same bytes when nothing
   changed.
   - `add` takes the local name, the `https://` URL and `--tag`, `--ref` or
-    `--version REQUIREMENT`, in that order, then `--subdir DIR` if the package is a folder of the repository
-    or `--workspace` (a flag with no value) if it is the whole workspace of the
-    repository, and `--group test` for the test group. `--workspace` with
+    `--version REQUIREMENT`, in that order, then `--subdir DIR` if the package
+    is a folder of the repository or `--workspace` (a flag with no value) if it
+    is the whole workspace of the repository, and `--group test` for the test
+    group. `--workspace` with
     `--subdir` or `--version` is a usage error, and it turns off the folder
     that a tag `NAME-X.Y.Z` would take. A text that is no requirement is a
     usage error, and `--version` writes `version = "REQUIREMENT"` in the
-    manifest and locks the highest tag that satisfies it. In place of the URL, `OWNER/REPO`
+    manifest and locks the highest tag that satisfies it. In place of the URL,
+    `OWNER/REPO`
     (a GitHub account name of letters, digits and `-`, not first, at most 39
     characters, then a repository of letters, digits, `.`, `_` and `-`) is
     `https://github.com/OWNER/REPO`; the manifest and the lock store the full

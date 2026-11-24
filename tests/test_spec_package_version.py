@@ -22,10 +22,13 @@ MAIN = 'import Bond from "pkg/bond/bond"\n\ndef main() -> Void\n  puts(Bond.bang
 
 # Tags of the repository: releases of several lines, `v` and plain names, a pre-release of the next line, a tag that is
 # no version and a tag of a folder of a monorepo. 0.10.0 sorts after 0.9.0 as a number, not as text.
-TAGS = ["0.7.2", "0.8.0", "0.8.3", "v0.9.0", "0.10.0", "1.0.0-rc.1", "1.0.0", "v1.2.3", "1.10.0", "2.0.0-alpha.1",
+TAGS = ["0.7.2", "0.8.0", "0.8.3", "v0.9.0", "0.9.0-rc.1", "0.10.0", "0.0.1234567890123", "1.0.0-rc.1", "1.0.0",
+        "v1.2.3", "1.7.0", "v1.7.0", "1.8.0+build", "1.10.0", "2.0.0-alpha.1", "2.0.0-alpha.2", "2.0.0-alpha.10",
         "release-5", "lib-9.9.9"]
 
-# Requirements and the tag that Gem::Requirement picks among TAGS, written by hand for the ones that pin the oracle.
+# Requirements and the tag that Gem::Requirement picks among TAGS, written by hand for the ones that pin the oracle:
+# `~>` with a pre-release keeps RubyGems' bound, `< 0.9`, which a 0.9.0 pre-release is under; 1.7.0 and v1.7.0 are one
+# version, and the first in text order wins; build metadata is ignored when comparing, and the tag keeps it.
 BY_HAND = {
     "~> 0.8": "0.10.0",
     "~> 0.8.1": "0.8.3",
@@ -36,15 +39,18 @@ BY_HAND = {
     "0.8.3": "0.8.3",
     "> 1.2.3": "1.10.0",
     "<= 1.0.0": "1.0.0",
-    ">= 2.0.0-alpha.1": "2.0.0-alpha.1",
+    ">= 2.0.0-alpha.1": "2.0.0-alpha.10",
+    "~> 0.8.0-rc.1": "0.9.0-rc.1",
+    "== 1.7.0": "1.7.0",
+    "== 1.8.0": "1.8.0+build",
     "~> 1.0.0-rc.1": "1.0.0",
     ">= 0.9, < 0.10": "v0.9.0",
     "~> 0": "0.10.0",
 }
-REQUIREMENTS = list(BY_HAND) + ["~> 0.9", "~> 1.2", ">= 0.7.2", "~> 0.7.2", "<= 0.9.0", "> 0.8.0, <= 0.8.3", "< 1.0.0",
+REQUIREMENTS = list(BY_HAND) + ["> 0.0.1234567890122", "~> 0.9", "~> 1.2", ">= 0.7.2", "~> 0.7.2", "<= 0.9.0", "> 0.8.0, <= 0.8.3", "< 1.0.0",
                                 "~> 1.10", ">= 1", "== 1.0.0-rc.1", "< 1.0.0-rc.1", ">=0.8,<0.9", "~>0.8.0"]
 # No tag has a version that satisfies these.
-NOTHING = ["~> 3.0", ">= 11", "< 0.7", "== 0.8.1", "~> 2.1", "> 1.10.0, < 2.0.0"]
+NOTHING = ["~> 3.0", ">= 11", "< 0.0.1", "== 0.8.1", "~> 2.1", "> 1.10.0, < 2.0.0"]
 
 
 def version_key(text):
@@ -120,7 +126,7 @@ def manifest(ws, remotes, requirement, name="bond", **more):
 
 
 def test_a_requirement_locks_the_highest_tag_that_satisfies_it_as_rubygems_reads_it(ws, remotes):
-    remotes.publish(REPOSITORY, FILES, tag="0.7.2")
+    commit = remotes.publish(REPOSITORY, FILES, tag="0.7.2")
     tag_all(remotes, TAGS)
     names = {"r%02d" % index: requirement for index, requirement in enumerate(REQUIREMENTS)}
     ws.write_manifest({name: dependency(remotes.url(REPOSITORY), version=text) for name, text in names.items()})
@@ -133,10 +139,11 @@ def test_a_requirement_locks_the_highest_tag_that_satisfies_it_as_rubygems_reads
         expected = chosen(requirement, TAGS)
         assert expected is not None, requirement
         assert (locked[name]["tag"], locked[name]["version"]) == (expected, requirement), requirement
+        assert locked[name]["commit"] == commit, requirement
         if requirement in BY_HAND:
             assert locked[name]["tag"] == BY_HAND[requirement], requirement
     # The table reaches every kind of tag: plain, `v`, a pre-release, and a version that sorts as a number.
-    assert {"0.10.0", "v0.9.0", "v1.2.3", "1.0.0-rc.1", "2.0.0-alpha.1", "1.10.0"} <= {
+    assert {"0.10.0", "v0.9.0", "v1.2.3", "1.0.0-rc.1", "2.0.0-alpha.10", "1.10.0", "0.9.0-rc.1", "1.8.0+build"} <= {
         entry["tag"] for entry in locked.values()}
 
 
@@ -230,6 +237,19 @@ def test_the_tags_of_a_folder_are_name_dash_version_and_the_others_are_ignored(w
     assert_at_key(problem, "PKG-VERSION-UNSATISFIED", ws.project / "agentica.toml", "dependencies.lib.version")
 
 
+def test_add_with_a_version_and_a_subdir_writes_both_and_takes_the_tags_of_the_folder(ws, remotes):
+    commit = remotes.publish(REPOSITORY, {"lib/lib.agc": BANG}, tag="lib-1.0.0")
+    tag_all(remotes, ["lib-1.3.0", "1.9.0"])
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = plain(ws, remotes, "add", "lib", remotes.url(REPOSITORY), "--subdir", "lib", "--version", "~> 1.0")
+    assert (result.code, result.stdout) == (0, "added lib@lib-1.3.0 (folder lib)\n"), result.stderr
+    assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == (
+        'name = "app"\n\n[dependencies]\nlib = { git = "%s", version = "~> 1.0", subdir = "lib" }\n' % (
+            remotes.url(REPOSITORY)))
+    entry = lock_of(ws)[0]
+    assert (entry["tag"], entry["subdir"], entry["version"], entry["commit"]) == ("lib-1.3.0", "lib", "~> 1.0", commit)
+
+
 @pytest.mark.parametrize("entry, key_path", [
     ('{ git = "%s", tag = "v1", version = "~> 1.0" }', "dependencies.bond"),
     ('{ git = "%s" }', "dependencies.bond"),
@@ -276,21 +296,21 @@ def test_a_lock_tag_that_does_not_satisfy_its_version_is_invalid_and_a_changed_r
     good = lock.read_text(encoding="utf-8")
 
     # The manifest changed its requirement: the lock is for the old one, and `update` makes it match again.
+    remotes.publish(REPOSITORY, FILES, tag="1.1.0")
     manifest(ws, remotes, "~> 1.1")
     _, problem = command(ws, remotes, "install")
     assert_at_key(problem, "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.bond")
-    _, problem = command(ws, remotes, "check", "main.agc")
-    assert problem is None or problem["code"] != "PKG-LOCK-INVALID"
+    assert plain(ws, remotes, "update").stdout == "updated bond@1.1.0\n"
 
     # The lock holds a tag its own version rejects, or a version with no tag, or a bad requirement.
-    manifest(ws, remotes, "~> 1.0")
-    lock.write_text(good.replace('tag = "1.0.0"', 'tag = "2.0.0"'), encoding="utf-8")
+    good = lock.read_text(encoding="utf-8")
+    lock.write_text(good.replace('tag = "1.1.0"', 'tag = "2.0.0"'), encoding="utf-8")
     _, problem = command(ws, remotes, "install")
     assert_at_key(problem, "PKG-LOCK-INVALID", lock, "package[0].tag")
-    lock.write_text(good.replace('version = "~> 1.0"', 'version = "latest"'), encoding="utf-8")
+    lock.write_text(good.replace('version = "~> 1.1"', 'version = "latest"'), encoding="utf-8")
     _, problem = command(ws, remotes, "install")
     assert_at_key(problem, "PKG-LOCK-INVALID", lock, "package[0].version")
-    lock.write_text(good.replace('tag = "1.0.0"\n', 'ref = "%s"\n' % ("a" * 40)), encoding="utf-8")
+    lock.write_text(good.replace('tag = "1.1.0"\n', 'ref = "%s"\n' % ("a" * 40)), encoding="utf-8")
     _, problem = command(ws, remotes, "install")
     assert_at_key(problem, "PKG-LOCK-INVALID", lock, "package[0].version")
 
@@ -307,7 +327,7 @@ def test_a_package_that_asks_for_a_version_is_resolved_and_two_requirements_of_o
     remotes.publish(REPOSITORY, FILES, tag="1.4.0")
     middle = 'name = "middle"\n\n[dependencies]\nbond = %s\n' % inline_table(
         dependency(remotes.url(REPOSITORY), version="~> 1.0"))
-    remotes.publish("owner/middle", {"middle.agc": BANG, "agentica.toml": middle}, tag="v1")
+    middle_commit = remotes.publish("owner/middle", {"middle.agc": BANG, "agentica.toml": middle}, tag="v1")
     ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1")})
     result = plain(ws, remotes, "update")
     assert (result.code, result.stdout) == (0, "added bond@1.4.0\nadded middle@v1\n"), result.stderr
@@ -316,4 +336,5 @@ def test_a_package_that_asks_for_a_version_is_resolved_and_two_requirements_of_o
     ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1"),
                        "bond": dependency(remotes.url(REPOSITORY), version=">= 1.0")})
     _, problem = command(ws, remotes, "update")
-    assert problem["code"] == "PKG-SOURCE-CONFLICT"
+    folder = ws.folder(remotes.url("owner/middle"), middle_commit)
+    assert_at_key(problem, "PKG-SOURCE-CONFLICT", folder / "agentica.toml", "dependencies.bond")

@@ -1,5 +1,5 @@
 ## The `version` key of a dependency (docs/grammar/05b-modules.md): a requirement over the SemVer tags of a repository,
-## written as RubyGems and Mix write it. A requirement is terms joined by `,`; a tag has to satisfy every term. A
+## written as RubyGems writes it. A requirement is terms joined by `,`; a tag has to satisfy every term. A
 ## term is an operator and a version: `~>` (the pessimistic operator: `~> 0.8` is `>= 0.8.0, < 1.0.0` and `~> 0.8.1` is
 ## `>= 0.8.1, < 0.9.0`), `>=`, `>`, `<=`, `<` or `==`; a version alone is `==`. A version has one to three numbers, and
 ## the missing ones are 0; only the full version of a bound may have a pre-release (`1.2.3-rc.1`). A pre-release tag is
@@ -111,8 +111,21 @@ end
 ## requirement that no tag satisfies shows.
 def newest(tags: List[String], prefix: String, limit: Int) -> List[String]
   named = tags.select do |tag: String| tag_version(tag, prefix).some? end
-  ordered = named.sort_by do |tag: String| sort_text(tag_version(tag, prefix).unwrap!) end
-  ordered.reverse.take(limit)
+  left = named.sort
+  found: List[String] = []
+  while found.size < limit and left.size > 0
+    best = 0
+    for at in 1...left.size
+      if AgenticaVersion.compare(tag_version(left[at], prefix).unwrap!, tag_version(left[best], prefix).unwrap!) > 0
+        best = at
+      end
+    end
+
+    found = found.push(left[best])
+    left = left.take(best).concat(left.drop(best + 1))
+  end
+
+  found
 end
 
 private
@@ -120,7 +133,6 @@ private
 MAX_LENGTH = 256
 MAX_TERMS = 8
 OPERATORS = ["~>", ">=", "<=", "==", ">", "<"]
-DIGITS = Set.new("0123456789".split(""))
 
 # One written term as the bounds it means: `~>` gives a lower and an upper one, the others one.
 def term_of(word: String) -> Result[List[Term]]
@@ -198,15 +210,4 @@ def holds?(term: Term, version: AgenticaVersion.Version) -> Bool
     "<" -> order < 0
     _ -> order == 0
   end
-end
-
-# A text that sorts versions as the versions compare, for the few tags a failure lists: the numbers are padded.
-def sort_text(version: AgenticaVersion.Version) -> String
-  padded = version.core.map do |number: String| "#{"0" * (12 - number.length)}#{number}" end
-  release = "1"
-  if version.pre.size > 0
-    release = "0"
-  end
-
-  "#{padded.join(".")}.#{release}.#{version.pre.join(".")}"
 end
