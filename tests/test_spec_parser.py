@@ -268,7 +268,7 @@ class TestSpecParser:
     def test_a_call_without_arguments_takes_its_block_without_parentheses(self):
         # `name do`, `recv.name do` and `{ |x| ... }` after a name call with no other argument; `name() do` still
         # parses. The `()` stays after |>, for lambda, proc and loop, and for a plain name in an if or guard
-        # condition, where no call takes a `{ }` block; a call with parentheses takes only a `do` block.
+        # condition, where a plain name takes no block; a call with parentheses takes only a `do` block.
         blocks = (
             "def answer(f: Fn[Int]) -> Int = f.call()\n\n"
             "def twice(f: Fn[Int, Int]) -> Int = f.call(1) + f.call(2)\n\n"
@@ -288,10 +288,20 @@ class TestSpecParser:
                    "PARSE-UNEXPECTED-TOKEN", (12, 12, 12, 14)),
             Reject(blocks + main_of("  return if ready do |x| x > 0 end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (12, 19, 12, 21)),
-            Reject(blocks + main_of("  xs = [1]\n  if xs.any? { |x| x > 0 }\n    puts(1)\n  end\n"),
-                   "PARSE-UNEXPECTED-TOKEN", (13, 14, 13, 15)),
-            Reject(blocks + main_of("  xs = [1]\n  return if xs.any? { |x| x > 0 }\n"),
+            Reject(blocks + main_of("  if ready { |x| x > 0 }\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (12, 12, 12, 13)),
+            Reject(blocks + main_of("  xs = [1]\n  for y in xs.map() { |x| x }\n    puts(y)\n  end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 21, 13, 22)),
+            # gets, gets! and none are plain names, though the parser builds a call for them.
+            Reject(blocks + main_of("  while gets { |x| x }\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (12, 14, 12, 15)),
+            # A `do` block of a call in a while, for or case head ends the head: it needs parentheses.
+            Reject(blocks + main_of("  xs = [1]\n  while xs.any? do |x| x > 5 end\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 20, 13, 21)),
+            Reject(blocks + main_of("  xs = [1]\n  for y in xs.map do |x| x end\n    puts(y)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 22, 13, 23)),
+            Reject(blocks + main_of("  xs = [1]\n  case xs.map do |x| x end\n    _ -> puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 18, 13, 19)),
             Reject(blocks + main_of("  xs = [1]\n  _ys = xs.map() { |x| x }\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 18, 13, 19)),
             Reject(blocks + main_of("  xs = [1]\n  _n = xs.reduce(0) { |a, x| a + x }\n"),
@@ -311,8 +321,20 @@ class TestSpecParser:
             # A case arm guard is a condition too.
             Reject(blocks + main_of("  case 1\n    1 if ready do |v| v > 0 end -> puts(1)\n    _ -> puts(2)\n  end\n"),
                    "PARSE-UNEXPECTED-TOKEN", (13, 16, 13, 18)),
-            Reject(blocks + main_of("  xs = [1]\n  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(1)\n"
-                                    "    _ -> puts(2)\n  end\n"), "PARSE-UNEXPECTED-TOKEN", (14, 18, 14, 19)),
+        ])
+        # A method call takes a `{ ... }` block in the head of an if, an elsif, a guard, a while, a for or a case arm
+        # guard: no head has braces of its own.
+        found = "def found(xs: List[Int]) -> Int\n  return 1 if xs.any? { |x| x > 0 }\n  0\nend\n\n"
+        self.check_output([
+            Output(blocks + found + main_of("  xs = [1, 3]\n  if xs.any? { |x| x > 5 } or xs.empty?\n    puts(\"if\")\n"
+                                    "  elsif xs.all? { |x| x > 0 }\n    puts(\"elsif\")\n  end\n"
+                                    "  for _ in [1, 2]\n    puts(\"guard\")\n    break if xs.any? { |x| x > 2 }\n  end\n"
+                                    "  while xs.empty? or xs.any? { |x| x > 100 }\n    puts(\"never\")\n  end\n"
+                                    "  for y in xs.sort_by { |x| 0 - x }\n    puts(y)\n  end\n"
+                                    "  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(\"arm\")\n    _ -> puts(2)\n  end\n"
+                                    "  case xs.map { |x| x * 2 }.size\n    2 -> puts(\"case\")\n    _ -> puts(\"other\")\n  end\n"
+                                    "  puts(found(xs))\n  puts(found([0]))\n"),
+                   ["elsif", "guard", "3", "1", "arm", "case", "1", "0"]),
         ])
         # Inside parentheses a head takes any block.
         self.check_output([

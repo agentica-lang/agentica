@@ -18,8 +18,8 @@ NESTING_LIMIT = 1000
 
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the
 ## nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call
-## starts a block, bare_blocks whether a plain name takes a `do` block and whether a `{ ... }` block may follow a call
-## without arguments (not in an if condition, where `{` and `do` are mistakes for the end of the line), and brace_at
+## starts a block, bare_blocks whether a plain name takes a `do` or a `{ ... }` block (not in a head, where `{` and
+## `do` after a plain name are mistakes for the end of the line), and brace_at
 ## and brace_form remember a `{` right after a block head, for the help of PARSE-UNEXPECTED-TOKEN.
 struct Env
   tokens: List[Tokens.Token]
@@ -97,7 +97,8 @@ def make_env(tokens: List[Tokens.Token]) -> Env
   )
 end
 
-## The same context, with `do` blocks allowed or not. Headers of case, while and for do not allow them.
+## The same context, with `do` blocks allowed or not. Headers of case, while and for do not allow them (a method call
+## still takes a `{ ... }` block there).
 def with_blocks(e: Env, allow: Bool) -> Env
   Env(
     tokens: e.tokens,
@@ -112,8 +113,7 @@ def with_blocks(e: Env, allow: Bool) -> Env
 end
 
 ## The same context for the condition of an if, an elsif, a guard or a case arm guard: blocks follow calls, but a plain
-## name takes no `do` block and no call takes a `{ ... }` block, so that the formatter may turn a guard into an if and
-## back.
+## name takes no block, so that the formatter may turn a guard into an if and back.
 def in_condition(e: Env) -> Env
   Env(
     tokens: e.tokens,

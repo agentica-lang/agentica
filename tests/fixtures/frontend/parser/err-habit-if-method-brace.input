@@ -1,0 +1,6 @@
+def main() -> Void
+  xs = [1]
+  if xs.empty? {
+    puts("a")
+  }
+end
