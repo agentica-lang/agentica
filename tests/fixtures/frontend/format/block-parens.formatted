@@ -34,34 +34,46 @@ def main() -> Void
 end
 
 def heads(xs: List[Int], z: Int) -> Int
-  if (xs.any? { |x| x > 0 })
+  if xs.any? { |x| x > 0 }
     puts("braces")
-  elsif (xs.all? { |x| x > z })
+  elsif xs.all? { |x| x > z }
     puts("elsif")
   end
   if (ready do |x| x > 0 end)
     puts("bare")
   end
-  if (ready do |x| x > 1 end and xs.none? { |x| x > 9 })
+  if ready() do |x| x > 1 end and xs.none? { |x| x > 9 }
     puts("both")
   end
   while (xs.any? do |x| x > 5 end) do
     puts("while")
   end
-  while (xs.any? { |x| x > 5 })
+  while xs.any? { |x| x > 5 }
     puts("while")
   end
-  for y in (xs.map { |x| x + 1 })
+  for y in xs.map { |x| x + 1 }
     puts(y)
   end
   for y in (xs.map do |x| x end) do
     puts(y)
   end
-  case (xs.map { |x| x }) do
+  case xs.map { |x| x } do
     _ -> puts("case")
   end
   for x in xs
-    next if (xs.any? { |y| y > z })
+    next if xs.any? { |y| y > z }
+  end
+  if xs.any? { |x| x > 0 } and !xs.none? { |x| x > 9 }
+    puts("unwrapped")
+  end
+  while xs.any? { |x| x > 100 }
+    puts("unwrapped")
+  end
+  for y in xs.sort_by { |x| 0 - x }
+    puts(y)
+  end
+  if (ready { |x| x > 0 })
+    puts("bare braces")
   end
   0
 end
@@ -88,7 +100,7 @@ def inside(xs: List[Int], z: Int) -> Int
     1 if (xs.any? { |v| v > 0 }) -> puts(7)
     2 if xs.empty? |> same() -> puts(8)
     3 if ((ready do |v| v > 0 end) |> same()) -> puts(10)
-    4 if ((xs.any? { |v| v > 0 }) |> same() |> same()) -> puts(11)
+    4 if (xs.any? { |v| v > 0 }) |> same() |> same() -> puts(11)
     5 if (xs.size > 0) |> same() -> puts(12)
     6 if ((ready do |v| v > 0 end)) -> puts(13)
     _ -> puts(9)

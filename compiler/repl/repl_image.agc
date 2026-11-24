@@ -502,7 +502,7 @@ end
 # A new enum that JSON.decode can build, with the name of a struct of the image that it can build: JSON.decode looks
 # for a struct first (vm/json.c).
 def clash(structs: List[Ir.StructDef], added: List[Ir.EnumDef]) -> String
-  return "" if (!added.any? { |entry: Ir.EnumDef| entry.decodable })
+  return "" if !added.any? { |entry: Ir.EnumDef| entry.decodable }
 
   names = Set.new(structs.filter { |entry: Ir.StructDef| entry.decodable }.map { |entry: Ir.StructDef| entry.name })
   for entry in added

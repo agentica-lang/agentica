@@ -62,6 +62,18 @@ def heads(xs: List[Int], z: Int) -> Int
   for x in xs
     next if (xs.any? { |y| y > z })
   end
+  if xs.any? { |x| x > 0 } and !xs.none? { |x| x > 9 }
+    puts("unwrapped")
+  end
+  while xs.any? { |x| x > 100 }
+    puts("unwrapped")
+  end
+  for y in xs.sort_by { |x| 0 - x }
+    puts(y)
+  end
+  if (ready { |x| x > 0 })
+    puts("bare braces")
+  end
   0
 end
 
