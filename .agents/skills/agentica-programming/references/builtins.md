@@ -150,9 +150,9 @@ List.partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]]   # [accepted
 List.take_while(list: List[A], block: Fn[A, Bool]) -> List[A]      # stops calling the block at the first false
 List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
 List.each_slice(list: List[A], size: Int) -> List[List[A]]         # no block; size < 1 is RUNTIME-INVALID-COUNT
-List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int, String, Bytes or Ref; first-appearance order
-List.tally(list: List[K]) -> Map[K, Int]                 # K is Int, String, Bytes or Ref; first-appearance order
-List.uniq(list: List[K]) -> List[K]                      # K is Int, String, Bytes or Ref; keeps the first of each
+List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is a Map key type; first-appearance order
+List.tally(list: List[K]) -> Map[K, Int]                 # K is a Map key type; first-appearance order
+List.uniq(list: List[K]) -> List[K]                      # K is a Map key type; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
@@ -200,7 +200,7 @@ m.select(block: Fn[K, V, Bool]) -> Map[K, V]             # keeps the entries the
 ## Set
 
 ```text
-Set.new(items: List[T]) -> Set[T]                        # T is Int, String, Bytes or Ref; repeats dropped, first keeps its place
+Set.new(items: List[T]) -> Set[T]                        # T is a Map key type; repeats dropped, first keeps its place
 Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
 Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(log n) amortized
 Set.include?(set: Set[T], value: T) -> Bool

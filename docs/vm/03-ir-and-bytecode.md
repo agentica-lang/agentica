@@ -409,7 +409,8 @@ header and the entry.
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
     Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JSON.Field, 8
-    Optional, 9 Enum, 10 struct instance) and, for 4 to 10, a `u32` operand:
+    Optional, 9 Enum, 10 struct instance, 11 to 16 Int8, Int16, Int32, UInt8,
+    UInt16 and UInt32) and, for 4 to 10, a `u32` operand:
     the item, value, `JSON.Field` or `Optional` payload type index (smaller
     than the entry's own), the struct index, the enum index or the index of a
     record of the Struct instances section. A file with a kind 7 entry has
@@ -507,9 +508,10 @@ header and the entry.
   the layout or to an opcode's meaning bumps the format version. A new opcode,
   type kind or constant kind does not: an older VM rejects the file as unknown.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
-  such a file and the call fails at run time with a wrong value type. Versions 7
-  and 8 are reserved by the sized numeric types (issue #984) and the builtin
-  `Time` types (issue #985).
+  such a file and the call fails at run time with a wrong value type. The
+  narrow integer kinds of the sized numeric types (11 to 16, issue #984) needed
+  no bump for that reason. Versions 7 and 8 are reserved by the rest of the
+  sized numeric types and the builtin `Time` types (issue #985).
 - The C loader is the only reader of this format and has no compatibility
   shims.
 

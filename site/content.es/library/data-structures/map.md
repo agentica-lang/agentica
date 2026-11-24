@@ -2,10 +2,10 @@
 title: Mapa
 weight: 2
 description: Funciones de Map[K, V]. Cada una es también un método de los mapas.
-source_hash: "c6388831b0fa"
+source_hash: "aeb3e02bda98"
 ---
 
-Los mapas son inmutables y mantienen el orden en que se añadieron las claves. Las claves son `Int`, `String`, `Bytes` o [`Ref`](/library/data-structures/ref/).
+Los mapas son inmutables y mantienen el orden en que se añadieron las claves. Las claves son `Int` o un tipo entero de menos bits (`UInt8` y los demás), `String`, `Bytes` o [`Ref`](/library/data-structures/ref/).
 
 `a == b` es verdadero cuando los dos mapas tienen las mismas claves con valores iguales, en cualquier orden. El tipo del valor debe admitir igualdad (no `Fn`, `Task`, `Channel` ni un handle).
 

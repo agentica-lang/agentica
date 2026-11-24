@@ -361,7 +361,7 @@ List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
 
-`tally` counts equal items; `uniq` keeps the first of each. Items are `Int`, `String`, `Bytes` or `Ref`, in order of first appearance.
+`tally` counts equal items; `uniq` keeps the first of each. Items are `Int` or a narrow integer type (`UInt8` and the like), `String`, `Bytes` or `Ref`, in order of first appearance.
 
 ```agentica
 def main() -> Void

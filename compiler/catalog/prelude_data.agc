@@ -15,6 +15,20 @@ PRELUDE_ONLY = [
   "__lazy_zlib",
 ]
 
+## The types of a Map key or a Set element (CheckTypes.key_type?), which group_by, tally and uniq allow.
+KEY_TYPES = [
+  Types.Type.Int,
+  Types.Type.Int8,
+  Types.Type.Int16,
+  Types.Type.Int32,
+  Types.Type.UInt8,
+  Types.Type.UInt16,
+  Types.Type.UInt32,
+  Types.Type.String,
+  Types.Type.Bytes,
+  Types.Type.Opaque("Ref"),
+]
+
 ## Every prelude function, sorted by name.
 ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Bytes.each", module: "bytes", limits: [], selector: "", bodies: {"": "each"}),
@@ -64,13 +78,7 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.group_by",
     module: "list",
-    limits: [
-      Model.Limit(
-        variable: "K",
-        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
-        what: "a key",
-      ),
-    ],
+    limits: [Model.Limit(variable: "K", allowed: KEY_TYPES, what: "a key")],
     selector: "",
     bodies: {"": "group_by"},
   ),
@@ -138,26 +146,14 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.tally",
     module: "list",
-    limits: [
-      Model.Limit(
-        variable: "K",
-        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
-        what: "items",
-      ),
-    ],
+    limits: [Model.Limit(variable: "K", allowed: KEY_TYPES, what: "items")],
     selector: "",
     bodies: {"": "tally"},
   ),
   Model.PreludeRow(
     name: "List.uniq",
     module: "list",
-    limits: [
-      Model.Limit(
-        variable: "K",
-        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
-        what: "items",
-      ),
-    ],
+    limits: [Model.Limit(variable: "K", allowed: KEY_TYPES, what: "items")],
     selector: "",
     bodies: {"": "uniq"},
   ),
@@ -199,13 +195,7 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "Range.group_by",
     module: "range",
-    limits: [
-      Model.Limit(
-        variable: "K",
-        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
-        what: "a key",
-      ),
-    ],
+    limits: [Model.Limit(variable: "K", allowed: KEY_TYPES, what: "a key")],
     selector: "",
     bodies: {"": "group_by"},
   ),

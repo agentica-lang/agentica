@@ -1,6 +1,6 @@
 """The narrow integer types (Int8, Int16, Int32, UInt8, UInt16, UInt32) through the product CLI: literals typed by their
-context, the range of a literal, the conversions to and from Int, the operators and the reserved names, with their
-diagnostic codes and spans.
+context, the range of a literal, the conversions to and from Int, the operators, JSON, map keys and set elements, and
+the reserved names, with their diagnostic codes and spans.
 
 A rule case is `(program, code, covered text)`: the code of the diagnostic and the source text its range covers. A
 program that must check clean has no code.
@@ -98,11 +98,22 @@ RULES = {
     "wrap_<type> gives the type, not a Result": (main("n = 1", "x: Result[UInt8] = n.wrap_uint8"),
                                                  "CHECK-TYPE-MISMATCH", "n.wrap_uint8"),
     "no unary minus on an unsigned value": (main("a: UInt8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
-    # JSON, keys and the list sums of the narrow types come in later pull requests of #984.
-    "no JSON.encode yet": (main("a: UInt8 = 1", "puts(JSON.encode(a))"), "CHECK-NOT-ENCODABLE", "a"),
-    "no JSON.decode yet": (PIXEL + main('puts(JSON.decode("{}", Pixel).ok?)'), "CHECK-NOT-DECODABLE", "Pixel"),
-    "no map key yet": (main("m: Map[UInt8, Int] = {}", "puts(m)"), "CHECK-MAP-KEY-TYPE", "UInt8"),
-    "no set element yet": (main("s: Set[UInt8] = Set.new([])", "puts(s)"), "CHECK-SET-ELEMENT-TYPE", "UInt8"),
+    "JSON encodes, decodes and describes a narrow type": (
+        PIXEL + main("a: UInt8 = 1", "puts(JSON.encode(a))", 'puts(JSON.decode("{}", Pixel).ok?)',
+                     "puts(JSON.schema(Pixel))", "xs: List[Int8] = [-1]", "puts(JSON.from(xs))"), None, None),
+    "a narrow type is a map key and a set element": (
+        main("m: Map[UInt8, Int] = {255: 1}", "s: Set[Int16] = Set.new([-32768])", "puts(m[255])",
+             "puts(s.include?(1))", "xs: List[UInt8] = [1, 1]", "puts(xs.tally)", "puts(xs.uniq)",
+             "puts(xs.group_by do |x: UInt8| x end)"), None, None),
+    "a map key literal out of range": (main("m: Map[UInt8, Int] = {256: 1}", "puts(m)"), "CHECK-INT-RANGE", "256"),
+    "a set element literal out of range": (main("s: Set[Int8] = Set.new([128])", "puts(s)"), "CHECK-INT-RANGE",
+                                           "128"),
+    "a map with narrow keys is not JSON": (main("m: Map[UInt8, Int] = {}", "puts(JSON.encode(m))"),
+                                           "CHECK-NOT-ENCODABLE", "m"),
+    "a map with narrow keys is no decode target": (main('puts(JSON.decode("{}", Map[UInt8, Int]))'),
+                                                   "CHECK-NOT-DECODABLE", "Map[UInt8, Int]"),
+    "a field default out of range": ("struct Pixel\n  g: UInt8 = 300\nend\n\n" + main(), "CHECK-INT-RANGE", "300"),
+    # The list sums of the narrow types come in a later pull request of #984.
     "no sum yet": (main("xs: List[UInt8] = [1]", "puts(xs.sum)"), "CHECK-TYPE-MISMATCH", "xs"),
     "a struct may not take a narrow name": ("struct Int8\n  a: Int\nend\n\n" + main(), "CHECK-REDEFINED-NAME", None),
     "an enum may not take a sized name": ("enum UInt64\n  A\nend\n\n" + main(), "CHECK-REDEFINED-NAME", None),

@@ -125,18 +125,21 @@ the checker enforces:
   arguments (`Box[Int]`, `Lib.Box[Int]`), never an index. `JSON.decode` also
   takes `List[T]` and `Map[String, T]` of such a type (or of a field type
   below); `schema` and `codec` refuse them (`CHECK-TYPE-MISMATCH`). Fields and
-  payloads may be Int, Float, Bool, String, lists, String-keyed maps, nested or
-  recursive structs and enums, generic struct instances whose fields are such
-  types after substitution (semantics, generic structs), and `Optional` of those
-  (and `JSON.Field`, for a struct field); any other nested type, a generic enum
-  instance included, is `CHECK-NOT-DECODABLE`.
-- `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
-  `null`), JSON.Value, lists, String-keyed maps, `Optional`, structs and user
-  enums of those, whose struct fields may also be `JSON.Field`. An instance of a
-  generic struct or enum counts by its fields or payloads after substitution
-  (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`TaskExit`) and
-  Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
-  annotation.
+  payloads may be Int, the narrow integer types, Float, Bool, String, lists,
+  String-keyed maps, nested or recursive structs and enums, generic struct
+  instances whose fields are such types after substitution (semantics, generic
+  structs), and `Optional` of those (and `JSON.Field`, for a struct field); any
+  other nested type, a generic enum instance included, is
+  `CHECK-NOT-DECODABLE`. A narrow integer decodes only from a JSON integer in
+  its range, else the error names the type and its range (`r: expected UInt8
+  from 0 to 255`); its schema has that `minimum` and `maximum`.
+- `JSON.encode` and `JSON.from` accept Int, the narrow integer types, Float,
+  Bool, String, Nil (as `null`), JSON.Value, lists, String-keyed maps,
+  `Optional`, structs and user enums of those, whose struct fields may also be
+  `JSON.Field`. An instance of a generic struct or enum counts by its fields or
+  payloads after substitution (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin
+  enums (`TaskExit`) and maps whose keys are not `String` are
+  `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation.
 - A user enum is a tagged object `{"tag": "Rect", "values": [1.0, 2.0]}`: `tag`
   is the variant name and `values` the payloads in order. The page has the
   errors and the schema (a `oneOf`). A `JSON.Field` in a payload is

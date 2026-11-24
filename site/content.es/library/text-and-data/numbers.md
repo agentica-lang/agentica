@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, String y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "c7d9bea8a5f9"
+source_hash: "0fcaa825cec2"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -181,6 +181,8 @@ end
 44
 1200
 ```
+
+Un tipo de menos bits es una clave de `Map` y un elemento de `Set`, como `Int`. En [JSON](/library/text-and-data/json/), `JSON.encode` lo escribe como un número, `JSON.decode` solo lee un entero dentro de su rango (si no, `r: expected UInt8 from 0 to 255`), y `JSON.schema` da su rango como `minimum` y `maximum`.
 
 ## abs, pow y gcd {#abs-pow-and-gcd}
 

@@ -2,7 +2,7 @@
 title: Lista
 weight: 1
 description: Funciones de List[T]. Cada una es también un método de las listas.
-source_hash: "6e217cba78cf"
+source_hash: "c3d8cab90882"
 ---
 
 Las listas son inmutables: cada función da una lista nueva. `xs.length` es `xs.size`, `push` es `append`, `select` es `filter`.
@@ -362,7 +362,7 @@ List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
 
-`tally` cuenta los elementos iguales; `uniq` conserva el primero de cada uno. Los elementos son `Int`, `String`, `Bytes` o `Ref`, en orden de primera aparición.
+`tally` cuenta los elementos iguales; `uniq` conserva el primero de cada uno. Los elementos son `Int` o un tipo entero de menos bits (`UInt8` y los demás), `String`, `Bytes` o `Ref`, en orden de primera aparición.
 
 ```agentica
 def main() -> Void

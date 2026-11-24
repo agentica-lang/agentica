@@ -661,7 +661,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
         cx,
         key.st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int, String, Bytes or Ref, found #{T.to_text(key.type)}",
+        "a Map key must be an integer, String, Bytes or Ref, found #{T.to_text(key.type)}",
         Ast.expr_span(first.key),
       ),
     )

@@ -845,8 +845,8 @@ page](../../site/content/library/data-structures/bytes.md). The language fixes:
 
 ### Maps
 
-`Map[K, V]` has exactly two type arguments: `K` is `Int`, `String`, `Bytes` or
-`Ref`, and `V` is any type.
+`Map[K, V]` has exactly two type arguments: `K` is `Int`, a narrow integer type
+(`UInt8` and the others), `String`, `Bytes` or `Ref`, and `V` is any type.
 
 ```ruby
 stock: Map[String, Int] = {"apple": 3, "pear": 0}
@@ -866,8 +866,9 @@ more = Map.put(stock, "kiwi", 7)
 
 ### Sets
 
-`Set[T]` has one type argument, `Int`, `String`, `Bytes` or `Ref`, like a `Map`
-key: any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value
+`Set[T]` has one type argument, `Int`, a narrow integer type, `String`, `Bytes`
+or `Ref`, like a `Map` key: any other element type is
+`CHECK-SET-ELEMENT-TYPE`. A set holds each value
 once and keeps the order of first insertion. Its functions are in the
 [`Set` page](../../site/content/library/data-structures/set.md).
 
