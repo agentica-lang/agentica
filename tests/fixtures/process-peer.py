@@ -78,12 +78,12 @@ def main():
     elif mode == "family":
         # The grandchild prints a line once it is set up, so the pid printed here is of a process that already ignores
         # SIGTERM when "stubborn" is given.
-        # stubborn: the grandchild ignores SIGTERM. slow MARKER: on SIGTERM it works 300 ms, writes MARKER and exits.
+        # stubborn: the grandchild ignores SIGTERM. slow MARKER: on SIGTERM it works 100 ms, writes MARKER and exits.
         handler = ""
         if sys.argv[2:3] == ["stubborn"]:
             handler = "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
         elif sys.argv[2:3] == ["slow"]:
-            handler = ("def done(*_):\n    time.sleep(0.3)\n    open(%r, 'w').write('done')\n    sys.exit(0)\n"
+            handler = ("def done(*_):\n    time.sleep(0.1)\n    open(%r, 'w').write('done')\n    sys.exit(0)\n"
                        "signal.signal(signal.SIGTERM, done)\n" % sys.argv[3])
         code = "import signal, sys, time\n%sprint(flush=True)\ntime.sleep(120)\n" % handler
         child = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE)

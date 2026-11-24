@@ -243,7 +243,7 @@ def route(request: HTTP.Request) -> Result[HTTP.Upgrade]
   end
 
   if request.path == "/keepalive"
-    return HTTP.accept_websocket(request, &echo, HTTP.WebSocketOptions(idle_ms: 600, ping_ms: 200))
+    return HTTP.accept_websocket(request, &echo, HTTP.WebSocketOptions(idle_ms: 1500, ping_ms: 300))
   end
 
   if request.path == "/late"
@@ -531,7 +531,7 @@ def test_idle_peers_are_dropped_pings_keep_a_live_one_and_a_lost_or_silent_peer_
             assert opcode == PING
             c.send(PONG, payload)
             pings += 1
-        assert time.monotonic() - started > 0.6, "the connection outlived idle_ms because of the pings"
+        assert time.monotonic() - started > 1.5, "the connection outlived idle_ms because of the pings"
         c.text("alive")
         while True:
             opcode, payload = c.message()
