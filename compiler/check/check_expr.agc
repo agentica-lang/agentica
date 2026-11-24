@@ -1016,10 +1016,12 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
 
   if T.sized_int?(narrow) and T.sized_int?(other)
     name = T.tag(narrow)
-    return (
-      "make both sides one type: x.#{to_int(narrow)} gives the Int of either side, " +
-      "n.to_#{name.downcase}! the #{name} of an Int"
-    )
+    gives = "x.#{to_int(narrow)} gives the Int of either side"
+    if to_int(narrow) != to_int(other)
+      gives = "x.#{to_int(narrow)} gives the Int of #{name} values, x.#{to_int(other)} of #{T.tag(other)} values"
+    end
+
+    return "make both sides one type: #{gives}, n.to_#{name.downcase}! the #{name} of an Int"
   elsif T.sized_int?(narrow) and T.is?(other, "Int")
     name = T.tag(narrow)
     return (
