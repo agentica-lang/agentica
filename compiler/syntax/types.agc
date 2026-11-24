@@ -655,7 +655,12 @@ def exact_text?(x: Float, text: String) -> Bool
     k += 1
   end
 
-  parts = text.replace("-", "").replace("E", "e").split("e")
+  unsigned = text
+  if text.start_with?("-")
+    unsigned = text.slice(1, text.size - 1)
+  end
+
+  parts = unsigned.replace("E", "e").split("e")
   q = 0
   if parts.size > 1
     q = parts[1].replace("+", "").to_i!

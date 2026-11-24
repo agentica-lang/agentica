@@ -49,6 +49,12 @@ RULES = {
     "two case arms that give one Float32": (
         main("x: Float32 = 1.0", "case x", '  16777216.0 -> puts("a")', '  16777217.0 -> puts("b")',
              '  _ -> puts("c")', "end"), "CHECK-UNREACHABLE-CASE-ARM", None),
+    "two case arms that give one Float32, one with a negative exponent": (
+        main("x: Float32 = 1.0", "case x", '  8388608.5 -> puts("a")', '  83886085e-1 -> puts("b")',
+             '  _ -> puts("c")', "end"), "CHECK-UNREACHABLE-CASE-ARM", None),
+    "two case arms that give one Float32, the second with two exponent digits": (
+        main("x: Float32 = 1.0", "case x", '  8388608.5 -> puts("a")', '  838860850e-2 -> puts("b")',
+             '  _ -> puts("c")', "end"), "CHECK-UNREACHABLE-CASE-ARM", None),
     "two arms on either side of a Float32 halfway give two Float32s": (
         main("x: Float32 = 1.0", "case x", '  16777217.0000000001 -> puts("a")', '  16777216.9999999999 -> puts("b")',
              '  _ -> puts("c")', "end"), None, None),

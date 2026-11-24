@@ -817,7 +817,6 @@ def integer_literal?(node: Ast.Expr) -> Bool
   end
 end
 
-# -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
 # CHECK-FLOAT-RANGE at a minus and the float literal after it, in Float32 when that is the target, else in Float.
 def negative_real(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[Void]
   type = T.Type.Float
@@ -837,6 +836,7 @@ def negative_real(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -
   end
 end
 
+# -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
 def negative_literal(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[State.Out]
   case node.operand
     Ast.Expr.Literal(found) ->
