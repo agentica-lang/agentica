@@ -48,8 +48,9 @@ def name_hints(name: String) -> Map[String, String] = ending_with(Tables.foreign
 
 private
 
-# A name that stands for more builtins than this is too vague to list (`new`, `read`).
-MAX_TARGETS = 8
+# A name that stands for more builtins than this is too vague to list. `to_i` is on Float, String, Time and each
+# integer type, so it stays under.
+MAX_TARGETS = 12
 
 # `found` with each entry of `hints` whose key is `Kind.name`; none for a name with a dot.
 def ending_with(hints: Map[String, String], name: String, found: Map[String, String]) -> Map[String, String]
