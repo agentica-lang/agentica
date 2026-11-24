@@ -9,7 +9,8 @@
 #include <string.h>
 
 static agc_string *text_of(agc_vm *vm, agc_value v) {
-  if (agc_is(v, AGC_T_NIL) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT)) {
+  if (agc_is(v, AGC_T_NIL) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) ||
+      agc_is(v, AGC_T_UINT64)) {
     char text[AGC_SCALAR_TEXT];
     size_t n = agc_scalar_text(vm, v, text);
     return agc_small_string(vm, text, n, n);

@@ -245,6 +245,8 @@ static void put_scalar(agc_vm *vm, agc_json_buffer *b, agc_value v, uint32_t spa
     agc_json_put(b, text, agc_float_text(x, text));
   } else if (agc_is(v, AGC_T_BYTES)) {
     not_encodable(vm, span);
+  } else if (agc_is(v, AGC_T_UINT64)) {
+    agc_json_put(b, text, (size_t)snprintf(text, sizeof text, "%" PRIu64, agc_as_uint64(vm, v)));
   } else {
     agc_json_put(b, text, (size_t)snprintf(text, sizeof text, "%" PRId64, agc_as_int(vm, v)));
   }
@@ -422,6 +424,13 @@ static agc_value scalar_json(agc_vm *vm, agc_value v, uint32_t span) {
   if (agc_is(v, AGC_T_NIL)) return agc_json_leaf(AGC_JSON_NULL, v);
   if (agc_is(v, AGC_T_BOOL)) return agc_json_leaf(AGC_JSON_BOOL, v);
   if (agc_is(v, AGC_T_INT)) return agc_json_leaf(AGC_JSON_INT, v);
+  if (agc_is(v, AGC_T_UINT64)) {
+    uint64_t whole = agc_as_uint64(vm, v);
+    if (whole <= (uint64_t)INT64_MAX) return agc_json_leaf(AGC_JSON_INT, agc_int((int64_t)whole));
+    char text[24];
+    size_t n = (size_t)snprintf(text, sizeof text, "%" PRIu64, whole);
+    return agc_json_leaf(AGC_JSON_BIG, agc_string_value(agc_json_ascii(text, n)));
+  }
   if (agc_is(v, AGC_T_FLOAT)) {
     if (!isfinite(agc_as_float(vm, v))) not_finite(vm, span);
     return agc_json_leaf(AGC_JSON_FLOAT, v);

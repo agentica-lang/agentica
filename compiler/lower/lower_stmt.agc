@@ -765,16 +765,26 @@ def lower_literal_test(
   skip: Int,
 ) -> Result[Lowering.Fx]
   imm = Ir.Imm.Nil
+  uint64 = Types.uint64?(cx.types[node.id])
   case node.value
-    Ast.LitValue.Whole(number) -> imm = Ir.Imm.Int(number)
+    Ast.LitValue.Whole(number) ->
+      imm = Ir.Imm.Int(number)
+      if uint64
+        imm = Ir.Imm.UInt64(number)
+      end
+
     Ast.LitValue.Real(number) -> imm = Ir.Imm.Float(number)
     Ast.LitValue.Text(text) -> imm = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> imm = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> imm = Ir.Imm.Nil
     Ast.LitValue.Huge(digits) ->
-      return ok(Lowering.emit_at(fx, "jump", [skip], node.span)) if digits != "-#{INT_MIN_DIGITS}"
-
-      imm = Ir.Imm.Int(INT_MIN)
+      if uint64 and Types.uint64_digits_fit?(digits)
+        imm = Ir.Imm.UInt64(Types.uint64_bits(digits))
+      elsif digits == "-#{INT_MIN_DIGITS}" and !uint64
+        imm = Ir.Imm.Int(INT_MIN)
+      else
+        return ok(Lowering.emit_at(fx, "jump", [skip], node.span))
+      end
   end
 
   fx = Lowering.alloc(fx)

@@ -94,9 +94,15 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   fail; `a.to_uint16` (a widening that fits) and `a.to_f` have no Result; any
   other conversion is `a.to_i.to_uint8!`. `Int64` and `Float64` are `Int` and
   `Float`; all ten names are reserved.
+- `UInt64`: as the unsigned narrow types, up to 18446744073709551615, with
+  its own unsigned `+ - * / %` and comparisons (`RUNTIME-INTEGER-OVERFLOW`
+  past 0 or 2^64 - 1, `RUNTIME-DIVISION-BY-ZERO`); `n.to_uint64` (Result),
+  `n.to_uint64!`, `n.wrap_uint64`, `x.to_i` (a Result: an error above the
+  greatest Int), `x.to_i!`, `x.to_f`; `u32.to_uint64` widens; JSON, `Map` keys,
+  `Set` elements and `List.sort` take it.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
-  keeps insertion order, `K` is `Int`, a narrow integer, `String`, `Bytes` or
+  keeps insertion order, `K` is `Int`, a sized integer, `String`, `Bytes` or
   `Ref`. `Set[T]`: distinct, immutable, first-insertion order, `T` is a key type
   (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, `==` in any order, not
   JSON-encodable.

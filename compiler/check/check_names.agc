@@ -25,6 +25,7 @@ METHOD_KINDS = [
   "UInt8",
   "UInt16",
   "UInt32",
+  "UInt64",
   "Range",
   "Bytes",
   "Channel",

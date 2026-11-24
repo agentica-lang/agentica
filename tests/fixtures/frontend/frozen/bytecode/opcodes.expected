@@ -53,3 +53,10 @@ global-set 51
 try-step 52
 jump-variant 53
 no-match 54
+add-u 55
+sub-u 56
+mul-u 57
+div-u 58
+mod-u 59
+lt-u 60
+le-u 61

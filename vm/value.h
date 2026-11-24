@@ -40,7 +40,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_GLOBAL_FAILED 1
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF, AGC_T_UINT64
 } agc_tag;
 
 typedef struct {
@@ -211,6 +211,7 @@ typedef enum {
   AGC_OP_TRY_STEP,
   AGC_OP_JUMP_VARIANT,
   AGC_OP_NO_MATCH,
+  AGC_OP_ADD_U, AGC_OP_SUB_U, AGC_OP_MUL_U, AGC_OP_DIV_U, AGC_OP_MOD_U, AGC_OP_LT_U, AGC_OP_LE_U,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -474,16 +475,17 @@ typedef struct {
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
    variants (agc_enum_def.payload_types). AGC_TYPE_INSTANCE is an instance of a generic struct (arg is its index in
    agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. AGC_TYPE_INT8 to
-   AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. */
+   AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. AGC_TYPE_UINT64 is a
+   scalar too, with a tag of its own. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
   AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE, AGC_TYPE_INT8, AGC_TYPE_INT16,
-  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32
+  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32, AGC_TYPE_UINT64
 } agc_type_kind;
 
-/* True for a kind of the type table with no operand: Int, Float, Bool, String and the narrow integers. */
+/* True for a kind of the type table with no operand: Int, Float, Bool, String, the narrow integers and UInt64. */
 static inline bool agc_type_scalar(uint32_t kind) {
-  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT32);
+  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT64);
 }
 
 /* True for a narrow integer kind; *least and *greatest are its range. */
@@ -783,6 +785,14 @@ static inline agc_value agc_ref(uint64_t id) {
   return v;
 }
 
+/* A UInt64: its 64 bits in as.i, read unsigned. It has a tag of its own, so no Int builtin or opcode takes one. */
+static inline agc_value agc_uint64(uint64_t u) {
+  agc_value v;
+  v.tag = AGC_T_UINT64;
+  v.as.i = (int64_t)u;
+  return v;
+}
+
 static inline agc_value agc_float(double f) {
   agc_value v;
   v.tag = AGC_T_FLOAT;
@@ -870,9 +880,15 @@ static inline uint64_t agc_as_ref(agc_vm *vm, agc_value v) {
   return (uint64_t)v.as.i;
 }
 
+static inline uint64_t agc_as_uint64(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_UINT64) agc_wrong_tag(vm);
+  return (uint64_t)v.as.i;
+}
+
 /* A tag of a Map key or a Set element. */
 static inline bool agc_key_tag(agc_value v) {
-  return v.tag == AGC_T_INT || v.tag == AGC_T_STRING || v.tag == AGC_T_BYTES || v.tag == AGC_T_REF;
+  return v.tag == AGC_T_INT || v.tag == AGC_T_STRING || v.tag == AGC_T_BYTES || v.tag == AGC_T_REF ||
+         v.tag == AGC_T_UINT64;
 }
 
 static inline double agc_as_float(agc_vm *vm, agc_value v) {

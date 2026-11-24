@@ -198,7 +198,8 @@ zero alone is decimal, not octal (`0755` is `755`), and a Float has no other
 base.
 
 An integer literal is an `Int`, unless its context expects a narrow integer
-type (`Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` or `UInt32`): an
+type (`Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32` or `UInt64`; a `UInt64`
+literal may be as large as 18446744073709551615): an
 annotation, a parameter, a struct field, a return type, a list or map item, or
 a `case` pattern on a value of that type. Then the literal has that type and
 must be in its range, or it is `CHECK-INT-RANGE` with the literal as the span

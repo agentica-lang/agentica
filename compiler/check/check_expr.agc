@@ -176,7 +176,7 @@ end
 # The narrow integer type that an integer literal takes where `expected` is expected, or Unknown, and the literal is an
 # Int.
 def narrow_target(expected: T.Type) -> T.Type
-  return expected if T.narrow_int?(expected)
+  return expected if T.sized_int?(expected)
 
   T.Type.Unknown
 end
@@ -194,9 +194,12 @@ def narrow_literal(
   target: T.Type,
   span: Source.Span,
 ) -> Result[State.Out]
-  if huge or !T.narrow_fits?(target, value)
-    return error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(target, text), span))
+  fits = T.narrow_fits?(target, value)
+  if huge
+    fits = T.uint64?(target) and T.uint64_digits_fit?(text)
   end
+
+  return error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(target, text), span)) if !fits
 
   ok(State.Out(st: st, type: target))
 end
@@ -872,7 +875,7 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) 
     wanted = left.type
   elsif node.op == "plus" and T.is?(left.type, "List")
     wanted = left.type
-  elsif NUMBER_OPERATORS.include?(node.op) and T.narrow_int?(left.type) and literal_tree?(node.right)
+  elsif NUMBER_OPERATORS.include?(node.op) and T.sized_int?(left.type) and literal_tree?(node.right)
     wanted = left.type
   end
 
@@ -992,6 +995,13 @@ def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) ->
   error(Failure.pack(base.with(expected: left, actual: right, labels: labels)))
 end
 
+# The method that gives the Int of a sized integer type: to_i, which a UInt64 has as a Result, so to_i! there.
+def to_int(type: T.Type) -> String
+  return "to_i!" if T.uint64?(type)
+
+  "to_i"
+end
+
 def same_help(sides: Sides, with_to_s: Bool) -> String
   either_int = T.is?(sides.left, "Int") or T.is?(sides.right, "Int")
   either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
@@ -999,20 +1009,25 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_error = T.error?(sides.left) or T.error?(sides.right)
   narrow = sides.left
   other = sides.right
-  if !T.narrow_int?(narrow)
+  if !T.sized_int?(narrow)
     narrow = sides.right
     other = sides.left
   end
 
-  if T.narrow_int?(narrow) and T.narrow_int?(other)
+  if T.sized_int?(narrow) and T.sized_int?(other)
+    name = T.tag(narrow)
+    gives = "x.#{to_int(narrow)} gives the Int of either side"
+    if to_int(narrow) != to_int(other)
+      gives = "x.#{to_int(narrow)} gives the Int of #{name} values, x.#{to_int(other)} of #{T.tag(other)} values"
+    end
+
+    return "make both sides one type: #{gives}, n.to_#{name.downcase}! the #{name} of an Int"
+  elsif T.sized_int?(narrow) and T.is?(other, "Int")
     name = T.tag(narrow)
     return (
-      "make both sides one type: x.to_i gives the Int of either side, " +
+      "make both sides one type: x.#{to_int(narrow)} gives the Int of a #{name}, " +
       "n.to_#{name.downcase}! the #{name} of an Int"
     )
-  elsif T.narrow_int?(narrow) and T.is?(other, "Int")
-    name = T.tag(narrow)
-    return "make both sides one type: x.to_i gives the Int of a #{name}, n.to_#{name.downcase}! the #{name} of an Int"
   elsif either_string and either_error
     return ERROR_TEXT_HELP
   elsif either_int and either_float
@@ -1077,7 +1092,7 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if T.narrow_int?(sides.left) or T.narrow_int?(sides.right)
+  if T.sized_int?(sides.left) or T.sized_int?(sides.right)
     try same_types(cx, sides, node, false)
     return ok(sides.left)
   end

@@ -4,6 +4,7 @@
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
+import Types from "../syntax/types"
 import Ir from "ir"
 import Scans from "lower_scan"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
@@ -30,13 +31,14 @@ def plan(
   constant_scans: List[Scans.Scan],
   order: List[String],
   roots: List[String],
+  types: List[Types.Type],
 ) -> Plan
   by_name: Map[String, Int] = {}
   literals: Map[String, Ir.Imm] = {}
   at = 0
   while at < constants.size
     by_name = by_name.put(constants[at].name, at)
-    value = literal_value(constants[at].value)
+    value = literal_value(types, constants[at].value)
     case value
       some(imm) -> literals = literals.put(constants[at].name, imm)
       none -> literals = literals
@@ -79,17 +81,35 @@ end
 
 ## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
 ## initializer.
-def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
+def literal_value(types: List[Types.Type], value: Ast.Expr) -> Optional[Ir.Imm]
   case value
-    Ast.Expr.Literal(node) -> plain(node.value)
+    Ast.Expr.Literal(node) ->
+      return uint64_value(node.value, false) if Types.uint64?(types[node.id])
+
+      plain(node.value)
     Ast.Expr.Unary(node) ->
       return none if node.op != "minus"
 
       case node.operand
-        Ast.Expr.Literal(inner) -> negated(inner.value)
+        Ast.Expr.Literal(inner) ->
+          return uint64_value(inner.value, true) if Types.uint64?(types[node.id])
+
+          negated(inner.value)
         _ -> none
       end
 
+    _ -> none
+  end
+end
+
+## The value of an integer literal of type UInt64, which a minus before it (`-0`) leaves zero.
+def uint64_value(value: Ast.LitValue, negative: Bool) -> Optional[Ir.Imm]
+  case value
+    Ast.LitValue.Whole(number) -> some(Ir.Imm.UInt64(number))
+    Ast.LitValue.Huge(digits) ->
+      return none if negative
+
+      some(Ir.Imm.UInt64(Types.uint64_bits(digits)))
     _ -> none
   end
 end

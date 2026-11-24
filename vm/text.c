@@ -200,6 +200,7 @@ static size_t int_text(int64_t n, char text[AGC_SCALAR_TEXT]) {
 
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_INT)) return int_text(agc_as_int(vm, v), text);
+  if (agc_is(v, AGC_T_UINT64)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRIu64, agc_as_uint64(vm, v));
   if (agc_is(v, AGC_T_NIL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "nil");
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);

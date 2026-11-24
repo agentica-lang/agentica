@@ -204,35 +204,247 @@ NARROW_ROWS: List[Model.Builtin] = Types.NARROW_INTS.keys.flat_map do |name: Str
   ].concat(widenings)
 end
 
-ROWS: List[Model.Builtin] = NARROW_ROWS.concat([
+## The rows of UInt64, which has a tag of its own in the VM and so builtins of its own.
+UINT64_ROWS: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Int.wrapping_add",
-    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
+    name: "UInt64.to_i",
+    parameters: [Model.Named(name: "uint64", type: Types.Type.UInt64)],
+    result: Types.Type.Result(Types.Type.Int),
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.to_int",
+    effects: [],
+    description: "The UInt64 as an Int, or an error when it is above 9223372036854775807.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.to_i!",
+    parameters: [Model.Named(name: "uint64", type: Types.Type.UInt64)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
-    implementation: "Int.wrapping_add",
+    implementation: "UInt64.to_int!",
+    effects: [],
+    description: "The UInt64 as an Int; halts when it is above 9223372036854775807.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.to_f",
+    parameters: [Model.Named(name: "uint64", type: Types.Type.UInt64)],
+    result: Types.Type.Float,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.to_float",
+    effects: [],
+    description: "The UInt64 as a Float, rounded to the nearest.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Int.to_uint64",
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
+    result: Types.Type.Result(Types.Type.UInt64),
+    rule: Model.Rule.Plain,
+    implementation: "Int.to_uint64",
+    effects: [],
+    description: "The Int as a UInt64, or an error when it is negative.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Int.to_uint64!",
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "Int.to_uint64!",
+    effects: [],
+    description: "The Int as a UInt64; halts when it is negative.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Int.wrap_uint64",
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "Int.wrap_uint64",
+    effects: [],
+    description: "The 64 bits of the Int as a UInt64: -1 is 18446744073709551615; it never fails.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.bit_and",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.bit_and",
+    effects: [],
+    description: "Bitwise and.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.bit_or",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.bit_or",
+    effects: [],
+    description: "Bitwise or.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.bit_xor",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.bit_xor",
+    effects: [],
+    description: "Bitwise exclusive or.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.bit_not",
+    parameters: [Model.Named(name: "uint64", type: Types.Type.UInt64)],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.bit_not",
+    effects: [],
+    description: "Flip every bit: 18446744073709551615 - uint64.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.shift_left",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "count", type: Types.Type.Int),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.shift_left",
+    effects: [],
+    description: (
+      "Shift bits left; bits that leave the top are dropped, so it wraps; a count of 64 or more gives 0; a " +
+      "negative count halts."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.shift_right",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "count", type: Types.Type.Int),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.shift_right",
+    effects: [],
+    description: "Shift bits right, filling with zeros; a count of 64 or more gives 0; a negative count halts.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.shift_right_unsigned",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "count", type: Types.Type.Int),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.shift_right",
+    effects: [],
+    description: "The same as shift_right: a UInt64 has no sign bit.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "UInt64.wrapping_add",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.wrapping_add",
     effects: [],
     description: "The sum, keeping the low 64 bits.",
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Int.wrapping_sub",
-    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
-    result: Types.Type.Int,
+    name: "UInt64.wrapping_sub",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
     rule: Model.Rule.Plain,
-    implementation: "Int.wrapping_sub",
+    implementation: "UInt64.wrapping_sub",
     effects: [],
     description: "The difference, keeping the low 64 bits.",
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Int.wrapping_mul",
-    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
-    result: Types.Type.Int,
+    name: "UInt64.wrapping_mul",
+    parameters: [
+      Model.Named(name: "uint64", type: Types.Type.UInt64),
+      Model.Named(name: "other", type: Types.Type.UInt64),
+    ],
+    result: Types.Type.UInt64,
     rule: Model.Rule.Plain,
-    implementation: "Int.wrapping_mul",
+    implementation: "UInt64.wrapping_mul",
     effects: [],
     description: "The product, keeping the low 64 bits.",
     alternatives: [],
   ),
-])
+]
+
+## The widenings of the unsigned narrow types to UInt64: every value fits, so no Result.
+WIDEN_ROWS: List[Model.Builtin] = ["UInt8", "UInt16", "UInt32"].map do |name: String|
+  Model.Builtin(
+    name: "#{name}.to_uint64",
+    parameters: [Model.Named(name: name.downcase, type: Types.NARROW_TYPES[name])],
+    result: Types.Type.UInt64,
+    rule: Model.Rule.Plain,
+    implementation: "UInt64.from_narrow",
+    effects: [],
+    description: "The #{name} as a UInt64; every #{name} value fits.",
+    alternatives: [],
+  )
+end
+
+ROWS: List[Model.Builtin] = (
+  NARROW_ROWS.concat([
+    Model.Builtin(
+      name: "Int.wrapping_add",
+      parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Int.wrapping_add",
+      effects: [],
+      description: "The sum, keeping the low 64 bits.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Int.wrapping_sub",
+      parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Int.wrapping_sub",
+      effects: [],
+      description: "The difference, keeping the low 64 bits.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Int.wrapping_mul",
+      parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Int.wrapping_mul",
+      effects: [],
+      description: "The product, keeping the low 64 bits.",
+      alternatives: [],
+    ),
+  ])
+    .concat(UINT64_ROWS)
+    .concat(WIDEN_ROWS)
+)

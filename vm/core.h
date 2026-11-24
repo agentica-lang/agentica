@@ -282,6 +282,13 @@ agc_status agc_op_lt_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc
 agc_status agc_op_le_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_add_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_sub_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_mul_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_div_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_mod_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_lt_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_le_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_ne(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);

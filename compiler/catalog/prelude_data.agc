@@ -24,6 +24,7 @@ KEY_TYPES = [
   Types.Type.UInt8,
   Types.Type.UInt16,
   Types.Type.UInt32,
+  Types.Type.UInt64,
   Types.Type.String,
   Types.Type.Bytes,
   Types.Type.Opaque("Ref"),
