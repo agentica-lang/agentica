@@ -4,6 +4,7 @@
 ## program order, file by file.
 
 import {ENUMS, RECORDS, record_defaults} from "../catalog/builtins"
+import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import CheckCache from "../modules/check_cache"
@@ -205,6 +206,7 @@ def start(linked: Linker.Linked) -> State.Cx
     json_needs: {},
     lenient: Set.new([]),
     std: std_prefixes(linked.modules),
+    modules: linked.modules,
   )
 end
 
@@ -290,9 +292,92 @@ def lenient_files(linked: Linker.Linked, settings: Env.Settings) -> Set[String]
   Set.new(files)
 end
 
+# `check_all`, with the re-exported std/ types in each problem written as the file of the problem writes them.
+def run(
+  linked: Linker.Linked,
+  settings: Env.Settings,
+  main_required: Bool,
+  recover: Bool,
+  taken: Reuse.Taken,
+) -> Result[Recovered]
+  result = check_all(linked, settings, main_required, recover, taken)
+  return error(Failure.pack(settled([Failure.unpack(result.message)], linked)[0])) if !result.ok?
+
+  done = result.unwrap!
+  ok(done.with(problems: settled(done.problems, linked)))
+end
+
+# The problems with the re-exported std/ names of each written as its file writes them, computed once for each file.
+def settled(problems: List[Failure.Problem], linked: Linker.Linked) -> List[Failure.Problem]
+  names: Map[String, Map[String, String]] = {}
+  out: List[Failure.Problem] = []
+  for found in problems
+    if mentions_std?(found)
+      if !names.has_key?(found.file)
+        names = names.put(found.file, std_names(linked, found.file))
+      end
+
+      out = out.push(renamed(found, names[found.file]))
+    else
+      out = out.push(found)
+    end
+  end
+
+  out
+end
+
+def renamed(found: Failure.Problem, names: Map[String, String]) -> Failure.Problem
+  return found if names.size == 0
+
+  help = found.help
+  case found.help
+    Diag.Help.Hint(text) -> help = Diag.Help.Hint(T.replaced_names(text, names, false))
+    Diag.Help.NoHelp -> help = found.help
+  end
+
+  found.with(
+    message: T.replaced_names(found.message, names, false),
+    help: help,
+    expected: T.replaced_names(found.expected, names, false),
+    actual: T.replaced_names(found.actual, names, false),
+    callee: T.replaced_names(found.callee, names, false),
+    signature: T.replaced_names(found.signature, names, false),
+    labels: found.labels.map do |label: Failure.Label|
+      label.with(text: T.replaced_names(label.text, names, false))
+    end,
+  )
+end
+
+# What a message prints for each re-exported std/ type (`HTTP.Request`), to what the file writes (Linker.std_written).
+def std_names(linked: Linker.Linked, file: String) -> Map[String, String]
+  written = Linker.std_written(linked.modules, file)
+  names: Map[String, String] = {}
+  for original in T.REEXPORTED_TYPES.keys
+    text = T.to_text_as(T.Type.Struct(original, []), written)
+    if text != T.REEXPORTED_TYPES[original]
+      names = names.put(T.REEXPORTED_TYPES[original], text)
+    end
+  end
+
+  names
+end
+
+# Whether a text of the problem holds a re-exported std/ type as a message prints it.
+def mentions_std?(found: Failure.Problem) -> Bool
+  hint = ""
+  case found.help
+    Diag.Help.Hint(text) -> hint = text
+    Diag.Help.NoHelp -> hint = ""
+  end
+
+  texts = [found.message, found.expected, found.actual, found.callee, found.signature, hint]
+  texts = texts.concat(found.labels.map do |label: Failure.Label| label.text end)
+  texts.any? do |text: String| T.REEXPORTED_TYPES.values.any? do |canonical: String| text.include?(canonical) end end
+end
+
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends
 # the run.
-def run(
+def check_all(
   linked: Linker.Linked,
   settings: Env.Settings,
   main_required: Bool,

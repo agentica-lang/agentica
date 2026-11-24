@@ -7,6 +7,7 @@ import Model from "../catalog/builtin_model"
 import {CALLABLE_NAMES} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
+import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
@@ -128,7 +129,7 @@ end
 ## (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional, JSON.Field or Map
 ## key of one, that must be encodable once the variables are bound. lenient is the files in which a name that nothing
 ## reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import. std is the prefixes of the
-## modules of the standard library.
+## modules of the standard library. modules are the linked modules (for Linker.std_written).
 struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -154,6 +155,7 @@ struct Cx
   json_needs: Map[String, List[Types.Type]]
   lenient: Set[String]
   std: Set[String]
+  modules: List[Linker.LinkedModule]
 end
 
 ## What the body of a generic function does with JSON that its callers must know: Need is a JSON.encode or JSON.from
