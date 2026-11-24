@@ -203,8 +203,12 @@ annotation, a parameter, a struct field, a return type, a list or map item, or
 a `case` pattern on a value of that type. Then the literal has that type and
 must be in its range, or it is `CHECK-INT-RANGE` with the literal as the span
 (`x: UInt8 = 256`). A minus before such a literal is part of it: `x: Int8 =
--128` checks, and `x: UInt8 = -1` is `CHECK-INT-RANGE`. A Float literal never
-takes a narrow type.
+-128` checks, and `x: UInt8 = -1` is `CHECK-INT-RANGE`. A literal on either side
+of `+ - * / %`, `< <= > >=` or `== !=` takes the narrow type of the other
+side, and so does an arithmetic of integer literals (`(1 + 2) * 3`); with two
+such trees under an arithmetic operator, the type expected of the whole
+expression goes into both (`x: UInt8 = 1 + 2`). A Float literal never takes a
+narrow type.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

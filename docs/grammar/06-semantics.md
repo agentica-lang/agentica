@@ -12,6 +12,14 @@ programs are valid and how they run.
   these types where its context expects it (§4, "Literals"), and `x.to_i` and
   `n.to_uint8` and the like convert. `Int64` is another name of `Int`, and
   `Float64` of `Float`; the ten names are reserved
+- The narrow integer types take `+ - * / %`, `< <= > >=` and `== !=` between
+  two values of one type; two types, or one and `Int`, are
+  `CHECK-TYPE-MISMATCH`. The result must be in the type's range, or the program
+  stops with `RUNTIME-INTEGER-OVERFLOW`: `UInt8` `3 - 5` and `Int8` `-128 / -1`
+  do not wrap. An arithmetic of literals is checked step by step, so `x: Int8 =
+  -(64 + 64)` halts at `64 + 64`. `/` truncates toward zero and `%` takes the
+  sign of the dividend. An unsigned value has no unary minus
+  (`CHECK-TYPE-MISMATCH`)
 - `Bool`: Only `true` and `false`; there is no truthiness
 - `String`: Unicode text; concatenation with `+`, repetition with `* Int`
 - `Bytes`: Immutable byte string, one byte for each item (`0..255`); no literal

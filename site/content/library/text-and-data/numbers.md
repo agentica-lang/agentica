@@ -104,7 +104,7 @@ Int.to_uint8!(int: Int) -> UInt8
 
 The integer types narrower than `Int`, each with its own range: `Int8` holds `-128` to `127`, `Int16` `-32768` to `32767`, `Int32` `-2147483648` to `2147483647`, `UInt8` `0` to `255`, `UInt16` `0` to `65535` and `UInt32` `0` to `4294967295`. `Int64` is another name of `Int`, and `Float64` of `Float`.
 
-An integer literal takes the narrow type that its place expects: an annotation, a parameter, a struct field, a return type, a list or map item, or a `case` pattern on a value of that type. A minus before it is part of it, so `x: Int8 = -128` checks. A literal outside the type is `CHECK-INT-RANGE` at the literal. A value is never converted on its own: `to_i` gives the `Int`, `n.to_uint8` gives a Result that is an error when `n` is outside `0` to `255`, and `n.to_uint8!` stops the program there with `RUNTIME-INTEGER-OVERFLOW`. The same three methods exist for each narrow type: `to_int8`, `to_int16`, `to_int32`, `to_uint16` and `to_uint32`. Of the operators, only `==` and `!=` take narrow values, two of one type; a literal there stays an `Int` and is `CHECK-TYPE-MISMATCH`, so compare with `255.to_uint8!`.
+An integer literal takes the narrow type that its place expects: an annotation, a parameter, a struct field, a return type, a list or map item, or a `case` pattern on a value of that type. A minus before it is part of it, so `x: Int8 = -128` checks. A literal outside the type is `CHECK-INT-RANGE` at the literal. A value is never converted on its own: `to_i` gives the `Int`, `n.to_uint8` gives a Result that is an error when `n` is outside `0` to `255`, and `n.to_uint8!` stops the program there with `RUNTIME-INTEGER-OVERFLOW`. The same three methods exist for each narrow type: `to_int8`, `to_int16`, `to_int32`, `to_uint16` and `to_uint32`. The operators `+`, `-`, `*`, `/`, `%`, `<`, `<=`, `>`, `>=`, `==` and `!=` take two values of one narrow type, and an integer literal (or an arithmetic of literals, such as `(1 + 2) * 3`) on either side takes the type of the other side, so `a + 1` and `a == 255` work on a `UInt8`. Two different types, or a narrow type and an `Int`, are `CHECK-TYPE-MISMATCH`; convert one side. A result outside the type stops the program with `RUNTIME-INTEGER-OVERFLOW`, below zero as well: `UInt8` `3 - 5` does not wrap. An arithmetic of literals is checked step by step: `x: Int8 = -(64 + 64)` stops at `64 + 64`. `/` truncates toward zero and `%` takes the sign of the dividend, as for `Int`. An unsigned value has no unary minus (`CHECK-TYPE-MISMATCH`); write `0 - x`, which stops below zero.
 
 ```agentica
 struct Pixel
@@ -118,7 +118,7 @@ def main() -> Void
   puts(p.inspect)
   puts(p.r.to_i + low.to_i)
   puts(300.to_uint8.ok?)
-  puts(200.to_uint8! == p.r)
+  puts(p.r == 255)
 end
 ```
 
@@ -126,13 +126,20 @@ end
 Pixel(r: 255, g: 0)
 127
 false
-false
+true
 ```
 
 ```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
 def main() -> Void
   n = 70000
   puts(n.to_uint16!)
+end
+```
+
+```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
+def main() -> Void
+  r: UInt8 = 255
+  puts(r + 1)
 end
 ```
 
