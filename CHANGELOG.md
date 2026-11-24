@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A method call takes its `{ ... }` block in the head of an `if`, `elsif`, a guard, a `while`, a `for` or a `case`: `if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }` (#1924).
 - `bytes.incomplete_utf8_length` counts the bytes at the end that cut a UTF-8 character, so a stream reader can keep them for the next chunk (#1789).
 
+### Fixed
+
+- `agentica add NAME URL --tag NAME-X.Y.Z` with no `--subdir` fetches the tag once, so the folder it picks and the commit it locks come from the same fetch (#1839).
+
 ## [0.37.0] - 2026-11-23
 
 ### Added

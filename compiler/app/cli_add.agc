@@ -83,6 +83,13 @@ struct Request
   workspace: Bool
 end
 
+# The request with its folder settled, and the lock entry that the fetch of the settled source gave (none when no fetch
+# was needed).
+struct Opened
+  request: Request
+  fetched: List[Lock.Locked]
+end
+
 # NAME SOURCE, then --tag TAG, --ref COMMIT or --version REQUIREMENT (one of them), --subdir DIR when the package is a
 # folder of the repository or --workspace (a flag with no value) when it is the whole workspace of the repository,
 # and --group test for a dependency that only the tests import, in any order. A word that is not a good
@@ -180,13 +187,15 @@ def add_in(
     return error(Failure.fail_key(file, "dependencies.#{asked.name}", "PKG-DEPENDENCY-EXISTS", message, help))
   end
 
-  request = try with_tag_subdir(settings, found, asked)
+  opened = try with_tag_subdir(settings, found, asked)
+  request = opened.request
 
   text = try Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
   edited = ManifestEdit.add_dependency(text, request.name, request.source, request.test, request.workspace)
   manifest = try added_manifest(found.manifest, edited, request)
   refresh = PackageResolve.Refresh(all: false, name: "")
-  resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  start = Lock.Lock(file: found.lock.file, packages: found.lock.packages.concat(opened.fetched), artifacts: [])
+  resolved = try PackageResolve.resolve(settings, manifest, found.members, start, refresh)
   packages = resolved.packages
   artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
   prebuilt = try Prebuilt.fetch_all(settings, manifest, found.members, packages, fetching)
@@ -217,21 +226,22 @@ def check_source(settings: Env.Settings, dir: String, file: String, request: Req
 end
 
 # A tag NAME-X.Y.Z with no --subdir names the folder NAME of the repository when the tagged commit has the package
-# there and not at its root (PackageFetch.tag_subdir). A member of the workspace is that folder with no fetch, and
-# with no check of the root manifest's name: the member list says the folder is a package.
-def with_tag_subdir(settings: Env.Settings, found: Project.Found, request: Request) -> Result[Request]
+# there and not at its root. A member of the workspace is that folder with no fetch, and with no check of the root
+# manifest's name: the member list says the folder is a package. Else the one fetch (PackageFetch.resolve_open) gives
+# the folder and the lock entry of the same commit, which the resolution then keeps.
+def with_tag_subdir(settings: Env.Settings, found: Project.Found, request: Request) -> Result[Opened]
   package = GitSource.tag_package(request.source.tag)
-  return ok(request) if request.workspace or package == "" or request.source.subdir != ""
-  return ok(request) if GitSource.subdir_problem(package) != ""
+  return ok(Opened(request: request, fetched: [])) if request.workspace or package == "" or request.source.subdir != ""
+  return ok(Opened(request: request, fetched: [])) if GitSource.subdir_problem(package) != ""
 
   folder = request.source.with(subdir: package)
-  return ok(request.with(source: folder)) if Members.member?(found.members, folder)
+  return ok(Opened(request: request.with(source: folder), fetched: [])) if Members.member?(found.members, folder)
 
   file = found.manifest.file
   cache = try PackageFetch.cache_root(settings.env, file)
   place = PackageFetch.Place(file: file, entry: Reader.child("dependencies", request.name))
-  subdir = try PackageFetch.tag_subdir(settings.workspace, cache, place, request.source, package)
-  ok(request.with(source: request.source.with(subdir: subdir)))
+  locked = try PackageFetch.resolve_open(settings.workspace, cache, place, request.name, request.source, package)
+  ok(Opened(request: request.with(source: locked.source), fetched: [locked]))
 end
 
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.

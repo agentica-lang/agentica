@@ -782,9 +782,10 @@ import Sqlite from "pkg/sqlite/db"
     working folder (a local package is a `path` dependency), is
     `PKG-SOURCE-INVALID` at `dependencies.<name>.git`. With a tag
     `NAME-X.Y.Z` (a SemVer version, a pre-release too) and no `--subdir`, `add`
-    fetches the tag and takes the folder NAME of the tag when the commit has
-    the file `NAME/agentica.toml` and its root has no `agentica.toml` whose
-    `name` is NAME; else the repository itself. The commit of `--ref` is the
+    fetches the tag once and takes the folder NAME of the tag when the commit
+    has the file `NAME/agentica.toml` and its root has no `agentica.toml` whose
+    `name` is NAME; else the repository itself, and the lock pins that same
+    commit. The commit of `--ref` is the
     whole id
     (40 or, for SHA-256, 64 digits), since git fetches no abbreviation (a
     package whose manifest asks for a part of an id that the lock lacks is

@@ -338,6 +338,31 @@ def test_add_with_a_tag_name_version_and_no_package_folder_takes_the_repository_
     assert line == "jobs = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0"))
 
 
+@pytest.mark.parametrize("files, folder", [
+    ({"jobs/" + path: text for path, text in JOBS.items()}, "jobs"),
+    ({"run.agc": "# root\n"}, ""),
+], ids=["the folder of the tag", "the repository itself"])
+def test_add_with_a_tag_name_version_fetches_once_and_locks_the_commit_it_chose_the_folder_from(
+        ws, remotes, tmp_path, files, folder):
+    remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
+    log = tmp_path / "fetches"
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    script = shim / "git"
+    script.write_text('#!/bin/sh\ncase " $* " in *" fetch "*) echo fetch >> %s;; esac\nPATH=%s exec git "$@"\n'
+                      % (log, os.environ["PATH"]), encoding="utf-8")
+    script.chmod(0o755)
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = run(cli() + ["add", "jobs", url(remotes), "--tag", "jobs-0.1.0"], cwd=ws.project,
+                 env=environment(ws, remotes, PATH=str(shim) + os.pathsep + os.environ["PATH"]))
+    assert result.code == 0, result.stderr
+    assert log.read_text(encoding="utf-8") == "fetch\n"
+    commit = remotes.git("rev-parse", "HEAD", cwd=remotes.work / REPOSITORY)
+    lock_entry(ws, remotes, REPOSITORY, JOBS if folder else {"run.agc": "# root\n"}, commit, tag="jobs-0.1.0",
+               name="jobs", subdir=folder or None)
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == ws.lock_text()
+
+
 def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes, tmp_path):
     manifest = 'name = "postgres"\n\n[dependencies]\ncommon = %s\n' % inline_table(
         dependency(url(remotes), tag="common-1", subdir="common"))
