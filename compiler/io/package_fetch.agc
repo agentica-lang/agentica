@@ -47,11 +47,13 @@ struct Entry
 end
 
 ## One thing that a manifest asks of the tag of a package: a `version` requirement (`text`), or a `tag` pin that reads
-## as a version (an exact one), and the package whose manifest asked ("" for the project's).
+## as a version (an exact one), the package whose manifest asked (`by`, "" for the project's) and the commit of that
+## package that was read (`at`), so that the ask of a package that has moved to another tag can be told apart.
 struct Ask
   text: String
   tag: String
   by: String
+  at: String
 end
 
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
@@ -219,13 +221,13 @@ end
 
 ## What a dependency asks of the tag, or none when it asks nothing that other asks can meet: a `version`, or a `tag`
 ## that is a version of the repository or folder (`X.Y.Z`, `vX.Y.Z`, or `NAME-X.Y.Z` with a subdir).
-def ask_for(source: GitSource.Source, by: String) -> Optional[Ask]
-  return some(Ask(text: source.version, tag: "", by: by)) if source.version != ""
+def ask_for(source: GitSource.Source, by: String, at: String) -> Optional[Ask]
+  return some(Ask(text: source.version, tag: "", by: by, at: at)) if source.version != ""
 
   prefix = VersionRequirement.tag_prefix(source.subdir)
   return none if source.tag == "" or !VersionRequirement.tag_version(source.tag, prefix).some?
 
-  some(Ask(text: "", tag: source.tag, by: by))
+  some(Ask(text: "", tag: source.tag, by: by, at: at))
 end
 
 ## Whether the tag meets every ask: it is a version of the repository or folder, equal to each pinned tag and
@@ -237,19 +239,34 @@ def fits?(subdir: String, tag: String, asks: List[Ask]) -> Bool
   asks.all? do |ask: Ask| meets?(ask, tag, prefix) end
 end
 
-## The tag that a `version` dependency takes now, for `add` and `update`: `git ls-remote --tags` of the repository (the
-## only place that lists tags, so install and the build stay offline), then the highest tag that meets every ask for
-## the package, the requirements of the whole tree and the tags it pins (`asks`, which hold the one of `source`). It
-## gives the source with that `tag` besides its `version`. A repository with no such tag is PKG-VERSION-UNSATISFIED at
-## `version` of the dependency that `place` names, with who asked for what in the message and the newest tags that read
-## as a version in the help; a git that fails is PKG-FETCH.
+## The names of the tags of a repository, from `git ls-remote --tags --refs` (the only place that lists tags, so
+## install and the build stay offline). A name that is not UTF-8 comes scrubbed, so it reads as no version. A git that
+## fails is PKG-FETCH at `place`.
+def list_tags(cache: String, place: Place, git_url: String) -> Result[List[String]]
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  listed = git(place, scratch, ["ls-remote", "--tags", "--refs", "--", git_url])
+  remove_temp(temp)
+  listing = try listed
+  ok(tag_names(listing.scrub))
+end
+
+## The tag that a `version` dependency takes now, for `add` and `update`: the highest of `tags` (`list_tags`) that
+## meets every ask for the package, the requirements of the whole tree and the tags it pins (`asks`, which hold the
+## one of `source`). It gives the source with that `tag` besides its `version`. A repository with no such tag is
+## PKG-VERSION-UNSATISFIED at `version` of the dependency that `place` names, with who asked for what in the message
+## and the newest tags that read as a version in the help.
 def choose_tag(
-  workspace: Workspace.Workspace,
-  cache: String,
   place: Place,
   name: String,
   source: GitSource.Source,
   asks: List[Ask],
+  tags: List[String],
 ) -> Result[GitSource.Source]
   requirements: List[VersionRequirement.Requirement] = []
   pins: List[String] = []
@@ -267,17 +284,6 @@ def choose_tag(
     requirements = requirements.push(requirement.unwrap!)
   end
 
-  made = make_temp(cache)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
-  end
-
-  temp = made.unwrap!
-  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  listed = git(place, scratch, ["ls-remote", "--tags", "--refs", "--", source.git])
-  remove_temp(temp)
-  listing = try listed
-  tags = tag_names(listing.scrub)
   prefix = VersionRequirement.tag_prefix(source.subdir)
   candidates = tags
   if pins.size > 0

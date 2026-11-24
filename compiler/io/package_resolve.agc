@@ -59,16 +59,24 @@ def resolve(
   refresh: Refresh,
 ) -> Result[Resolved]
   asks: Map[String, List[PackageFetch.Ask]] = {}
+  listings: Map[String, List[String]] = {}
+  starts: List[String] = []
+  name = ""
+  file = manifest.file
   for _ in 0...MAX_PASSES
-    done = try pass(settings, manifest, members, old, refresh, asks)
+    done = try pass(settings, manifest, members, old, refresh, asks, listings)
     return ok(done.resolved) if !done.again
 
     asks = done.asks
+    listings = done.listings
+    name = done.name
+    file = done.file
+    return error(moving(file, name, "starts a pass that it started before")) if starts.include?(fingerprint(asks))
+
+    starts = starts.push(fingerprint(asks))
   end
 
-  place = PackageFetch.Place(file: manifest.file, entry: "dependencies")
-  message = "the requirements of the packages move the tags for more than #{MAX_PASSES} passes"
-  error(PackageFetch.fail(place, "PKG-VERSION-UNSATISFIED", "", message, ""))
+  error(moving(file, name, "is still moving after #{MAX_PASSES} passes"))
 end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
@@ -137,14 +145,14 @@ MAX_PASSES = 32
 NATIVE_TIMEOUT_MS = 300_000
 
 # A package some manifest asks for, the file of that manifest (the project's, or the cached one of a package), the
-# package it belongs to ("" for the project's), whether it says `override = true` (only the project's can) and
-# whether it
-# is a workspace dependency.
+# package it belongs to ("" for the project's) and the commit of it that was read, whether it says `override = true`
+# (only the project's can) and whether it is a workspace dependency.
 struct Wanted
   name: String
   source: GitSource.Source
   asked_in: String
   by: String
+  at: String
   override: Bool
   workspace: Bool
 end
@@ -156,10 +164,14 @@ struct Found_artifact
   row: String
 end
 
-# What one pass found: whether it stopped to start again, the asks to start with, and what it resolved.
+# What one pass found: whether it stopped to start again (and then the name and the manifest of the ask that stopped
+# it), the asks to start the next one with, the tags of the repositories that were listed, and what it resolved.
 struct Pass
   again: Bool
+  name: String
+  file: String
   asks: Map[String, List[PackageFetch.Ask]]
+  listings: Map[String, List[String]]
   resolved: Resolved
 end
 
@@ -172,8 +184,10 @@ def pass(
   old: Lock.Lock,
   refresh: Refresh,
   start: Map[String, List[PackageFetch.Ask]],
+  seen: Map[String, List[String]],
 ) -> Result[Pass]
   asks = start
+  listings = seen
   # Only a package that is fetched needs the cache, so a manifest of workspace members and paths alone works with no
   # HOME.
   cache = ""
@@ -184,6 +198,7 @@ def pass(
       source: dependency.source,
       asked_in: manifest.file,
       by: "",
+      at: "",
       override: dependency.override,
       workspace: dependency.workspace,
     )
@@ -196,25 +211,65 @@ def pass(
   while at < queue.size
     wanted = queue[at]
     at += 1
-    asks = note_ask(asks, wanted)
     if found.has_key?(wanted.name)
       if found[wanted.name].override
         asked = note_asked(asked, found[wanted.name], wanted)
       else
+        asks = note_ask(asks, wanted)
         again = try reconcile(found[wanted.name], wanted, asks)
-        return ok(Pass(again: true, asks: asks, resolved: Resolved(packages: [], asked: {}))) if again
+        if again
+          return ok(
+            Pass(
+              again: true,
+              name: wanted.name,
+              file: wanted.asked_in,
+              asks: current_asks(asks, found),
+              listings: listings,
+              resolved: Resolved(packages: [], asked: {}),
+            ),
+          )
+        end
       end
 
       next
     end
 
+    asks = note_ask(asks, wanted)
+
     if cache == "" and !in_place?(members, wanted.source)
       cache = try PackageFetch.cache_root(settings.env, old.file)
     end
 
-    settled = try settle(settings, cache, members, old, refresh, wanted, asks_of(asks, wanted.name))
+    here_asks = asks_of(asks, wanted.name)
+    tags: List[String] = []
+    if wanted.source.version != "" and !wanted.workspace and !in_place?(members, wanted.source)
+      if kept_at(old, refresh, wanted, here_asks) < 0
+        place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
+        listings = try listed(cache, place, listings, wanted.source.git)
+        tags = listings[GitSource.identity(wanted.source.git)]
+      end
+    end
+
+    settled = try settle(settings, cache, members, old, refresh, wanted, here_asks, tags)
     for locked in settled
       found = found.put(locked.name, locked)
+    end
+
+    # A package that moved to another tag leaves the asks of its old manifest behind. Those are dropped, and a name
+    # that this pass settled by them is settled again by starting over.
+    stale = moved_names(asks, settled)
+    asks = without_moved(asks, settled)
+    if stale.any? do |name: String| found.has_key?(name) end
+      return ok(
+        Pass(
+          again: true,
+          name: wanted.name,
+          file: wanted.asked_in,
+          asks: current_asks(asks, found),
+          listings: listings,
+          resolved: Resolved(packages: [], asked: {}),
+        ),
+      )
     end
 
     # The siblings of a member are in `found` by now, so they are not asked for again.
@@ -226,7 +281,94 @@ def pass(
     end
   end
 
-  ok(Pass(again: false, asks: asks, resolved: Resolved(packages: found.values, asked: asked)))
+  done = Resolved(packages: found.values, asked: asked)
+  ok(Pass(again: false, name: "", file: "", asks: asks, listings: listings, resolved: done))
+end
+
+# PKG-VERSION-UNSATISFIED at the dependency `name` of the manifest `file` that asked last: the asks of the tree never
+# settle on one tag of it.
+def moving(file: String, name: String, why: String) -> String
+  place = PackageFetch.Place(file: file, entry: Reader.child("dependencies", name))
+  message = "the tag of #{name} keeps moving: what the packages ask of it #{why}"
+  PackageFetch.fail(place, "PKG-VERSION-UNSATISFIED", "", message, "")
+end
+
+# The tags of a repository, listed once for the whole `resolve`.
+def listed(
+  cache: String,
+  place: PackageFetch.Place,
+  listings: Map[String, List[String]],
+  git: String,
+) -> Result[Map[String, List[String]]]
+  key = GitSource.identity(git)
+  return ok(listings) if listings.has_key?(key)
+
+  ok(listings.put(key, try PackageFetch.list_tags(cache, place, git)))
+end
+
+# The names that a package of `settled` asked something of in a manifest that is not the one it has now.
+def moved_names(asks: Map[String, List[PackageFetch.Ask]], settled: List[Lock.Locked]) -> List[String]
+  names: List[String] = []
+  for name in asks.keys
+    for locked in settled
+      if asks[name].any? do |ask: PackageFetch.Ask| ask.by == locked.name and ask.at != locked.commit end
+        names = names.push(name)
+      end
+    end
+  end
+
+  names
+end
+
+# The asks without those of the manifests that the packages of `settled` had before.
+def without_moved(
+  asks: Map[String, List[PackageFetch.Ask]],
+  settled: List[Lock.Locked],
+) -> Map[String, List[PackageFetch.Ask]]
+  kept: Map[String, List[PackageFetch.Ask]] = {}
+  for name in asks.keys
+    current = asks[name].select do |ask: PackageFetch.Ask|
+      !settled.any? do |locked: Lock.Locked| ask.by == locked.name and ask.at != locked.commit end
+    end
+
+    if current.size > 0
+      kept = kept.put(name, current)
+    end
+  end
+
+  kept
+end
+
+# The asks that the next pass starts with: the project's, and those of a package that is settled at the commit that
+# was read (the ask of a package that has moved to another tag, or that this pass has not reached yet, may not hold).
+def current_asks(
+  asks: Map[String, List[PackageFetch.Ask]],
+  found: Map[String, Lock.Locked],
+) -> Map[String, List[PackageFetch.Ask]]
+  kept: Map[String, List[PackageFetch.Ask]] = {}
+  for name in asks.keys
+    current = asks[name].select do |ask: PackageFetch.Ask|
+      ask.by == "" or (found.has_key?(ask.by) and found[ask.by].commit == ask.at)
+    end
+
+    if current.size > 0
+      kept = kept.put(name, current)
+    end
+  end
+
+  kept
+end
+
+# The asks as text, to tell whether a pass starts where an earlier one did.
+def fingerprint(asks: Map[String, List[PackageFetch.Ask]]) -> String
+  lines: List[String] = []
+  for name in asks.keys
+    for ask in asks[name]
+      lines = lines.push("#{name}|#{ask.text}|#{ask.tag}|#{ask.by}|#{ask.at}")
+    end
+  end
+
+  lines.sort.join("\n")
 end
 
 # The asks of a name, in the order they were noted.
@@ -241,7 +383,7 @@ end
 def note_ask(asks: Map[String, List[PackageFetch.Ask]], wanted: Wanted) -> Map[String, List[PackageFetch.Ask]]
   return asks if wanted.workspace or GitSource.local?(wanted.source)
 
-  ask = PackageFetch.ask_for(wanted.source, wanted.by)
+  ask = PackageFetch.ask_for(wanted.source, wanted.by, wanted.at)
   return asks if !ask.some?
 
   known = asks_of(asks, wanted.name)
@@ -251,7 +393,8 @@ def note_ask(asks: Map[String, List[PackageFetch.Ask]], wanted: Wanted) -> Map[S
 end
 
 def same_ask?(left: PackageFetch.Ask, right: PackageFetch.Ask) -> Bool
-  left.tag == right.tag and left.by == right.by and VersionRequirement.same?(left.text, right.text)
+  same_asker = left.by == right.by and left.at == right.at
+  same_asker and left.tag == right.tag and VersionRequirement.same?(left.text, right.text)
 end
 
 # Whether the pass has to start again because `wanted` asks for something that the entry `locked` of its name does
@@ -262,8 +405,8 @@ end
 def reconcile(locked: Lock.Locked, wanted: Wanted, asks: Map[String, List[PackageFetch.Ask]]) -> Result[Bool]
   return ok(false) if GitSource.same?(locked.source, wanted.source) and wanted.workspace == Lock.root?(locked)
 
-  asked = PackageFetch.ask_for(wanted.source, wanted.by)
-  held = PackageFetch.ask_for(locked.source, "")
+  asked = PackageFetch.ask_for(wanted.source, wanted.by, wanted.at)
+  held = PackageFetch.ask_for(locked.source, "", "")
   versioned = locked.source.version != "" or wanted.source.version != ""
   alike = GitSource.same_place?(locked.source, wanted.source) and !wanted.workspace and !Lock.root?(locked)
   if !(versioned and alike and asked.some? and held.some? and !locked.member)
@@ -357,6 +500,7 @@ def settle(
   refresh: Refresh,
   wanted: Wanted,
   asks: List[PackageFetch.Ask],
+  tags: List[String],
 ) -> Result[List[Lock.Locked]]
   if GitSource.local?(wanted.source)
     return ok([
@@ -388,20 +532,18 @@ def settle(
 
   return settle_workspace(settings, cache, old, refresh, wanted) if wanted.workspace
 
-  for index in 0...old.packages.size
+  index = kept_at(old, refresh, wanted, asks)
+  if index >= 0
     locked = old.packages[index]
-    same = locked.name == wanted.name and GitSource.same?(locked.source, wanted.source)
-    if same and !locked.member and !Lock.root?(locked) and !moves?(refresh, wanted) and keeps?(locked, asks)
-      place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
-      try PackageFetch.fill(settings.workspace, cache, place, locked)
-      return ok([locked.with(override: wanted.override)])
-    end
+    place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
+    try PackageFetch.fill(settings.workspace, cache, place, locked)
+    return ok([locked.with(override: wanted.override)])
   end
 
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   source = wanted.source
   if source.version != ""
-    source = try PackageFetch.choose_tag(settings.workspace, cache, place, wanted.name, source, asks)
+    source = try PackageFetch.choose_tag(place, wanted.name, source, asks, tags)
   end
 
   fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, source)
@@ -442,6 +584,19 @@ def settle_workspace(
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   fetched = try PackageFetch.resolve_workspace(settings.workspace, cache, place, wanted.name, wanted.source)
   ok([fetched[0].with(override: wanted.override)].concat(fetched.drop(1)))
+end
+
+# The index of the locked entry that is kept for `wanted`: the same source, not a member, nobody asked to move its pin
+# and it still meets the asks of its name. -1 when the pin is fetched.
+def kept_at(old: Lock.Lock, refresh: Refresh, wanted: Wanted, asks: List[PackageFetch.Ask]) -> Int
+  for index in 0...old.packages.size
+    locked = old.packages[index]
+    same = locked.name == wanted.name and GitSource.same?(locked.source, wanted.source)
+    kept = same and !locked.member and !Lock.root?(locked) and !moves?(refresh, wanted)
+    return index if kept and keeps?(locked, asks)
+  end
+
+  -1
 end
 
 # Whether a locked entry still meets the asks of its name: one that is not a `version` has nothing to meet.
@@ -487,6 +642,7 @@ def asked_by(
         source: dependency.source,
         asked_in: file,
         by: locked.name,
+        at: locked.commit,
         override: false,
         workspace: dependency.workspace,
       )
