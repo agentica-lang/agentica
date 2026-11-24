@@ -126,9 +126,6 @@ static void float_bits(buffer *b, double f) {
   u32(b, (uint32_t)(bits >> 32));
 }
 
-/* Version 6 writes the prelude flag of each function after its span; a version 5 file has none. */
-static bool flags_written = true;
-
 /* Returns where the instruction count is. */
 static size_t function(buffer *b, const char *name, uint32_t params, uint32_t captures, uint32_t registers,
                        const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t prelude) {
@@ -137,7 +134,7 @@ static size_t function(buffer *b, const char *name, uint32_t params, uint32_t ca
   u32(b, captures);
   u32(b, registers);
   u32(b, 0);
-  if (flags_written) u32(b, prelude);
+  u32(b, prelude);
   size_t count_at = b->len;
   u32(b, count);
   for (uint32_t i = 0; i < count; i++) {
@@ -159,7 +156,6 @@ static spec base(void) {
 
 static buffer build(spec s) {
   buffer b;
-  flags_written = s.version != AGC_FORMAT_PREVIOUS;
   b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0) + (s.updates ? s.updates->len : 0) +
                   (s.second_source ? strlen(s.second_source) : 0));
   assert(b.data);
@@ -1139,23 +1135,17 @@ static void prelude_tests(void) {
   char error[160] = "";
   agc_program *p;
 
-  /* The flag is 0 or 1, and a file of version 5 has none: both loaders read it, with no prelude function. */
+  /* The flag is 0 or 1. Version 5, the format before it, is refused by both loaders like any other old format. */
   spec s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
   assert(loads(s, NULL));
   s.funcs[1].prelude = 2;
   assert(!loads(s, "bad prelude flag"));
   s = base();
-  s.version = AGC_FORMAT_PREVIOUS;
+  s.version = AGC_FORMAT_VERSION - 1;
   buffer old = build(s);
-  assert(agc_load(old.data, old.len, &p, error, sizeof error));
-  assert(!p->functions[0].prelude);
-  assert(agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL));
-  free(old.data);
-  s.version = AGC_FORMAT_PREVIOUS - 1;
-  old = build(s);
   assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
+  assert(!agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL) && strstr(error, "format version"));
   free(old.data);
-  flags_written = true;
 
   /* __fail_arg belongs to prelude functions only. */
   s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);

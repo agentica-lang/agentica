@@ -16,9 +16,8 @@ branch.
 - **Header**: magic, format version and Agentica version match exactly, and the
   file ends right after the entry. The exception is the front end that the
   single binary loads itself (the carried one, or the file of `--front-end`):
-  its Agentica version may differ, and every other check applies to it. The
-  format version is the binary's (6) or the previous one (5, with no prelude
-  flag, §4.6).
+  its Agentica version may differ, and every other check applies to it,
+  the format version (6) included.
 - **Strings**: valid UTF-8 with no surrogates. Character counts are computed.
 - **Spans**: the source exists, `start <= end`, and each line is within the
   source's line count and each column within the line's length plus 1.

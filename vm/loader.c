@@ -936,8 +936,7 @@ static agc_string *joined(reader *r, const agc_string *base, const agc_string *a
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
-  if (r->format != AGC_FORMAT_VERSION && r->format != AGC_FORMAT_PREVIOUS)
-    reject(r, "unsupported format version");
+  if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 
@@ -1041,13 +1040,9 @@ static void load(reader *r, agc_program *p) {
     f->captures = read_u32(r);
     f->registers = read_u32(r);
     f->span = read_u32(r);
-    /* Version 6 added the prelude flag after the span (0 or 1); a version 5 file has no prelude function. */
-    f->prelude = false;
-    if (r->format >= AGC_FORMAT_VERSION) {
-      uint32_t flag = read_u32(r);
-      if (flag > 1) reject(r, "bad prelude flag");
-      f->prelude = flag == 1;
-    }
+    uint32_t flag = read_u32(r);
+    if (flag > 1) reject(r, "bad prelude flag");
+    f->prelude = flag == 1;
     if (f->registers == 0 || f->registers > 65535 || (uint64_t)f->params + f->captures > f->registers)
       reject(r, "bad register count");
     if (f->span >= p->span_count) reject(r, "span index out of range");
