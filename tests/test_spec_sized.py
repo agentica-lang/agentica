@@ -92,6 +92,9 @@ RULES = {
                                            "128"),
     "a map with narrow keys is not JSON": (main("m: Map[UInt8, Int] = {}", "puts(JSON.encode(m))"),
                                            "CHECK-NOT-ENCODABLE", "m"),
+    "a map with narrow keys is no decode target": (main('puts(JSON.decode("{}", Map[UInt8, Int]))'),
+                                                   "CHECK-NOT-DECODABLE", "Map[UInt8, Int]"),
+    "a field default out of range": ("struct Pixel\n  g: UInt8 = 300\nend\n\n" + main(), "CHECK-INT-RANGE", "300"),
     # The list sums of the narrow types come in a later pull request of #984.
     "no sum yet": (main("xs: List[UInt8] = [1]", "puts(xs.sum)"), "CHECK-TYPE-MISMATCH", "xs"),
     "a struct may not take a narrow name": ("struct Int8\n  a: Int\nend\n\n" + main(), "CHECK-REDEFINED-NAME", None),

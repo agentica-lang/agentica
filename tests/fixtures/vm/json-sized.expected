@@ -1,13 +1,16 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 161,
+  "steps": 175,
   "stdout": [
     "{\"type\":\"object\",\"properties\":{\"r\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":255},\"g\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":255},\"depth\":{\"type\":\"integer\",\"minimum\":-32768,\"maximum\":32767},\"id\":{\"type\":\"integer\",\"minimum\":-2147483648,\"maximum\":2147483647},\"tiny\":{\"type\":\"integer\",\"minimum\":-128,\"maximum\":127},\"port\":{\"anyOf\":[{\"type\":\"integer\",\"minimum\":0,\"maximum\":65535},{\"type\":\"null\"}]},\"count\":{\"anyOf\":[{\"type\":\"integer\",\"minimum\":0,\"maximum\":4294967295},{\"type\":\"null\"}]}},\"required\":[\"r\",\"depth\",\"id\",\"tiny\"]}",
     "ok(Pixel(r: 255, g: 7, depth: -32768, id: 2147483647, tiny: -128, port: JSON.Field.Absent, count: some(4294967295)))",
     "{\"r\":255,\"g\":7,\"depth\":-32768,\"id\":2147483647,\"tiny\":-128,\"count\":4294967295}",
     "ok([0, 255])",
     "error(\"[\\\"a\\\"]: expected UInt16 from 0 to 65535\", kind: \"json.decode\")",
+    "error(\"port: expected UInt16 from 0 to 65535 or null\", kind: \"json.decode\")",
+    "ok(Wide(n: -9223372036854775808, x: 1.5))",
+    "{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807},\"x\":{\"type\":\"number\"}},\"required\":[\"n\",\"x\"]}",
     "{255: \"max\", 0: \"min\", 7: \"seven\"}",
     "max",
     "none",

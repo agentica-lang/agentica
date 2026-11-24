@@ -1135,19 +1135,13 @@ static void prelude_tests(void) {
   char error[160] = "";
   agc_program *p;
 
-  /* The flag is 0 or 1. Version 5, the format before it, is refused by both loaders like any other old format; version
-     6 still loads (AGC_FORMAT_PREVIOUS). */
+  /* The flag is 0 or 1. Version 5, the format before it, is refused by both loaders like any other old format. */
   spec s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
   assert(loads(s, NULL));
   s.funcs[1].prelude = 2;
   assert(!loads(s, "bad prelude flag"));
   s = base();
-  s.version = AGC_FORMAT_PREVIOUS;
-  buffer six = build(s);
-  assert(agc_load(six.data, six.len, &p, error, sizeof error));
-  assert(agc_load_front_end(six.data, six.len, &p, error, sizeof error, NULL));
-  free(six.data);
-  s.version = AGC_FORMAT_PREVIOUS - 1;
+  s.version = AGC_FORMAT_VERSION - 1;
   buffer old = build(s);
   assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
   assert(!agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL) && strstr(error, "format version"));
@@ -1675,20 +1669,16 @@ static void narrow_default_tests(void) {
   }
 }
 
-/* A format-6 file (AGC_FORMAT_PREVIOUS) loads, but has no narrow integer kind. */
-static void previous_format_tests(void) {
-  static const struct {
-    uint8_t field;
-    const char *reason;
-  } cases[] = {{AGC_TYPE_INT, NULL}, {AGC_TYPE_INT8, "unknown type kind 11"}, {AGC_TYPE_UINT32, "unknown type kind 16"}};
-  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
-    buffer t = field_tables(cases[k].field, AGC_TYPE_INSTANCE, 0);
+/* The narrow integer kinds (11 to 16) are scalars with no operand in a file of this format; 17 is unknown. */
+static void narrow_kind_tests(void) {
+  for (uint32_t kind = AGC_TYPE_INT8; kind <= AGC_TYPE_UINT32 + 1; kind++) {
+    buffer t = field_tables((uint8_t)kind, AGC_TYPE_INSTANCE, 0);
     buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 0);
     spec s = base();
-    s.version = AGC_FORMAT_PREVIOUS;
     s.tables = &t;
     s.tail = &tail;
-    assert(loads(s, cases[k].reason) == (cases[k].reason == NULL));
+    const char *reason = kind > AGC_TYPE_UINT32 ? "unknown type kind 17" : NULL;
+    assert(loads(s, reason) == (reason == NULL));
     free(t.data);
     free(tail.data);
   }
@@ -2634,7 +2624,7 @@ int main(void) {
   json_instance_tests();
   field_default_tests();
   narrow_default_tests();
-  previous_format_tests();
+  narrow_kind_tests();
   session_json_names();
   error_struct_tests();
   stored_name_tests();

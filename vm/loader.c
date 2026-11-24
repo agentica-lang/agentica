@@ -529,8 +529,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    uint32_t last = r->format == AGC_FORMAT_PREVIOUS ? AGC_TYPE_INSTANCE : AGC_TYPE_UINT32;
-    if (t->kind > last) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_UINT32) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (agc_type_scalar(t->kind)) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -940,7 +939,7 @@ static agc_string *joined(reader *r, const agc_string *base, const agc_string *a
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
-  if (r->format != AGC_FORMAT_VERSION && r->format != AGC_FORMAT_PREVIOUS) reject(r, "unsupported format version");
+  if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 

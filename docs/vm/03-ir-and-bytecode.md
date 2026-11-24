@@ -382,7 +382,7 @@ Sections come in this fixed order. Each starts with a `u32` count, except the
 header and the entry.
 
 - **Section:** Header
-  - **Entry:** magic `"AGCB"`, `u32` format version (7), `str` Agentica version
+  - **Entry:** magic `"AGCB"`, `u32` format version (6), `str` Agentica version
     (the `VERSION` file)
 
 - **Section:** Sources
@@ -508,12 +508,12 @@ header and the entry.
   the layout or to an opcode's meaning bumps the format version. A new opcode,
   type kind or constant kind does not: an older VM rejects the file as unknown.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
-  such a file and the call fails at run time with a wrong value type. Version 7
-  added the narrow integer kinds of the sized numeric types (issue #984), and 8
-  is reserved by the builtin `Time` types (issue #985).
+  such a file and the call fails at run time with a wrong value type. The
+  narrow integer kinds of the sized numeric types (11 to 16, issue #984) needed
+  no bump for that reason. Versions 7 and 8 are reserved by the rest of the
+  sized numeric types and the builtin `Time` types (issue #985).
 - The C loader is the only reader of this format and has no compatibility
-  shims, with one exception until the next release: it still reads format 6,
-  which has no type of kind 11 to 16 (`AGC_FORMAT_PREVIOUS`).
+  shims.
 
 ### 4.7 The prelude
 

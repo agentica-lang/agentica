@@ -19,11 +19,7 @@
 
 /* The first four bytes of every .agcb file. */
 #define AGC_MAGIC "AGCB"
-#define AGC_FORMAT_VERSION 7
-/* The format before the narrow integer kinds of the type table (version 7). The loader still reads it, so that the
-   first binary of the bootstrap works from a stage0 of format 6; such a file has no type of kind 11 to 16. Remove it
-   after the next release. */
-#define AGC_FORMAT_PREVIOUS 6
+#define AGC_FORMAT_VERSION 6
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
@@ -486,7 +482,9 @@ typedef enum {
 } agc_type_kind;
 
 /* True for a kind of the type table with no operand: Int, Float, Bool, String and the narrow integers. */
-static inline bool agc_type_scalar(uint32_t kind) { return kind < AGC_TYPE_LIST || kind >= AGC_TYPE_INT8; }
+static inline bool agc_type_scalar(uint32_t kind) {
+  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT32);
+}
 
 /* True for a narrow integer kind; *least and *greatest are its range. */
 static inline bool agc_type_narrow(uint32_t kind, int64_t *least, int64_t *greatest) {
