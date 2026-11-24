@@ -143,6 +143,8 @@ def main() -> Void
 end
 ```
 
+A narrow type is a `Map` key and a `Set` element, like `Int`. In [JSON](/library/text-and-data/json/), `JSON.encode` writes it as a number, `JSON.decode` reads only an integer in its range (`r: expected UInt8 from 0 to 255` otherwise), and `JSON.schema` gives its range as `minimum` and `maximum`.
+
 ## abs, pow and gcd
 
 ```signature

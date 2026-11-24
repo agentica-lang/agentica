@@ -473,11 +473,28 @@ typedef struct {
    AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
    variants (agc_enum_def.payload_types). AGC_TYPE_INSTANCE is an instance of a generic struct (arg is its index in
-   agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. */
+   agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. AGC_TYPE_INT8 to
+   AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
-  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE
+  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE, AGC_TYPE_INT8, AGC_TYPE_INT16,
+  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32
 } agc_type_kind;
+
+/* True for a kind of the type table with no operand: Int, Float, Bool, String and the narrow integers. */
+static inline bool agc_type_scalar(uint32_t kind) {
+  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT32);
+}
+
+/* True for a narrow integer kind; *least and *greatest are its range. */
+static inline bool agc_type_narrow(uint32_t kind, int64_t *least, int64_t *greatest) {
+  static const int64_t ranges[][2] = {{INT8_MIN, INT8_MAX},   {INT16_MIN, INT16_MAX}, {INT32_MIN, INT32_MAX},
+                                      {0, UINT8_MAX},         {0, UINT16_MAX},        {0, UINT32_MAX}};
+  if (kind < AGC_TYPE_INT8 || kind > AGC_TYPE_UINT32) return false;
+  *least = ranges[kind - AGC_TYPE_INT8][0];
+  *greatest = ranges[kind - AGC_TYPE_INT8][1];
+  return true;
+}
 
 /* The variants of the builtin JSON.Field enum, in table order from agc_program.json_field. */
 enum { AGC_JSON_FIELD_ABSENT, AGC_JSON_FIELD_NULL, AGC_JSON_FIELD_VALUE };

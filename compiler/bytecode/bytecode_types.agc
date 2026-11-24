@@ -124,9 +124,9 @@ end
 private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
-# 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum, 10 struct instance) and, for the
-# last seven, the number of the item type, the struct, the type inside the JSON.Field or the Optional, the enum, or the
-# instance.
+# 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum, 10 struct instance, 11 to 16 Int8,
+# Int16, Int32, UInt8, UInt16 and UInt32) and, for tags 4 to 10, the number of the item type, the struct, the type
+# inside the JSON.Field or the Optional, the enum, or the instance.
 def type_id(
   program: Ir.Program,
   struct_index: Map[String, Int],
@@ -141,6 +141,12 @@ def type_id(
     Types.Type.Float -> ok(Pool.intern(pool, "1", [1]))
     Types.Type.Bool -> ok(Pool.intern(pool, "2", [2]))
     Types.Type.String -> ok(Pool.intern(pool, "3", [3]))
+    Types.Type.Int8 -> ok(Pool.intern(pool, "11", [11]))
+    Types.Type.Int16 -> ok(Pool.intern(pool, "12", [12]))
+    Types.Type.Int32 -> ok(Pool.intern(pool, "13", [13]))
+    Types.Type.UInt8 -> ok(Pool.intern(pool, "14", [14]))
+    Types.Type.UInt16 -> ok(Pool.intern(pool, "15", [15]))
+    Types.Type.UInt32 -> ok(Pool.intern(pool, "16", [16]))
     Types.Type.List(item) ->
       inner = try type_id(program, struct_index, enum_index, pool, item)
       ok(entry_of(inner.pool, 4, inner.id))

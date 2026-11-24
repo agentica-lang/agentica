@@ -21,6 +21,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica fmt` writes a brace block in an `if`, `elsif`, guard, `while`, `for` or `case` head without parentheses (#1924).
 - A method call takes its `{ ... }` block in the head of an `if`, `elsif`, a guard, a `while`, a `for` or a `case`: `if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }` (#1924).
 - `bytes.incomplete_utf8_length` counts the bytes at the end that cut a UTF-8 character, so a stream reader can keep them for the next chunk (#1789).
+- `JSON.encode`, `JSON.decode` and `JSON.schema` take the narrow integer types: decode reads only an integer in the type's range (`r: expected UInt8 from 0 to 255`), and the schema gives its `minimum` and `maximum`; the narrow types are `Map` keys and `Set` elements too (#984).
 
 ### Changed
 

@@ -315,9 +315,10 @@ def builtin_structs(used: Set[String], decodable: Map[String, List[Types.Type]])
 end
 
 # The user structs and enums JSON.decode can build, with their field types, or for an enum the payload types of all
-# its variants one after the other. Every type is an Int, Float, Bool or String, or a List, a Map from String or an
-# Optional of such a type or of a struct or enum that can be built itself. Only looked for when some function uses a
-# type name as a value. A generic enum is left out: JSON.decode takes a bare name, and the checker refuses an instance.
+# its variants one after the other. Every type is an Int, a narrow integer, Float, Bool or String, or a List, a Map
+# from String or an Optional of such a type or of a struct or enum that can be built itself. Only looked for when some
+# function uses a type name as a value. A generic enum is left out: JSON.decode takes a bare name, and the checker
+# refuses an instance.
 # Every struct that can be built is kept, but an enum only when it is one of type_names or a struct or another
 # kept enum
 # has it in a field or payload, since the type table of such a struct names it. An instance of a generic struct
@@ -592,10 +593,12 @@ def json_field_inner(
   args = ref.args
   if args.size == 0 and substitutions.has_key?(ref.name)
     return some(substitutions[ref.name])
-  elsif args.size == 0 and ref.name == "Int"
+  elsif args.size == 0 and (ref.name == "Int" or ref.name == "Int64")
     return some(Types.Type.Int)
-  elsif args.size == 0 and ref.name == "Float"
+  elsif args.size == 0 and (ref.name == "Float" or ref.name == "Float64")
     return some(Types.Type.Float)
+  elsif args.size == 0 and Types.NARROW_INTS.has_key?(ref.name)
+    return some(Types.narrow_int(ref.name))
   elsif args.size == 0 and ref.name == "Bool"
     return some(Types.Type.Bool)
   elsif args.size == 0 and ref.name == "String"
