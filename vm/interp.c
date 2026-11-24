@@ -206,7 +206,9 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   agc_fail_argument(vm, code, message, -1, span);
 }
 
-static agc_outcome *text_failure(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
+/* Inlined in both callers, so agc_fail_again below plain_turn does not move it (make layout-check). */
+static inline __attribute__((always_inline)) agc_outcome *text_failure(agc_vm *vm, const char *code,
+                                                                       const agc_string *message, uint32_t span) {
   agc_outcome *o = vm->outcome;
   o->kind = AGC_FAILED;
   o->code = code;
@@ -220,17 +222,6 @@ static agc_outcome *text_failure(agc_vm *vm, const char *code, const agc_string 
 void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {
   text_failure(vm, code, message, report_span(vm, span, argument));
   raise_failure(vm);
-}
-
-/* A failure that happened in another task and reaches this one (a link): its span is already the reported one, and its
-   stack is the original's, or none. */
-void agc_fail_again(agc_vm *vm, const char *code, const agc_string *message, uint32_t span, const agc_stack *stack) {
-  agc_outcome *o = text_failure(vm, code, message, span);
-  if (stack)
-    o->stack = *stack;
-  else
-    o->stack.shown = false;
-  unwind(vm);
 }
 
 void agc_exit(agc_vm *vm, int64_t code) {
@@ -2367,6 +2358,17 @@ NESTED void agc_task_clear_nested(agc_task *t) {
 
 NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
   *vm->outcome = *failed;
+  unwind(vm);
+}
+
+/* A failure that happened in another task and reaches this one (a link): its span is already the reported one, and its
+   stack is the original's, or none. Below plain_turn, so it does not move the loop of --jit off (make layout-check). */
+void agc_fail_again(agc_vm *vm, const char *code, const agc_string *message, uint32_t span, const agc_stack *stack) {
+  agc_outcome *o = text_failure(vm, code, message, span);
+  if (stack)
+    o->stack = *stack;
+  else
+    o->stack.shown = false;
   unwind(vm);
 }
 
