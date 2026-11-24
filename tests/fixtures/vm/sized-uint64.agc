@@ -103,12 +103,18 @@ end
 def order(parts: List[String]) -> Int
   split = parts.index("|").unwrap!
   given = parts.take(split).drop(1).map do |text: String| operand(text) end
-  want = parts.drop(split + 1)
-  differs(
-    "order",
-    given.sort.map do |value: UInt64| show(value) end,
-    want.map do |text: String| show(operand(text)) end,
-  )
+  expected = parts.drop(split + 1).map do |text: String| show(operand(text)) end
+  by_sort = given.sort.map do |value: UInt64| show(value) end
+  keyed = given.sort_by do |value: UInt64| value end
+  by_key = keyed.map do |value: UInt64| show(value) end
+  differs("order", by_sort, expected) + differs("order by key", by_key, expected)
+end
+
+def order8(parts: List[String]) -> Int
+  split = parts.index("|").unwrap!
+  given = parts.take(split).drop(1).map do |text: String| text.to_i!.to_int8! end
+  got = given.sort.map do |value: Int8| value.to_i.to_s end
+  differs("order8", got, parts.drop(split + 1))
 end
 
 def check(line: String) -> Int
@@ -121,6 +127,7 @@ def check(line: String) -> Int
     "wrap" -> wrap(parts)
     "widen" -> widen(parts)
     "order" -> order(parts)
+    "order8" -> order8(parts)
     "not" -> differs(line, [show(operand(parts[1]).bit_not)], [parts[2]])
     _ ->
       puts("unknown vector: #{line}")

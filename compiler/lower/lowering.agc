@@ -352,7 +352,7 @@ end
 def literal_default(value: Ast.LitValue, negative: Bool, uint64: Bool) -> Ir.FieldDefault
   case value
     Ast.LitValue.Whole(number) ->
-      return Ir.FieldDefault.Value(Ir.Imm.UInt64(0 - number)) if uint64 and negative
+      return Ir.FieldDefault.Value(Ir.Imm.UInt64(0)) if uint64 and negative
       return Ir.FieldDefault.Value(Ir.Imm.UInt64(number)) if uint64
       return Ir.FieldDefault.Value(Ir.Imm.Int(-number)) if negative
 

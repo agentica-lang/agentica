@@ -91,7 +91,7 @@ end
 List.sort(list: List[T]) -> List[T]
 ```
 
-Sorts `Int`, `Float`, `String` or `Ref` values, smallest first (a `Ref` by when it was made); any other element type is `CHECK-TYPE-MISMATCH`. The sort is stable and O(n log n). Strings sort by code point, so `"B"` comes before `"a"`, and a `NaN` goes last.
+Sorts `Int`, [sized integer](/library/text-and-data/numbers/#int8-int16-int32-uint8-uint16-and-uint32) (a `UInt64` as an unsigned number), `Float`, `String` or `Ref` values, smallest first (a `Ref` by when it was made); any other element type is `CHECK-TYPE-MISMATCH`. The sort is stable and O(n log n). Strings sort by code point, so `"B"` comes before `"a"`, and a `NaN` goes last.
 
 ```agentica
 def main() -> Void
@@ -111,7 +111,7 @@ end
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
-Sorts ascending by the key from the function (an `Int`, `Float`, `String` or `Ref`; any other key type is `CHECK-TYPE-MISMATCH`). The function runs once per element, left to right. Equal keys keep their order, and the cost is O(n log n) plus the key calls.
+Sorts ascending by the key from the function (an `Int`, a sized integer type, `Float`, `String` or `Ref`; any other key type is `CHECK-TYPE-MISMATCH`). The function runs once per element, left to right. Equal keys keep their order, and the cost is O(n log n) plus the key calls.
 
 ```agentica
 def main() -> Void

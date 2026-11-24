@@ -50,7 +50,7 @@ def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
         cx,
         target.st,
         "CHECK-TYPE-MISMATCH",
-        "List.sort needs List[Int], List[Float], List[String] or List[Ref], found #{T.to_text(target.type)}",
+        "List.sort needs a List of Int, a sized integer type, Float, String or Ref, found #{T.to_text(target.type)}",
         Ast.expr_span(site.args[0]),
       ),
     )
@@ -82,14 +82,22 @@ def sort_by_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast
   Args.list_argument(cx, key.st, site, T.Type.List(T.params(key.type)[0]))
 end
 
-# The key function takes one parameter and gives an Int, a Float, a String or a Ref.
+# The key function takes one parameter and gives an Int, a sized integer type, a Float, a String or a Ref.
 def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[Bool]
   if !T.is?(callback, "Fn") or T.params(callback).size != 1
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by requires a key function with one parameter", span))
   end
 
   if !sort_key?(T.result(callback))
-    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float, String or Ref", span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-TYPE-MISMATCH",
+        "sort_by keys must be Int, a sized integer type, Float, String or Ref",
+        span,
+      ),
+    )
   end
 
   ok(true)

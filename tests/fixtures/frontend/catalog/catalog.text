@@ -515,9 +515,9 @@ builtin List.set forms=1
 builtin List.size forms=1
   List.size(list: List[T]) -> Int shape=(List(Var(T))) -> Int rule=ListSize impl="List.size" effects=[] desc="Count list elements."
 builtin List.sort forms=1
-  List.sort(list: List[T]) -> List[T] shape=(List(Var(T))) -> List(Var(T)) rule=ListSort impl="List.sort" effects=[] desc="Stable ascending sort of Int, Float, String or Ref; NaN goes last; O(n log n)."
+  List.sort(list: List[T]) -> List[T] shape=(List(Var(T))) -> List(Var(T)) rule=ListSort impl="List.sort" effects=[] desc="Stable ascending sort of Int, sized integer, Float, String or Ref; NaN goes last; O(n log n)."
 builtin List.sort_by forms=1
-  List.sort_by(list: List[A], key: Fn[A, K]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Var(K))) -> List(Var(A)) rule=ListSortBy impl="List.sort_by" effects=[] desc="Stable ascending sort by an Int, Float, String or Ref key; one key call per element."
+  List.sort_by(list: List[A], key: Fn[A, K]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Var(K))) -> List(Var(A)) rule=ListSortBy impl="List.sort_by" effects=[] desc="Stable ascending sort by an Int, sized integer, Float, String or Ref key; one key call per element."
 builtin List.sum forms=1
   List.sum(list: List[N]) -> N shape=(List(Var(N))) -> Var(N) rule=Prelude impl="" effects=[] desc="Add the Ints or Floats of a list; an empty list gives 0 or 0.0; Int overflow halts; O(n)."
 builtin List.take forms=1

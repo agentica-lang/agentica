@@ -28,8 +28,8 @@ OPCODES = {
 ## checked program, so every step still runs before the next failure or branch.
 STEP_PASSES = Set.new([
   "move", "const", "global", "not", "lt-i", "le-i", "eq", "ne", "add-f", "sub-f", "mul-f", "neg-f", "lt-f", "le-f",
-  "concat", "to-text", "inspect", "list", "list-len", "struct", "field", "enum", "is-variant", "same", "map",
-  "struct-with", "closure", "is-ok",
+  "lt-u", "le-u", "concat", "to-text", "inspect", "list", "list-len", "struct", "field", "enum", "is-variant", "same",
+  "map", "struct-with", "closure", "is-ok",
 ])
 
 ## The opcodes written as their first two operands and a zero.

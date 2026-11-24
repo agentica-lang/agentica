@@ -1,4 +1,4 @@
-# The narrow integer types in JSON.schema (minimum and maximum per type), JSON.encode, a field default, a List target
+# The sized integer types in JSON.schema (minimum and maximum per type), JSON.encode, a field default, a List target
 # of JSON.decode, and as Map keys and Set elements; Int64 and Float64 fields decode as Int and Float.
 struct Pixel
   r: UInt8
@@ -15,7 +15,14 @@ struct Wide
   x: Float64
 end
 
+struct Id
+  n: UInt64 = 18446744073709551615
+  seen: Optional[UInt64]
+end
+
 def main() -> Void
+  puts(JSON.schema(Id))
+  puts(JSON.encode(Id(seen: some(5))))
   puts(JSON.schema(Pixel))
   text = "{\"r\": 255, \"depth\": -32768, \"id\": 2147483647, \"tiny\": -128, \"count\": 4294967295}"
   pixel = JSON.decode(text, Pixel)

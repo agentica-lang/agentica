@@ -155,9 +155,10 @@ def narrow_fits?(type: Type, value: Int) -> Bool
   value >= bounds[0] and value <= bounds[1]
 end
 
-## True when the digits of an integer literal, past the Int range, are no more than the greatest UInt64.
+## True when the digits of an integer literal, past the Int range, are no more than the greatest UInt64. A literal with
+## a prefix or a sign (the Huge text of a long hex literal, `-5`) is not.
 def uint64_digits_fit?(digits: String) -> Bool
-  return false if digits.start_with?("-") or digits.length > UINT64_MAX_DIGITS.length
+  return false if digits.length > UINT64_MAX_DIGITS.length or !digits.split("").all? do |c: String| digit?(c) end
   return true if digits.length < UINT64_MAX_DIGITS.length
 
   head = digits.slice(0, 19).to_i!

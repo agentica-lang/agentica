@@ -264,7 +264,9 @@ The user-facing rules (which fields are required, the `JSON.Field` and
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
   outside int64), a narrow integer type and its range (`UInt8 from 0 to 255`,
-  type kinds 11 to 16, for a value outside it too), `finite Float` (a big
+  type kinds 11 to 16, for a value outside it too), `UInt64 from 0 to
+  18446744073709551615` (type kind 17: an integer from 0, or a big integer of
+  digits that fits), `finite Float` (a big
   integer that rounds to infinity fails), `Bool` or `String`, with ` or null`
   after it where a `JSON.Field` or `Optional` applies.
 - `JSON.schema(T)` writes each struct and enum reached once in `$defs` under its
@@ -272,7 +274,9 @@ The user-facing rules (which fields are required, the `JSON.Field` and
   "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`, and every
   other byte a URI fragment may not hold percent-encoded (`Box%5BInt%5D`). Int
   is `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`, and a narrow
-  integer type the same with its own range.
+  integer type the same with its own range; a UInt64 has `minimum` 0 and
+  `maximum` 18446744073709551615, written as an exact big integer. JSON.encode
+  writes a UInt64 above the greatest Int as that big integer.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

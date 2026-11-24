@@ -435,7 +435,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.ListSort,
     implementation: "List.sort",
     effects: [],
-    description: "Stable ascending sort of Int, Float, String or Ref; NaN goes last; O(n log n).",
+    description: "Stable ascending sort of Int, sized integer, Float, String or Ref; NaN goes last; O(n log n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -448,7 +448,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.ListSortBy,
     implementation: "List.sort_by",
     effects: [],
-    description: "Stable ascending sort by an Int, Float, String or Ref key; one key call per element.",
+    description: "Stable ascending sort by an Int, sized integer, Float, String or Ref key; one key call per element.",
     alternatives: [],
   ),
   Model.Builtin(

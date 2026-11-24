@@ -76,7 +76,7 @@
     (dst) = agc_fn_value(f_);                                                        \
   } while (0)
 
-/* SORT_INT also sorts Refs, by their numbers (below 2^63, so in the Int order). */
+/* SORT_INT also sorts Refs, by their numbers (below 2^63, so in the Int order), and UInt64 values, as unsigned. */
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
@@ -1307,6 +1307,31 @@ static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_
   agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
 }
 
+/* A UInt64 opcode of the turn loop, out of line so that the loop keeps the code of the Int and Float opcodes: the
+   instruction is read back from the frame as op_failed reads it. */
+static __attribute__((noinline)) void unsigned_op(agc_vm *vm) {
+  const agc_task *t = vm->task;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  agc_instr in = vm->rt->program->functions[frame->function].code[frame->pc - 1];
+  agc_value *R = t->regs + frame->base;
+  agc_status status;
+  switch ((agc_opcode)in.op) {
+    case AGC_OP_ADD_U: status = agc_op_add_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_SUB_U: status = agc_op_sub_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_MUL_U: status = agc_op_mul_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_DIV_U: status = agc_op_div_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_MOD_U: status = agc_op_mod_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_LT_U: status = agc_op_lt_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    default: status = agc_op_le_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+  }
+  if (status == AGC_STATUS_OVERFLOW) {
+    const agc_function *f = &vm->rt->program->functions[frame->function];
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "UInt64 result is outside 0 to 18446744073709551615",
+             f->spans[frame->pc - 1]);
+  }
+  if (status != AGC_STATUS_OK) op_failed(vm, status);
+}
+
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
    decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park (agc_task_end_turn
    reads the flag once more after it). */
@@ -1755,13 +1780,13 @@ reload:
         }
         break;
       }
-      case AGC_OP_ADD_U: BINARY(agc_op_add_u); break;
-      case AGC_OP_SUB_U: BINARY(agc_op_sub_u); break;
-      case AGC_OP_MUL_U: BINARY(agc_op_mul_u); break;
-      case AGC_OP_DIV_U: BINARY(agc_op_div_u); break;
-      case AGC_OP_MOD_U: BINARY(agc_op_mod_u); break;
-      case AGC_OP_LT_U: BINARY(agc_op_lt_u); break;
-      case AGC_OP_LE_U: BINARY(agc_op_le_u); break;
+      case AGC_OP_ADD_U:
+      case AGC_OP_SUB_U:
+      case AGC_OP_MUL_U:
+      case AGC_OP_DIV_U:
+      case AGC_OP_MOD_U:
+      case AGC_OP_LT_U:
+      case AGC_OP_LE_U: unsigned_op(vm); break;
       case AGC_OP_NO_MATCH: agc_no_match(vm, R[in.a], SPAN);
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);

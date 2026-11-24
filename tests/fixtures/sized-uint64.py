@@ -9,9 +9,11 @@ A line is `arith a b` and the results of +, -, *, /, %, <, <=, ==, !=, >, >=; `b
 bit_or, bit_xor, wrapping_add, wrapping_sub and wrapping_mul; `not a want`; `shift a count` and the results of
 shift_left and shift_right; `convert a` and to_i (`-` above the Int range) and the bits of to_f; `widen a` for an a
 that a UInt32 holds; `wrap n want checked` for any Int n: the result of Int.wrap_uint64 and of Int.to_uint64 (`-` when
-n is negative); `order a b c ... | x y z`: the operands sorted give x y z.
+n is negative); `order a b c ... | x y z`: the operands sorted, by List.sort and by sort_by, give x y z; `order8` is the
+same for Int8 values.
 """
 
+import random
 import struct
 from pathlib import Path
 
@@ -24,9 +26,11 @@ WRAPS = [-(1 << 63), -(1 << 32), -2, -1, 0, 1, (1 << 31), (1 << 63) - 1]
 
 
 def operands() -> list[int]:
-    """The edges of the 64 bits and of the sign of an Int, and values that make a product just fit or just not."""
+    """The edges of the 64 bits and of the sign of an Int, and values that make a product just fit or just not, and the
+    ties and near ties of the conversion to a Float (2**53 + 1 and 2**64 - 1024 are halfway between two Floats)."""
     found = {0, 1, 2, 3, 10, 255, 256, 65535, 65536, (1 << 32) - 1, 1 << 32, (1 << 32) + 1, (1 << 63) - 1, 1 << 63,
-             (1 << 63) + 1, LIMIT - 2, LIMIT - 1, 0x5555555555555555, 0xAAAAAAAAAAAAAAAA, 10**19, 10**18}
+             (1 << 63) + 1, LIMIT - 2, LIMIT - 1, 0x5555555555555555, 0xAAAAAAAAAAAAAAAA, 10**19, 10**18,
+             (1 << 53) + 1, (1 << 53) + 3, LIMIT - 1024, LIMIT - 1025}
     return sorted(found)
 
 
@@ -68,9 +72,15 @@ def lines() -> list[str]:
             out.append(f"widen {a}")
     for n in WRAPS:
         out.append(f"wrap {n} {n % LIMIT} {n if n >= 0 else '-'}")
-    descending = " ".join(str(signed(a)) for a in sorted(values, reverse=True))
     ascending = " ".join(str(signed(a)) for a in sorted(values))
-    out.append(f"order {descending} | {ascending}")
+    rng = random.Random(984)
+    for _ in range(3):
+        shuffled = rng.sample(values, len(values))
+        out.append(f"order {' '.join(str(signed(a)) for a in shuffled)} | {ascending}")
+    out.append(f"order {' '.join(str(signed(a)) for a in sorted(values, reverse=True))} | {ascending}")
+    for _ in range(3):
+        small = [rng.randint(-128, 127) for _ in range(40)] + [-128, 127, 0, -1]
+        out.append(f"order8 {' '.join(map(str, small))} | {' '.join(map(str, sorted(small)))}")
     return out
 
 
