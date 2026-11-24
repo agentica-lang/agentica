@@ -125,7 +125,6 @@ struct Reexported
   item: Model.Item
 end
 
-# The type recorded for the target of a field access; Unknown when there is none.
 # The struct that a member is read from: the type of the target, or the one inside its Optional for `&.`.
 def owner_name(types: List[T.Type], target: Ast.Expr, safe: Optional[Source.Span]) -> String
   type = target_type(types, target)
@@ -134,6 +133,7 @@ def owner_name(types: List[T.Type], target: Ast.Expr, safe: Optional[Source.Span
   T.name(type)
 end
 
+# The type recorded for the target of a field access; Unknown when there is none.
 def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   id = Ast.expr_id(target)
   return types[id] if id < types.size

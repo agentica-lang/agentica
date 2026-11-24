@@ -41,6 +41,9 @@ VALID = [
     "  words&.each do |w| puts(w) end",
     '  f = ->(o: Optional[String]) { o&.size }\n  puts(f.call(some("a")))',
     "  puts(words&.map do |w| some(w)&.size.unwrap_or(0) end)",
+    # The Optional comes from the context: a lambda with a typed variable, and a block over a list of Optionals.
+    "  f: Fn[Optional[User], Optional[String]] = ->(u) { u&.address&.city }\n  puts(f.call(some(user)))",
+    "  rows: List[Optional[User]] = [some(user), none]\n  puts(rows.map do |row| row&.address&.city end)",
     # A line that starts with &.name continues the line before.
     "  n = user.address\n    &.city\n    &.size\n  puts(n)",
 ]
@@ -77,3 +80,14 @@ def test_safe_navigation_on_a_value_that_is_not_an_optional_or_a_member_that_is_
     program = HEAD % body
     assert_rule(checked(program), program, code, text)
 
+
+
+MODULE_BLOCK = {
+    "lib.agc": "module Net\n  def ping() -> Int = 1\nend\n",
+    "main.agc": 'import L from "lib"\n\ndef main() -> Void\n  puts(L.Net&.ping())\nend\n',
+}
+
+
+@table("files", [MODULE_BLOCK], lambda files: files)
+def test_a_module_block_of_an_alias_before_the_operator_is_not_an_optional(checked, files):
+    assert_rule(checked(files), files["main.agc"], "CHECK-SAFE-NAV-RECEIVER", "&.")
