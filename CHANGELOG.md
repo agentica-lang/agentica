@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The narrow integer types take `+`, `-`, `*`, `/`, `%`, the comparisons and `==`: a literal on either side takes the type of the other (`a + 1`, `a == 255`), two types are `CHECK-TYPE-MISMATCH`, a result outside the type halts with `RUNTIME-INTEGER-OVERFLOW`, and an unsigned value has no unary minus (#984).
 - The narrow integer types `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` and `UInt32`: an integer literal takes the type its place expects, out of range is `CHECK-INT-RANGE`, and `x.to_i`, `n.to_uint8` and `n.to_uint8!` convert; `Int64` and `Float64` name `Int` and `Float` (#984).
 - `BDD.run(steps, hooks: some(BDD.Hooks(before_all:, after_all:)))` sets a feature up once per `--jobs` worker, as RSpec's `before(:all)`, and `BDD.feature_state(ctx)` gives each scenario what it returned; failures are `RUNTIME-BDD-BEFORE-ALL` and `RUNTIME-BDD-AFTER-ALL` (#1459).
 - `Task.spawn_link` starts a task linked to its caller: a crash of either ends the other with the same diagnostic, and a return or a cancel leaves it running (#1916).

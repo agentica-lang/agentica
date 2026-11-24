@@ -75,6 +75,9 @@ def key_here?(cx: State.Cx, type: ResolvedType) -> Bool = key_type?(type) or (cx
 ## True for Int and Float.
 def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Types.is?(type, "Float")
 
+## True for the types that arithmetic and < take: Int, Float and the narrow integer types.
+def number?(type: ResolvedType) -> Bool = numeric?(type) or Types.narrow_int?(type)
+
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
 def primitive?(type: ResolvedType) -> Bool
   numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")

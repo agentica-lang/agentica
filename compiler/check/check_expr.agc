@@ -64,6 +64,24 @@ private
 # The types whose left side of == gives the right side its expected type (check_sides).
 EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
 
+# The operators on two numbers, and of those the ones that give a number: an integer literal on one side takes the
+# narrow type of the other side (check_sides).
+NUMBER_OPERATORS = Set.new([
+  "plus",
+  "minus",
+  "multiply",
+  "divide",
+  "modulo",
+  "less",
+  "less-equal",
+  "greater",
+  "greater-equal",
+  "equal",
+  "not-equal",
+])
+
+ARITHMETIC_OPERATORS = Set.new(["plus", "minus", "multiply", "divide", "modulo"])
+
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
 struct Sides
@@ -104,7 +122,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Literal(found) -> check_literal(cx, st, found, expected)
     Ast.Expr.Name(found) -> check_name(cx, st, found)
     Ast.Expr.Unary(found) -> check_unary(cx, st, found, expected)
-    Ast.Expr.Binary(found) -> check_binary(cx, st, found)
+    Ast.Expr.Binary(found) -> check_binary(cx, st, found, expected)
     Ast.Expr.Call(found) -> Calls.check_call(cx, st, found, expected)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
@@ -707,15 +725,27 @@ end
 
 # - and not. -9223372036854775808 is the one literal that only fits under a minus.
 def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
-  operand = try unary_operand(cx, st, node)
   target = narrow_target(expected)
+  inner = T.Type.Unknown
+  if node.op == "minus" and !integer_literal?(node.operand) and literal_tree?(node.operand)
+    # -(1 + 2): the tree under the minus takes the narrow type too.
+    inner = target
+  end
+
+  operand = try unary_operand(cx, st, node, inner)
   if node.op == "minus" and !T.unknown?(target) and integer_literal?(node.operand)
     # A minus before an integer literal is part of it: -128 is an Int8.
     return negative_literal(cx, operand.st, node, target)
   end
 
+  if node.op == "minus" and T.unsigned?(operand.type)
+    help = "an unsigned value has no minus; write 0 - x, which halts below zero"
+    message = "unary \"-\" expects a signed number, found #{T.to_text(operand.type)}"
+    return error(State.fail_help(cx, operand.st, "CHECK-TYPE-MISMATCH", message, node.op_span, help))
+  end
+
   if node.op == "minus"
-    if !CheckTypes.numeric?(operand.type)
+    if !CheckTypes.number?(operand.type)
       return error(
         State.fail(
           cx,
@@ -772,10 +802,10 @@ def negative_literal(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type
   end
 end
 
-def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out]
+def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
   return ok(State.Out(st: st, type: T.Type.Int)) if node.op == "minus" and min_literal?(node.operand)
 
-  out = try State.expr_completion(cx, st, node.operand, T.Type.Unknown)
+  out = try State.expr_completion(cx, st, node.operand, expected)
   if T.is?(out.type, "Void")
     return error(
       State.fail_maybe(
@@ -824,7 +854,9 @@ def void_negation_help(node: Ast.Unary) -> String
   end
 end
 
-def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
+def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
+  return literal_sides(cx, st, node, expected) if NUMBER_OPERATORS.include?(node.op) and literal_tree?(node.left)
+
   left = try State.expr(cx, st, node.left, T.Type.Unknown)
   if node.op == "dot-dot" or node.op == "dot-dot-dot"
     chained = left.st.with(range_chain: chain_ids(node.right))
@@ -840,10 +872,44 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
     wanted = left.type
   elsif node.op == "plus" and T.is?(left.type, "List")
     wanted = left.type
+  elsif NUMBER_OPERATORS.include?(node.op) and T.narrow_int?(left.type) and literal_tree?(node.right)
+    wanted = left.type
   end
 
   right = try State.expr(cx, left.st, node.right, wanted)
   ok(Sides(st: right.st, left: left.type, right: right.type))
+end
+
+# The sides of an operator whose left side is a tree of integer literals (literal_tree?). With a literal tree on the
+# right too, an arithmetic operator gives both sides the narrow type expected of it: `x: UInt8 = 1 + 2`. Else the right
+# side is checked first, and a narrow type of it is the type of the left side: `255 == a`.
+def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
+  if literal_tree?(node.right)
+    wanted = T.Type.Unknown
+    if ARITHMETIC_OPERATORS.include?(node.op)
+      wanted = narrow_target(expected)
+    end
+
+    left = try State.expr(cx, st, node.left, wanted)
+    right = try State.expr(cx, left.st, node.right, wanted)
+    return ok(Sides(st: right.st, left: left.type, right: right.type))
+  end
+
+  right = try State.expr(cx, st, node.right, T.Type.Unknown)
+  left = try State.expr(cx, right.st, node.left, narrow_target(right.type))
+  ok(Sides(st: left.st, left: left.type, right: right.type))
+end
+
+# True for an integer literal, a minus before one, or an arithmetic operator on two such trees: `1`, `-5`, `(1 + 2) *
+# 3`. It takes the narrow type that its other side or its context gives it.
+def literal_tree?(node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.Literal(_) -> integer_literal?(node)
+    Ast.Expr.Unary(found) -> found.op == "minus" and literal_tree?(found.operand)
+    Ast.Expr.Binary(found) ->
+      ARITHMETIC_OPERATORS.include?(found.op) and literal_tree?(found.left) and literal_tree?(found.right)
+    _ -> false
+  end
 end
 
 # The ids of the method calls and field accesses along the target chain of an expression.
@@ -866,8 +932,8 @@ def chain_ids(node: Ast.Expr) -> List[Int]
   ids
 end
 
-def check_binary(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[State.Out]
-  sides = try check_sides(cx, st, node)
+def check_binary(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[State.Out]
+  sides = try check_sides(cx, st, node, expected)
   type = try binary_type(cx, sides, node)
   ok(State.Out(st: sides.st, type: type))
 end
@@ -931,7 +997,23 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
   either_string = T.is?(sides.left, "String") or T.is?(sides.right, "String")
   either_error = T.error?(sides.left) or T.error?(sides.right)
-  if either_string and either_error
+  narrow = sides.left
+  other = sides.right
+  if !T.narrow_int?(narrow)
+    narrow = sides.right
+    other = sides.left
+  end
+
+  if T.narrow_int?(narrow) and T.narrow_int?(other)
+    name = T.tag(narrow)
+    return (
+      "make both sides one type: x.to_i gives the Int of either side, " +
+      "n.to_#{name.downcase}! the #{name} of an Int"
+    )
+  elsif T.narrow_int?(narrow) and T.is?(other, "Int")
+    name = T.tag(narrow)
+    return "make both sides one type: x.to_i gives the Int of a #{name}, n.to_#{name.downcase}! the #{name} of an Int"
+  elsif either_string and either_error
     return ERROR_TEXT_HELP
   elsif either_int and either_float
     return "make both sides the same type: n.to_f turns the Int into a Float, " + "x.to_i! truncates the Float"
@@ -953,7 +1035,7 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
 end
 
 def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if CheckTypes.numeric?(sides.left) and CheckTypes.numeric?(sides.right)
+  if CheckTypes.number?(sides.left) and CheckTypes.number?(sides.right)
     return ok(sides.left)
   elsif T.is?(sides.left, "String") and T.is?(sides.right, "String")
     return ok(T.Type.String)
@@ -987,7 +1069,7 @@ end
 
 def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, false)
-  if !CheckTypes.numeric?(sides.left) or !CheckTypes.numeric?(sides.right)
+  if !CheckTypes.number?(sides.left) or !CheckTypes.number?(sides.right)
     return error(type_error(cx, sides, node, "arithmetic expects two numbers, found #{T.to_text(sides.left)}", ""))
   end
 
@@ -995,6 +1077,11 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
+  if T.narrow_int?(sides.left) or T.narrow_int?(sides.right)
+    try same_types(cx, sides, node, false)
+    return ok(sides.left)
+  end
+
   if !T.is?(sides.left, "Int") or !T.is?(sides.right, "Int")
     help = ""
     if T.is?(sides.left, "String")
@@ -1017,7 +1104,7 @@ end
 
 def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, false)
-  if !CheckTypes.numeric?(sides.left) or !CheckTypes.numeric?(sides.right)
+  if !CheckTypes.number?(sides.left) or !CheckTypes.number?(sides.right)
     help = ""
     if T.is?(sides.left, "String")
       help = "< <= > >= only take Int or Float; compare Strings with == and !=, or order a List[String] with xs.sort"

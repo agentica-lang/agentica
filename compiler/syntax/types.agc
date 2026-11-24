@@ -132,6 +132,9 @@ def is?(type: Type, word: String) -> Bool = tag(type) == word
 ## True for Int8, Int16, Int32, UInt8, UInt16 and UInt32.
 def narrow_int?(type: Type) -> Bool = NARROW_INTS.has_key?(tag(type))
 
+## True for UInt8, UInt16 and UInt32.
+def unsigned?(type: Type) -> Bool = narrow_int?(type) and NARROW_INTS[tag(type)][0] == 0
+
 ## True when the narrow integer type holds the value.
 def narrow_fits?(type: Type, value: Int) -> Bool
   bounds = NARROW_INTS[tag(type)]
