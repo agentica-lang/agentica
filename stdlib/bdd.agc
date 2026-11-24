@@ -495,7 +495,7 @@ def open_feature(hooks: Optional[Hooks], text: String) -> Optional[Live]
   end
 
   Task.monitor(task, made) do |down|
-    gone: Result[JSON.Value] = error("the hook crashed: #{down.code} #{down.message}")
+    gone: Result[JSON.Value] = error("the hook crashed: #{down.code} #{down.message}", kind: "task.crashed")
     gone
   end
 
