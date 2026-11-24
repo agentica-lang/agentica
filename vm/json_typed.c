@@ -188,6 +188,7 @@ static const char *nullable_mismatch(const agc_json *j, uint32_t kind) {
     case AGC_TYPE_OPTIONAL: return NULL;
     case AGC_TYPE_INT: return j->kind == AGC_JSON_INT ? NULL : "signed 64-bit Int or null";
     case AGC_TYPE_FLOAT: return number ? NULL : "finite Float or null";
+    case AGC_TYPE_FLOAT32: return number ? NULL : "finite Float32 or null";
     case AGC_TYPE_BOOL: return j->kind == AGC_JSON_BOOL ? NULL : "Bool or null";
     case AGC_TYPE_STRING: return j->kind == AGC_JSON_STRING ? NULL : "String or null";
     case AGC_TYPE_LIST: return j->kind == AGC_JSON_ARRAY ? NULL : "array or null";
@@ -360,6 +361,9 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
     } else if (kind == AGC_TYPE_FLOAT) {
       if (!agc_json_to_float(vm, j, &x)) return decode_error(vm, stack, depth, "finite Float");
       v = agc_float(x);
+    } else if (kind == AGC_TYPE_FLOAT32) {
+      if (!agc_json_to_float32(vm, j, &x)) return decode_error(vm, stack, depth, "finite Float32");
+      v = agc_float32(x);
     } else if (kind == AGC_TYPE_BOOL) {
       if (j->kind != AGC_JSON_BOOL) return decode_error(vm, stack, depth, "Bool");
       v = j->scalar;
@@ -461,7 +465,7 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
                           agc_json_leaf(AGC_JSON_INT, agc_int(greatest))};
     return object_of(3, keys, values);
   }
-  if (t->kind == AGC_TYPE_FLOAT) return typed("number");
+  if (t->kind == AGC_TYPE_FLOAT || t->kind == AGC_TYPE_FLOAT32) return typed("number");
   if (t->kind == AGC_TYPE_BOOL) return typed("boolean");
   if (t->kind == AGC_TYPE_STRING) return typed("string");
   if (t->kind == AGC_TYPE_STRUCT) return reference(p->structs[t->arg].json_name);

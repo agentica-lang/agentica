@@ -4,6 +4,7 @@
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
+import Types from "../syntax/types"
 import Ir from "ir"
 import Scans from "lower_scan"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
@@ -30,13 +31,14 @@ def plan(
   constant_scans: List[Scans.Scan],
   order: List[String],
   roots: List[String],
+  types: List[Types.Type],
 ) -> Plan
   by_name: Map[String, Int] = {}
   literals: Map[String, Ir.Imm] = {}
   at = 0
   while at < constants.size
     by_name = by_name.put(constants[at].name, at)
-    value = literal_value(constants[at].value)
+    value = literal_value(constants[at].value, types)
     case value
       some(imm) -> literals = literals.put(constants[at].name, imm)
       none -> literals = literals
@@ -78,15 +80,15 @@ def plan(
 end
 
 ## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
-## initializer.
-def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
+## initializer. types are the checked types by node id.
+def literal_value(value: Ast.Expr, types: List[Types.Type]) -> Optional[Ir.Imm]
   case value
-    Ast.Expr.Literal(node) -> plain(node.value)
+    Ast.Expr.Literal(node) -> plain(node.value, types[node.id])
     Ast.Expr.Unary(node) ->
       return none if node.op != "minus"
 
       case node.operand
-        Ast.Expr.Literal(inner) -> negated(inner.value)
+        Ast.Expr.Literal(inner) -> negated(inner.value, types[inner.id])
         _ -> none
       end
 
@@ -156,10 +158,10 @@ def kept_names(
   kept
 end
 
-def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
+def plain(value: Ast.LitValue, type: Types.Type) -> Optional[Ir.Imm]
   case value
     Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(number))
-    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(number))
+    Ast.LitValue.Real(number, text) -> some(Ir.real(number, text, type))
     Ast.LitValue.Text(text) -> some(Ir.Imm.Text(text))
     Ast.LitValue.Flag(flag) -> some(Ir.Imm.Bool(flag))
     Ast.LitValue.Nothing -> some(Ir.Imm.Nil)
@@ -167,10 +169,10 @@ def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
   end
 end
 
-def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
+def negated(value: Ast.LitValue, type: Types.Type) -> Optional[Ir.Imm]
   case value
     Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(0 - number))
-    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(-number))
+    Ast.LitValue.Real(number, text) -> some(Ir.real(-number, "-#{text}", type))
     Ast.LitValue.Huge(digits) ->
       return some(Ir.Imm.Int(INT_MIN)) if digits == INT_MIN_DIGITS
 

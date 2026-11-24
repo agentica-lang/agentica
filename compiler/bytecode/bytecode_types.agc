@@ -147,6 +147,7 @@ def type_id(
     Types.Type.UInt8 -> ok(Pool.intern(pool, "14", [14]))
     Types.Type.UInt16 -> ok(Pool.intern(pool, "15", [15]))
     Types.Type.UInt32 -> ok(Pool.intern(pool, "16", [16]))
+    Types.Type.Float32 -> ok(Pool.intern(pool, "18", [18]))
     Types.Type.List(item) ->
       inner = try type_id(program, struct_index, enum_index, pool, item)
       ok(entry_of(inner.pool, 4, inner.id))

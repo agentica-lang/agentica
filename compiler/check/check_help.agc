@@ -155,6 +155,10 @@ def convert_help(expected: Types.Type, actual: Types.Type) -> String
     return "give a Result with ok(...) or error(\"message\")"
   elsif Types.is?(expected, "Int") and Types.is?(actual, "Float")
     return "convert it with x.to_i!, which truncates"
+  elsif Types.is?(expected, "Float32") and Types.is?(actual, "Float")
+    return "convert it with x.to_float32, which rounds"
+  elsif Types.is?(expected, "Float") and Types.is?(actual, "Float32")
+    return "convert it with x.to_f"
   end
 
   ""

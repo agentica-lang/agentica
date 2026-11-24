@@ -26,6 +26,10 @@ NARROW_INTS: Map[String, List[Int]] = {
   "UInt32": [0, 4294967295],
 }
 
+## 2^128 - 2^103 as a Float and as its digits: a float literal from it up rounds to an infinity in Float32.
+FLOAT32_HALFWAY = 340282356779733661637539395458142568448.0
+FLOAT32_HALFWAY_DIGITS = "340282356779733661637539395458142568448"
+
 ## The narrow integer types by name.
 NARROW_TYPES: Map[String, Type] = {
   "Int8": Type.Int8,
@@ -55,6 +59,7 @@ enum Type
   UInt8
   UInt16
   UInt32
+  Float32
   Bool
   String
   Nil
@@ -99,6 +104,7 @@ def tag(type: Type) -> String
     Type.UInt8 -> "UInt8"
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
+    Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"
@@ -145,6 +151,36 @@ end
 def narrow_outside(type: Type, text: String) -> String
   bounds = NARROW_INTS[tag(type)]
   "#{text} is outside #{tag(type)}, #{bounds[0]} to #{bounds[1]}"
+end
+
+## True when a float literal, its value and its text, rounds to an infinity in the type, Float or Float32. In Float32
+## that is from 2^128 - 2^103 up, halfway between the largest Float32 and 2^128; that bound is a Float, so only a text
+## whose Float is the bound itself needs its digits: the part before the point decides, as the text is that close.
+def float_overflow?(type: Type, number: Float, text: String) -> Bool
+  magnitude = number.abs
+  return Float.to_bits(magnitude) == 0x7FF0000000000000 if !is?(type, "Float32")
+  return magnitude > FLOAT32_HALFWAY if magnitude != FLOAT32_HALFWAY
+
+  digits = integer_digits(text)
+  return digits.size > FLOAT32_HALFWAY_DIGITS.size if digits.size != FLOAT32_HALFWAY_DIGITS.size
+
+  for at in 0...digits.size
+    mine = digits.slice(at, 1).to_i!
+    bound = FLOAT32_HALFWAY_DIGITS.slice(at, 1).to_i!
+    return mine > bound if mine != bound
+  end
+
+  true
+end
+
+## The message of a float literal (its text) that rounds to an infinity in the type.
+def float_outside(type: Type, text: String) -> String
+  largest = "1.7976931348623157e308"
+  if is?(type, "Float32")
+    largest = "3.4028235e38"
+  end
+
+  "#{text} is past the largest #{tag(type)}, #{largest}, and would be an infinity"
 end
 
 ## The narrow integer type of that name (a key of NARROW_INTS).
@@ -411,6 +447,7 @@ def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.UInt8 -> "UInt8"
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
+    Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"
@@ -549,4 +586,38 @@ end
 def digit?(character: String) -> Bool
   code = character.code
   code >= 48 and code <= 57
+end
+
+# The digits before the point of a decimal text, without its sign or leading zeros: "-1.25e2" gives "125".
+def integer_digits(text: String) -> String
+  unsigned = text
+  if text.start_with?("-")
+    unsigned = text.slice(1, text.size - 1)
+  end
+
+  parts = unsigned.replace("E", "e").split("e")
+  exponent = 0
+  if parts.size > 1
+    exponent = parts[1].replace("+", "").to_i!
+  end
+
+  halves = parts[0].split(".")
+  digits = halves[0]
+  if halves.size > 1
+    digits += halves[1]
+  end
+
+  point = halves[0].size + exponent
+  whole = "0"
+  if point >= digits.size
+    whole = digits + "0" * (point - digits.size)
+  elsif point > 0
+    whole = digits.slice(0, point)
+  end
+
+  while whole.size > 1 and whole.start_with?("0")
+    whole = whole.slice(1, whole.size - 1)
+  end
+
+  whole
 end

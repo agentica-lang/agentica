@@ -110,6 +110,7 @@ def constant_key(imm: Ir.Imm) -> String
     Ir.Imm.Bool(flag) -> "b#{flag}"
     Ir.Imm.Int(number) -> "i#{number}"
     Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
+    Ir.Imm.Float32(text) -> "g#{text}"
     Ir.Imm.Text(text) -> "s#{text}"
     Ir.Imm.Bytes(text) -> "y#{text}"
     Ir.Imm.Type(type) -> "t#{Types.tag(type)}:#{Types.json_name(type)}"
@@ -340,8 +341,9 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
   labels
 end
 
-# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes) and its value. A
-# Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as UTF-8.
+# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes, 9 Float32) and its
+# value. A Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as
+# UTF-8. A Float32 is its decimal text, written the same way.
 def constant_bytes(imm: Ir.Imm) -> List[Int]
   case imm
     Ir.Imm.Void -> [0]
@@ -349,6 +351,7 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Bool(flag) -> flag_bytes(flag)
     Ir.Imm.Int(number) -> [4].concat(Wire.i64(number))
     Ir.Imm.Float(number) -> [5].concat(Wire.f64(number))
+    Ir.Imm.Float32(text) -> [9].concat(Wire.string(text))
     Ir.Imm.Text(text) -> [6].concat(Wire.string(text))
     Ir.Imm.Bytes(text) -> [7].concat(Wire.string(text))
     # The writer has turned it into an Int (bytecode_writer.agc, typed_constants); never written.

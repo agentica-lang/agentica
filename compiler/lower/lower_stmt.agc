@@ -767,7 +767,7 @@ def lower_literal_test(
   imm = Ir.Imm.Nil
   case node.value
     Ast.LitValue.Whole(number) -> imm = Ir.Imm.Int(number)
-    Ast.LitValue.Real(number) -> imm = Ir.Imm.Float(number)
+    Ast.LitValue.Real(number, text) -> imm = Ir.real(number, text, cx.types[node.id])
     Ast.LitValue.Text(text) -> imm = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> imm = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> imm = Ir.Imm.Nil

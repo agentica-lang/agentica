@@ -90,6 +90,15 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `RUNTIME-INTEGER-OVERFLOW` (`UInt8` `3 - 5` too); no unary minus on
   unsigned. `Int64` and `Float64` are `Int` and `Float`; all ten names are
   reserved.
+- `Float32`: binary32. A float literal takes it from its place, as above
+  (`x: Float32 = 0.1`; `x: Float32 = 1` is `CHECK-TYPE-MISMATCH`). A literal
+  that rounds to an infinity is `CHECK-FLOAT-RANGE` (`Float32` from about
+  `3.4028235677973366e38`, `Float` past `1.7976931348623157e308`). `+ - * /`
+  and the comparisons take two `Float32`s, never one and a `Float`; no `%`.
+  Each result is the nearest `Float32`; past the largest is an infinity.
+  `to_s` is the shortest text (`0.1`). `x.to_f`, `f.to_float32`,
+  `n.to_float32`, `x.to_bits` (a `UInt32`), `Float32.from_bits(bits)`. Never a
+  map key.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
   keeps insertion order, `K` is `Int`, a narrow integer, `String`, `Bytes` or

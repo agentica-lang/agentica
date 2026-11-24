@@ -40,7 +40,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_GLOBAL_FAILED 1
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF, AGC_T_FLOAT32
 } agc_tag;
 
 typedef struct {
@@ -177,7 +177,11 @@ typedef struct {
 
 /* An object keeps its members in the order they came (the first place of a repeated key, with its last value), as
    Ruby's JSON does, and `sorted` holds the same members by key for agc_json_find: `members` itself when they are in
-   key order, NULL for a small object (at most 8 members), which a lookup scans. */
+   key order, NULL for a small object (at most 8 members), which a lookup scans. A float parsed from text whose double
+   is halfway between two binary32 values keeps in `count` the side of that double its text was on (AGC_JSON_ABOVE or
+   AGC_JSON_BELOW; 0 when the text is the double), so that a Float32 read from it rounds the text, not the double. */
+enum { AGC_JSON_ABOVE = 1, AGC_JSON_BELOW };
+
 typedef struct {
   agc_json_kind kind;
   agc_value scalar;
@@ -474,16 +478,17 @@ typedef struct {
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
    variants (agc_enum_def.payload_types). AGC_TYPE_INSTANCE is an instance of a generic struct (arg is its index in
    agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. AGC_TYPE_INT8 to
-   AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. */
+   AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. AGC_TYPE_FLOAT32
+   is Float32, a scalar whose values have their own tag; kind 17, between them, is UInt64's (#984) and unknown here. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
   AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE, AGC_TYPE_INT8, AGC_TYPE_INT16,
-  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32
+  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32, AGC_TYPE_FLOAT32 = AGC_TYPE_UINT32 + 2
 } agc_type_kind;
 
-/* True for a kind of the type table with no operand: Int, Float, Bool, String and the narrow integers. */
+/* True for a kind of the type table with no operand: Int, Float, Bool, String, the narrow integers and Float32. */
 static inline bool agc_type_scalar(uint32_t kind) {
-  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT32);
+  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_UINT32) || kind == AGC_TYPE_FLOAT32;
 }
 
 /* True for a narrow integer kind; *least and *greatest are its range. */
@@ -790,6 +795,14 @@ static inline agc_value agc_float(double f) {
   return v;
 }
 
+/* A Float32: a double that holds a binary32 value, rounded by agc_round_f32. */
+static inline agc_value agc_float32(double f) {
+  agc_value v;
+  v.tag = AGC_T_FLOAT32;
+  v.as.f = f;
+  return v;
+}
+
 static inline agc_value agc_string_value(agc_string *s) {
   agc_value v;
   v.tag = AGC_T_STRING;
@@ -880,6 +893,11 @@ static inline double agc_as_float(agc_vm *vm, agc_value v) {
   return v.as.f;
 }
 
+static inline double agc_as_float32(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_FLOAT32) agc_wrong_tag(vm);
+  return v.as.f;
+}
+
 static inline agc_string *agc_as_string(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_STRING) agc_wrong_tag(vm);
   return v.as.p;
@@ -948,6 +966,13 @@ CC_OWNS char *agc_cstr(const agc_string *s);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
+/* Float32 (vm/value.c): x rounded to binary32, ties to even, an infinity past the largest; true when x is halfway
+   between two binary32 values; the binary32 nearest a decimal text, false when it is not
+   [-]digits[.digits][(e|E)[+-]digits]; and the shortest text that reads back as the binary32 x. */
+double agc_round_f32(double x);
+bool agc_f32_midpoint(double x);
+bool agc_read_float32(const char *s, size_t len, double *out);
+size_t agc_float32_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
 uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);

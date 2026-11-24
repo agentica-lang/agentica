@@ -198,7 +198,7 @@ def number?(value: Ast.Expr) -> Bool
       case node.value
         Ast.LitValue.Whole(_) -> true
         Ast.LitValue.Huge(_) -> true
-        Ast.LitValue.Real(_) -> true
+        Ast.LitValue.Real(_, _) -> true
         _ -> false
       end
 

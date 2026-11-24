@@ -37,6 +37,7 @@ SIMPLE = {
   "g": T.Type.UInt8,
   "h": T.Type.UInt16,
   "k": T.Type.UInt32,
+  "a": T.Type.Float32,
   "b": T.Type.Bool,
   "s": T.Type.String,
   "n": T.Type.Nil,
@@ -83,6 +84,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.UInt8 -> ok("g")
     T.Type.UInt16 -> ok("h")
     T.Type.UInt32 -> ok("k")
+    T.Type.Float32 -> ok("a")
     T.Type.Bool -> ok("b")
     T.Type.String -> ok("s")
     T.Type.Nil -> ok("n")

@@ -63,6 +63,21 @@ in a PR that rewrites the goldens.
   `+nan.0` (any NaN), `+inf.0`, `-inf.0`, `-0.0`, `0.0`. Exact ties round up in
   magnitude, and at a power of two the neighbour above can win, so the shortest
   string is not always the nearest one.
+- Float32 is a binary32 value held in a double, under its own tag. `+ - * /`
+  run in binary64 and round once to binary32 (`(float)`, ties to even): for two
+  binary32 operands binary64 has 53 >= 2 * 24 + 2 bits, so that is the binary32
+  nearest the exact result (Figueroa, 1995); a subnormal sum is exact, and a
+  product or quotient is a normal double. Past the largest Float32 is an
+  infinity. NaN, `-0.0`, ordering and `==` are as for Float. `Int.to_float32`
+  converts the int64 straight to `float`, never through a double. Its text is
+  the Float text layout above with the fewest digits (1 to 9) that read back
+  as the same binary32, the nearer of two, and the upper one in a tie.
+- A Float32 literal (constant kind 9) and a Float32 JSON field are read from
+  their decimal text exactly (`agc_read_float32`, integer arithmetic, no
+  locale). A JSON float whose double is halfway between two binary32 values
+  keeps which side its text was on, so the field rounds the text and not the
+  double. Past the largest Float32, a literal does not load and a field is a
+  decode error.
 
 ### 2.3 Strings and text
 

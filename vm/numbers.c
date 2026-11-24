@@ -313,14 +313,50 @@ static agc_value builtin_float_to_bits32(agc_vm *vm, agc_value *args, uint32_t s
   return agc_int(bits);
 }
 
-static agc_value builtin_float_from_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
-  int64_t value = agc_as_int(vm, args[0]);
+/* The binary32 whose bits are the Int argument, which must be between 0 and 2^32 - 1. */
+static float float_of_bits32(agc_vm *vm, agc_value arg, uint32_t span) {
+  int64_t value = agc_as_int(vm, arg);
   if (value < 0 || value > UINT32_MAX)
     agc_fail(vm, "RUNTIME-INVALID-NUMBER", "bits must be between 0 and 4294967295", span + 1);
   uint32_t bits = (uint32_t)value;
   float narrow;
   memcpy(&narrow, &bits, sizeof narrow);
+  return narrow;
+}
+
+static agc_value builtin_float_from_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
+  float narrow = float_of_bits32(vm, args[0], span);
   return agc_float(isnan(narrow) ? float64_from_bits(AGC_CANONICAL_NAN64) : (double)narrow);
+}
+
+static agc_value builtin_float_to_float32(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float32(agc_round_f32(agc_as_float(vm, args[0])));
+}
+
+/* Rounded once, from the 64-bit integer: through a double, 2^53 + 2^29 + 1 would round twice, to 2^53. */
+static agc_value builtin_int_to_float32(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float32((double)(float)agc_as_int(vm, args[0]));
+}
+
+static agc_value builtin_float32_to_f(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float(agc_as_float32(vm, args[0]));
+}
+
+static agc_value builtin_float32_to_bits(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  float narrow = (float)agc_as_float32(vm, args[0]);
+  if (isnan(narrow)) return agc_int(AGC_CANONICAL_NAN32);
+  uint32_t bits;
+  memcpy(&bits, &narrow, sizeof bits);
+  return agc_int(bits);
+}
+
+static agc_value builtin_float32_from_bits(agc_vm *vm, agc_value *args, uint32_t span) {
+  float narrow = float_of_bits32(vm, args[0], span);
+  return agc_float32(isnan(narrow) ? NAN : (double)narrow);
 }
 
 static int64_t floor_ms(int64_t seconds, int64_t nanoseconds) { return seconds * 1000 + nanoseconds / 1000000; }
@@ -394,6 +430,11 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float.to_float32", 1, builtin_float_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Int.to_float32", 1, builtin_int_to_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.to_f", 1, builtin_float32_to_f, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.to_bits", 1, builtin_float32_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float32.from_bits", 1, builtin_float32_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8", 1, builtin_int_to_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int8!", 1, builtin_int_to_int8_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.to_int16", 1, builtin_int_to_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

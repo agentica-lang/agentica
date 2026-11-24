@@ -161,6 +161,63 @@ static void compare_with_reference(void) {
   for (int i = 0; i < 20000; i++) check_reference(random_bits());
 }
 
+/* Float32 text: the shortest digits that read back, and the exact reader with its halfway cases, where a double
+   would round the text to the midpoint itself. */
+static double read32(const char *text) {
+  double x;
+  assert(agc_read_float32(text, strlen(text), &x));
+  assert(x == agc_round_f32(x) || isinf(x));
+  return x;
+}
+
+static void float32_tests(void) {
+  static const struct {
+    uint32_t bits;
+    const char *text;
+  } shown[] = {
+    {0x3DCCCCCD, "0.1"},       {0x3F800000, "1.0"},           {0x3EAAAAAB, "0.33333334"},
+    {0x7F7FFFFF, "3.4028235e+38"}, {0x00000001, "1e-45"},      {0x00800000, "1.1754944e-38"},
+    {0x4B800001, "16777218.0"}, {0x80000000, "-0.0"},          {0x7F800000, "+inf.0"},
+    {0xFF800000, "-inf.0"},     {0x7FC00000, "+nan.0"},        {0x501502F9, "10000000000.0"},
+  };
+  for (size_t i = 0; i < sizeof shown / sizeof shown[0]; i++) {
+    float f;
+    memcpy(&f, &shown[i].bits, sizeof f);
+    char text[AGC_SCALAR_TEXT];
+    size_t n = agc_float32_text((double)f, text);
+    text[n] = '\0';
+    if (strcmp(text, shown[i].text) != 0) fprintf(stderr, "%s: got %s\n", shown[i].text, text);
+    assert(strcmp(text, shown[i].text) == 0);
+    if (isfinite(f)) assert(read32(text) == (double)f);
+  }
+  assert(read32("0.1") == (double)0.1f);
+  assert(read32("1.000000059604644775390625") == 1.0);
+  assert(read32("1.0000000596046447753906250000000001") == 1.0 + 0x1p-23);
+  assert(read32("1.00000005960464477539062500000000000000001") == 1.0 + 0x1p-23);
+  assert(read32("1.0000000596046447753906249999999999") == 1.0);
+  assert(read32("340282356779733661637539395458142568447.9") == 0x1.fffffep127);
+  assert(isinf(read32("340282356779733661637539395458142568448")));
+  assert(isinf(read32("1e39")) && read32("-1e39") < 0);
+  assert(read32("7e-46") == 0 && read32("7.1e-46") == 0x1p-149 && signbit(read32("-1e-50")));
+  /* 2^-150 exactly, halfway between 0 and the least subnormal: the even one is 0. */
+  assert(read32("7.00649232162408535461864791644958065640130970938257885878534141944895541342930300743319094181060"
+                "791015625e-46") == 0);
+  char text[300] = "1.";
+  memset(text + 2, '0', 200);
+  strcpy(text + 202, "1");
+  assert(read32(text) == 1.0);
+  strcpy(text, "1.000000059604644775390625");
+  memset(text + 26, '0', 200);
+  strcpy(text + 226, "1e0");
+  assert(read32(text) == 1.0 + 0x1p-23);
+  static const char *const refused[] = {"", "-", "1.", ".5", "1e", "1e+", "+1", "nan", "inf", "1.5x", " 1", "1,5",
+                                        "0x10", "--1", "1e5.0"};
+  for (size_t i = 0; i < sizeof refused / sizeof refused[0]; i++) {
+    double x;
+    assert(!agc_read_float32(refused[i], strlen(refused[i]), &x));
+  }
+}
+
 int main(void) {
   double tiny;
   uint64_t tiny_bits = 1;
@@ -178,6 +235,7 @@ int main(void) {
     assert(strcmp(text, cases[i].text) == 0);
   }
   compare_with_reference();
+  float32_tests();
   puts("float text tests passed");
   return 0;
 }

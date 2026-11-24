@@ -128,6 +128,9 @@ struct agc_nested_stack {
   agc_native native;
 };
 
+/* An operator of float32_op. */
+typedef enum { F32_ADD, F32_SUB, F32_MUL, F32_DIV, F32_LT, F32_LE } f32_op;
+
 /* Where a failure or an exit jumps: the catch of a builtin that compiled code calls, which hands it on outside
    compiled code (run_compiled), else the turn's or the run's target. */
 static _Noreturn void unwind(agc_vm *vm) {
@@ -999,6 +1002,7 @@ static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x
     return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
   }
   if (tags_are(x, y, AGC_T_BOOL)) return agc_as_bool(vm, *x) == agc_as_bool(vm, *y);
+  if (tags_are(x, y, AGC_T_FLOAT32)) return x->as.f == y->as.f;
   return -1;
 }
 
@@ -1006,8 +1010,8 @@ static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x
    as -0.0. */
 static int same_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (x->tag != y->tag) return 0;
-  if (agc_is(*x, AGC_T_FLOAT)) {
-    double a = agc_as_float(vm, *x), b = agc_as_float(vm, *y);
+  if (agc_is(*x, AGC_T_FLOAT) || agc_is(*x, AGC_T_FLOAT32)) {
+    double a = x->as.f, b = y->as.f;
     /* isnan and signbit return any nonzero int (mingw-w64's isnan gives -1), so each is turned into 0 or 1. */
     return isnan(a) ? isnan(b) != 0 : a == b && (signbit(a) != 0) == (signbit(b) != 0);
   }
@@ -1063,27 +1067,55 @@ OP_HELPER agc_status agc_op_neg_i(agc_vm *vm, agc_value *dst, const agc_value *a
   return AGC_STATUS_OK;
 }
 
+/* The _F opcodes on two Float32s: the operation in double, then one rounding to binary32. For + - * / that is the
+   binary32 nearest the exact result: the operands are binary32 values and binary64 has 53 >= 2 * 24 + 2 bits
+   (Figueroa, 1995); a subnormal binary32 sum is exact, and a product or quotient is a normal double. Any other pair is
+   the wrong tag, a Float with a Float32 too. */
+static __attribute__((noinline, cold)) agc_status float32_op(agc_value *dst, const agc_value *a, const agc_value *b,
+                                                             f32_op op) {
+  if (!agc_is(*b, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
+  double y = b->as.f;
+  if (op == F32_DIV && y == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  if (!agc_is(*a, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
+  double x = a->as.f;
+  switch (op) {
+    case F32_ADD: *dst = agc_float32(agc_round_f32(x + y)); break;
+    case F32_SUB: *dst = agc_float32(agc_round_f32(x - y)); break;
+    case F32_MUL: *dst = agc_float32(agc_round_f32(x * y)); break;
+    case F32_DIV: *dst = agc_float32(agc_round_f32(x / y)); break;
+    case F32_LT: *dst = agc_bool(x < y); break;
+    case F32_LE: *dst = agc_bool(x <= y); break;
+  }
+  return AGC_STATUS_OK;
+}
+
+static __attribute__((noinline, cold)) agc_status float32_neg(agc_value *dst, const agc_value *a) {
+  if (!agc_is(*a, AGC_T_FLOAT32)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float32(-a->as.f);
+  return AGC_STATUS_OK;
+}
+
 OP_HELPER agc_status agc_op_add_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_ADD);
   *dst = agc_float(agc_as_float(vm, *a) + agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
 OP_HELPER agc_status agc_op_sub_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_SUB);
   *dst = agc_float(agc_as_float(vm, *a) - agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
 OP_HELPER agc_status agc_op_mul_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_MUL);
   *dst = agc_float(agc_as_float(vm, *a) * agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
 /* The divisor is checked first, so a zero divisor fails with RUNTIME-DIVISION-BY-ZERO whatever the left operand. */
 OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!agc_is(*b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!agc_is(*b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_DIV);
   double divisor = agc_as_float(vm, *b);
   if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
   if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
@@ -1092,7 +1124,7 @@ OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a
 }
 
 OP_HELPER agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
-  if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!agc_is(*a, AGC_T_FLOAT)) return float32_neg(dst, a);
   *dst = agc_float(-agc_as_float(vm, *a));
   return AGC_STATUS_OK;
 }
@@ -1110,13 +1142,13 @@ OP_HELPER agc_status agc_op_le_i(agc_vm *vm, agc_value *dst, const agc_value *a,
 }
 
 OP_HELPER agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_LT);
   *dst = agc_bool(agc_as_float(vm, *a) < agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }
 
 OP_HELPER agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!tags_are(a, b, AGC_T_FLOAT)) return float32_op(dst, a, b, F32_LE);
   *dst = agc_bool(agc_as_float(vm, *a) <= agc_as_float(vm, *b));
   return AGC_STATUS_OK;
 }

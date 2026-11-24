@@ -599,6 +599,8 @@ def json_field_inner(
     return some(Types.Type.Float)
   elsif args.size == 0 and Types.NARROW_INTS.has_key?(ref.name)
     return some(Types.narrow_int(ref.name))
+  elsif args.size == 0 and ref.name == "Float32"
+    return some(Types.Type.Float32)
   elsif args.size == 0 and ref.name == "Bool"
     return some(Types.Type.Bool)
   elsif args.size == 0 and ref.name == "String"

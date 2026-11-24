@@ -595,7 +595,7 @@ def literal_kind(value: Ast.LitValue) -> String
   case value
     Ast.LitValue.Whole(_) -> "int"
     Ast.LitValue.Huge(_) -> "int"
-    Ast.LitValue.Real(_) -> "float"
+    Ast.LitValue.Real(_, _) -> "float"
     Ast.LitValue.Text(_) -> "string"
     Ast.LitValue.Flag(_) -> "bool"
     Ast.LitValue.Nothing -> "nil"
@@ -606,7 +606,7 @@ def literal_text(value: Ast.LitValue) -> String
   case value
     Ast.LitValue.Whole(number) -> "#{number}"
     Ast.LitValue.Huge(digits) -> digits
-    Ast.LitValue.Real(number) -> "#{number}"
+    Ast.LitValue.Real(number, _) -> "#{number}"
     Ast.LitValue.Text(text) -> text
     Ast.LitValue.Flag(flag) -> "#{flag}"
     Ast.LitValue.Nothing -> "nil"
@@ -674,6 +674,7 @@ def shape(type: Types.Type) -> Model.TypeShape
     Types.Type.UInt8 -> builtin("UInt8", [])
     Types.Type.UInt16 -> builtin("UInt16", [])
     Types.Type.UInt32 -> builtin("UInt32", [])
+    Types.Type.Float32 -> builtin("Float32", [])
     Types.Type.Bool -> builtin("Bool", [])
     Types.Type.String -> builtin("String", [])
     Types.Type.Nil -> builtin("Nil", [])

@@ -12,7 +12,8 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 
 ## The value of a `const` instruction. Void and Nil are the values of those types; Bytes is the UTF-8 bytes of its
-## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program. Type is the
+## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program. Float32 is
+## the decimal text of a Float32 literal, which the VM rounds once to binary32 when it loads the program. Type is the
 ## target of JSON.decode or JSON.schema in a session of `agentica repl`, which the writer turns into the Int of its
 ## entry in the type table (a struct, an enum, or an instance of a generic struct), so the call names one entry even
 ## where a name stands for several.
@@ -22,6 +23,7 @@ enum Imm
   Bool(Bool)
   Int(Int)
   Float(Float)
+  Float32(String)
   Text(String)
   Bytes(String)
   Type(Types.Type)
@@ -124,6 +126,13 @@ end
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude
 ## functions, which the bytecode flags and the VM reports at the call of the user.
 def prelude_file?(program: Program, file: Int) -> Bool = program.sources[file].file.start_with?(PRELUDE_PREFIX)
+
+## The constant of a float literal (its value and its text) of the type: a Float32, or else a Float.
+def real(number: Float, text: String, type: Types.Type) -> Imm
+  return Imm.Float32(text) if Types.is?(type, "Float32")
+
+  Imm.Float(number)
+end
 
 ## The instruction with no immediate and no builtin name.
 def instr(op: String, args: List[Int], file: Int, spans: List[Source.Span]) -> Instr

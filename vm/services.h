@@ -77,6 +77,10 @@ const char *agc_json_version(void);
 agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *text, size_t len, agc_value *out);
 const char *agc_json_status_message(agc_json_status status);
 bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out);
+/* A JSON number as the binary32 nearest its text (ties to even), never rounded through a double: an Int converts
+   directly, a number past Int reads its text, a float takes the side of its text (agc_json.count). False for another
+   kind, or a number past the largest Float32. */
+bool agc_json_to_float32(agc_vm *vm, const agc_json *j, double *out);
 /* A decodable type is a struct, an enum or a struct instance of the program: kind is AGC_TYPE_STRUCT, AGC_TYPE_ENUM or
    AGC_TYPE_INSTANCE and index its place. */
 agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t kind, uint32_t index);

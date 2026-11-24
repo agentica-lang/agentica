@@ -108,6 +108,7 @@ static bool scalar_tag(uint32_t tag) {
     case AGC_T_BOOL:
     case AGC_T_INT:
     case AGC_T_FLOAT:
+    case AGC_T_FLOAT32:
     case AGC_T_STRING:
     case AGC_T_BYTES:
     case AGC_T_RANGE:
@@ -117,12 +118,13 @@ static bool scalar_tag(uint32_t tag) {
   }
 }
 
-/* Two values of one scalar tag; Floats by IEEE 754. */
+/* Two values of one scalar tag; Floats and Float32s by IEEE 754. */
 static bool scalar_equal(agc_vm *vm, agc_value a, agc_value b) {
   switch ((agc_tag)a.tag) {
     case AGC_T_BOOL: return agc_as_bool(vm, a) == agc_as_bool(vm, b);
     case AGC_T_INT: return agc_as_int(vm, a) == agc_as_int(vm, b);
     case AGC_T_FLOAT: return agc_as_float(vm, a) == agc_as_float(vm, b);
+    case AGC_T_FLOAT32: return agc_as_float32(vm, a) == agc_as_float32(vm, b);
     case AGC_T_STRING: return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
     case AGC_T_BYTES: return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
     case AGC_T_RANGE: {

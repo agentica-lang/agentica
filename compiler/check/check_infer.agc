@@ -72,6 +72,7 @@ PLAIN_KINDS = {
   "UInt8": T.Type.UInt8,
   "UInt16": T.Type.UInt16,
   "UInt32": T.Type.UInt32,
+  "Float32": T.Type.Float32,
   "String": T.Type.String,
   "Json": T.Type.Json,
   "Range": T.Type.Range,
@@ -339,7 +340,7 @@ def literal_type(expr: Ast.Expr) -> Optional[T.Type]
     Ast.Expr.Literal(literal) ->
       case literal.value
         Ast.LitValue.Whole(_) -> some(T.Type.Int)
-        Ast.LitValue.Real(_) -> some(T.Type.Float)
+        Ast.LitValue.Real(_, _) -> some(T.Type.Float)
         Ast.LitValue.Text(_) -> some(T.Type.String)
         Ast.LitValue.Flag(_) -> some(T.Type.Bool)
         _ -> none

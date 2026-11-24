@@ -125,20 +125,23 @@ the checker enforces:
   arguments (`Box[Int]`, `Lib.Box[Int]`), never an index. `JSON.decode` also
   takes `List[T]` and `Map[String, T]` of such a type (or of a field type
   below); `schema` and `codec` refuse them (`CHECK-TYPE-MISMATCH`). Fields and
-  payloads may be Int, the narrow integer types, Float, Bool, String, lists,
-  String-keyed maps, nested or recursive structs and enums, generic struct
-  instances whose fields are such types after substitution (semantics, generic
-  structs), and `Optional` of those (and `JSON.Field`, for a struct field); any
-  other nested type, a generic enum instance included, is
+  payloads may be Int, the narrow integer types, Float, Float32, Bool, String,
+  lists, String-keyed maps, nested or recursive structs and enums, generic
+  struct instances whose fields are such types after substitution (semantics,
+  generic structs), and `Optional` of those (and `JSON.Field`, for a struct
+  field); any other nested type, a generic enum instance included, is
   `CHECK-NOT-DECODABLE`. A narrow integer decodes only from a JSON integer in
   its range, else the error names the type and its range (`r: expected UInt8
-  from 0 to 255`); its schema has that `minimum` and `maximum`.
+  from 0 to 255`); its schema has that `minimum` and `maximum`. A Float32 is
+  the nearest binary32 to the number's text, rounded once, and one past the
+  largest Float32 is an error (`x: expected finite Float32`).
 - `JSON.encode` and `JSON.from` accept Int, the narrow integer types, Float,
-  Bool, String, Nil (as `null`), JSON.Value, lists, String-keyed maps,
-  `Optional`, structs and user enums of those, whose struct fields may also be
-  `JSON.Field`. An instance of a generic struct or enum counts by its fields or
-  payloads after substitution (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin
-  enums (`TaskExit`) and maps whose keys are not `String` are
+  Float32 (its shortest text; `JSON.from` widens it to a Float), Bool, String,
+  Nil (as `null`), JSON.Value, lists, String-keyed maps, `Optional`, structs and
+  user enums of those, whose struct fields may also be `JSON.Field`. An
+  instance of a generic struct or enum counts by its fields or payloads after
+  substitution (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums
+  (`TaskExit`) and maps whose keys are not `String` are
   `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation.
 - A user enum is a tagged object `{"tag": "Rect", "values": [1.0, 2.0]}`: `tag`
   is the variant name and `values` the payloads in order. The page has the

@@ -13,6 +13,7 @@ def method_modules() -> Map[String, String]
     "Codec": "Codec",
     "Error": "Error",
     "Float": "Float",
+    "Float32": "Float32",
     "Int": "Int",
     "Int16": "Int16",
     "Int32": "Int32",

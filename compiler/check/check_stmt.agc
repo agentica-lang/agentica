@@ -678,20 +678,21 @@ def check_pattern(
   case pattern
     Ast.Pattern.Wildcard(_) -> ok(ArmDone(st: st, arms: arms.with(wildcard: true)))
     Ast.Pattern.Literal(literal) ->
-      try check_literal(cx, st, literal, value_type)
+      typed = try check_literal(cx, st, literal, value_type)
       if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value) end
-        return error(duplicate(cx, st, "literal", "case arm", spot))
+        return error(duplicate(cx, typed, "literal", "case arm", spot))
       end
 
-      ok(ArmDone(st: st, arms: arms.with(literals: arms.literals.push(literal.value))))
+      ok(ArmDone(st: typed, arms: arms.with(literals: arms.literals.push(literal.value))))
     Ast.Pattern.Variant(variant) -> check_variant(cx, st, variant, value_type, arms, spot)
     # The parser makes an or-pattern only at the top of an arm, out of the other kinds.
     Ast.Pattern.Or(_) -> ok(ArmDone(st: st, arms: arms))
   end
 end
 
-# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
-def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
+# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested. A
+# float pattern of a case on a Float32 is a Float32, recorded by its id for the lowering.
+def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[State.St]
   pattern_type = literal_type(pattern.value)
   message = "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}"
   if T.error?(value_type) and T.is?(pattern_type, "String")
@@ -700,13 +701,22 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     return error(State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help))
   end
 
-  return narrow_pattern(cx, st, pattern, value_type) if T.narrow_int?(value_type) and T.is?(pattern_type, "Int")
+  if T.narrow_int?(value_type) and T.is?(pattern_type, "Int")
+    try narrow_pattern(cx, st, pattern, value_type)
+    return ok(st)
+  end
 
-  if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
+  float32 = T.is?(value_type, "Float32") and T.is?(pattern_type, "Float")
+  if !float32 and (!Types.primitive?(value_type) or !T.same?(value_type, pattern_type))
     return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span))
   end
 
-  ok(true)
+  case pattern.value
+    Ast.LitValue.Real(number, text) if T.float_overflow?(value_type, number, text) ->
+      error(State.fail(cx, st, "CHECK-FLOAT-RANGE", T.float_outside(value_type, text), pattern.span))
+    _ if float32 -> ok(State.record_type(st, pattern.id, T.Type.Float32))
+    _ -> ok(st)
+  end
 end
 
 # An integer pattern of a case on a narrow integer type takes that type: CHECK-INT-RANGE when it does not hold it.
@@ -817,9 +827,7 @@ end
 # A pattern in a payload position of the given type: a literal of that type, or a variant of the enum it has.
 def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -> Result[State.St]
   case inner
-    Ast.Pattern.Literal(pattern) ->
-      try check_literal(cx, st, pattern, type)
-      ok(st)
+    Ast.Pattern.Literal(pattern) -> check_literal(cx, st, pattern, type)
     Ast.Pattern.Variant(pattern) ->
       payload = payload_types(cx, pattern, type)
       return error(variant_mismatch(cx, st, pattern, type)) if !payload.ok?
@@ -1112,7 +1120,7 @@ def literal_type(value: Ast.LitValue) -> T.Type
   case value
     Ast.LitValue.Whole(_) -> T.Type.Int
     Ast.LitValue.Huge(_) -> T.Type.Int
-    Ast.LitValue.Real(_) -> T.Type.Float
+    Ast.LitValue.Real(_, _) -> T.Type.Float
     Ast.LitValue.Text(_) -> T.Type.String
     Ast.LitValue.Flag(_) -> T.Type.Bool
     Ast.LitValue.Nothing -> T.Type.Nil
@@ -1124,7 +1132,7 @@ def same_literal?(a: Ast.LitValue, b: Ast.LitValue) -> Bool
   case a
     Ast.LitValue.Whole(x) -> whole_is?(b, x)
     Ast.LitValue.Huge(x) -> huge_is?(b, x)
-    Ast.LitValue.Real(x) -> real_is?(b, x)
+    Ast.LitValue.Real(x, _) -> real_is?(b, x)
     Ast.LitValue.Text(x) -> text_is?(b, x)
     Ast.LitValue.Flag(x) -> flag_is?(b, x)
     Ast.LitValue.Nothing -> nothing?(b)
@@ -1147,7 +1155,7 @@ end
 
 def real_is?(b: Ast.LitValue, x: Float) -> Bool
   case b
-    Ast.LitValue.Real(y) -> Float.to_bits(x) == Float.to_bits(y)
+    Ast.LitValue.Real(y, _) -> Float.to_bits(x) == Float.to_bits(y)
     _ -> false
   end
 end
