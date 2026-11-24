@@ -146,6 +146,17 @@ struct Planned
   shell: Report.FileResult
   base: String
   chosen: List[Gherkin.Scenario]
+  seen: Seen
+end
+
+# The feature of a scenario, as the hooks of the step program see it: the file, the name and the tags (the feature's
+# own), and the line of the `Feature`, where a hook failure is located.
+struct Seen
+  entry: Int
+  key: String
+  name: String
+  tags: List[String]
+  span: Report.Span
 end
 
 # How an entry runs: whole (a test file, or an entry with a problem), as a result known before anything runs (a
@@ -164,6 +175,7 @@ struct Job
   item: Optional[Gherkin.Scenario]
   base: String
   cover: String
+  seen: Seen
 end
 
 # What a job gives back.
@@ -189,6 +201,14 @@ end
 # The worker of a lane, if it has one.
 struct Slot
   worker: Optional[Process]
+  held: Optional[Seen]
+  broken: List[String]
+end
+
+# What a lane found when it stopped a feature of its worker: the file index and the failure of `after_all`.
+struct Closing
+  entry: Int
+  failure: Report.Failure
 end
 
 struct Played
@@ -204,12 +224,19 @@ end
 struct Ending
   verdict: Report.Verdict
   reuse: Bool
+  live: Bool
 end
 
 struct Turn
   run: Run
   slot: Slot
 end
+
+def nobody() -> Seen
+  Seen(entry: -1, key: "", name: "", tags: [], span: Report.Span(file: "", line: 1, column: 1, end_column: 1))
+end
+
+def no_slot() -> Slot = Slot(worker: none, held: none, broken: [])
 
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.
 def save_report(path: String, text: String) -> Result[Void]
@@ -369,15 +396,19 @@ def run_entries(
   # children that run at once never share one.
   plans = (0...entries.size).to_a.map do |at| plan_entry(config, tags, entries[at]) end
   work = jobs_of(plans, lanes.parts)
-  return gathered(entries, plans, work, []) if work.size == 0
+  return gathered(entries, plans, work, [], {}) if work.size == 0
 
   queue: Channel[Int] = Channel.new(work.size)
   (0...work.size).to_a.each do |at| _ = queue.send(at, 0) end
   queue.close
   results: Channel[Done] = Channel.new(work.size)
+  closings: Channel[Closing] = Channel.new(work.size)
   count = min_of(lanes.jobs, work.size)
   running = (0...count).to_a.map do |_|
-    lane: Task[Result[Void]] = Task.spawn do run_lane(config, patterns, lanes, entries, work, queue, results) end
+    lane: Task[Result[Void]] = Task.spawn do
+      run_lane(config, patterns, lanes, entries, work, queue, results, closings)
+    end
+
     lane
   end
 
@@ -385,6 +416,17 @@ def run_entries(
   crashes = awaited.filter { |ended| not ended.ok? }.map { |ended| ended.message }
 
   results.close
+  closings.close
+  closed_files: Map[Int, Report.Failure] = {}
+  seen_closing = closings.recv(0)
+  while seen_closing.ok?
+    closing = seen_closing.unwrap!
+    if not closed_files.has_key?(closing.entry)
+      closed_files = closed_files.put(closing.entry, closing.failure)
+    end
+    seen_closing = closings.recv(0)
+  end
+
   ran: Map[Int, Ran] = {}
   got = results.recv(0)
   while got.ok?
@@ -397,7 +439,7 @@ def run_entries(
   end
   ended = (0...work.size).to_a.map do |at| job_result(ran.get(at), lost) end
 
-  gathered(entries, plans, work, ended)
+  gathered(entries, plans, work, ended, closed_files)
 end
 
 def job_result(found: Optional[Ran], lost: String) -> Result[Ran]
@@ -415,8 +457,9 @@ def run_lane(
   work: List[Job],
   queue: Channel[Int],
   results: Channel[Done],
+  closings: Channel[Closing],
 ) -> Result[Void]
-  slot = Slot(worker: none)
+  slot = no_slot()
   next = queue.recv(0)
   while next.ok?
     at = next.unwrap!
@@ -425,14 +468,38 @@ def run_lane(
     if job.scenario < 0
       ran = Ran.File(run_entry(config, part_of(lanes.parts, job.entry), entries[job.entry]))
     else
-      played = run_scenario(config, patterns, job.base, job.item.unwrap!, job.cover, lanes.isolate, slot)
+      slot = leave_feature(slot, job.seen.key, closings)
+      played = run_scenario(config, patterns, job, lanes.isolate, slot)
       slot = played.slot
       ran = Ran.Scenario(played.result)
     end
     try results.send(Done(at: at, ran: ran), 0)
     next = queue.recv(0)
   end
+  _ = leave_feature(slot, "", closings)
   ok()
+end
+
+# Stops the feature that the lane's worker has set up when the next job is of another feature (or of none: `key` is
+# ""): the worker runs `after_all` and answers `stopped` or a failure, which the lane keeps for the feature's file.
+# A worker that does not stop is closed.
+def leave_feature(slot: Slot, key: String, closings: Channel[Closing]) -> Slot
+  return slot if slot.held.none? or slot.worker.none?
+
+  held = slot.held.unwrap!
+  return slot if held.key == key
+
+  p = slot.worker.unwrap!
+  failure = stopped(p, held, Time.monotonic_ms() + 30000)
+  if failure.some?
+    _ = closings.send(Closing(entry: held.entry, failure: failure.unwrap!), 0)
+  end
+  if key == "" or failure.some?
+    Process.close(p)
+    return Slot(worker: none, held: none, broken: slot.broken)
+  end
+
+  Slot(worker: slot.worker, held: none, broken: slot.broken)
 end
 
 # The jobs of the plans, in entry order and each file's scenarios in file order.
@@ -440,12 +507,21 @@ def jobs_of(plans: List[Plan], parts: String) -> List[Job]
   work: List[Job] = []
   for at in 0...plans.size
     case plans[at]
-      Plan.Whole -> work = work.push(Job(entry: at, scenario: -1, item: none, base: "", cover: ""))
+      Plan.Whole -> work = work.push(Job(entry: at, scenario: -1, item: none, base: "", cover: "", seen: nobody()))
       Plan.Known(_) -> work = work
       Plan.Scenarios(planned) ->
         for index in 0...planned.chosen.size
           cover = cover_of(part_of(parts, at), index)
-          job = Job(entry: at, scenario: index, item: some(planned.chosen[index]), base: planned.base, cover: cover)
+          seen = planned.seen.with(entry: at)
+          job = Job(
+            entry: at,
+            scenario: index,
+            item: some(planned.chosen[index]),
+            base: planned.base,
+            cover: cover,
+            seen: seen,
+          )
+
           work = work.push(job)
         end
     end
@@ -461,6 +537,7 @@ def gathered(
   plans: List[Plan],
   work: List[Job],
   ended: List[Result[Ran]],
+  closings: Map[Int, Report.Failure],
 ) -> List[Report.FileResult]
   results: List[Report.FileResult] = []
   next = 0
@@ -492,7 +569,13 @@ def gathered(
       case plans[at]
         Plan.Known(result) -> results = results.push(result)
         Plan.Whole -> results = results.push(file.unwrap!)
-        Plan.Scenarios(planned) -> results = results.push(planned.shell.with(scenarios: scenarios))
+        Plan.Scenarios(planned) ->
+          shell = planned.shell.with(scenarios: scenarios)
+          if closings.has_key?(at)
+            shell = shell.with(verdict: Report.Verdict.Fail(closings[at]))
+          end
+
+          results = results.push(shell)
       end
     end
   end
@@ -664,7 +747,8 @@ def plan_file(config: Config, tags: Tags.Expr, path: String) -> Plan
         output: "",
       )
 
-      Plan.Scenarios(Planned(shell: shell, base: base, chosen: chosen))
+      seen = Seen(entry: -1, key: path, name: feature.name, tags: feature.tags, span: feature.span)
+      Plan.Scenarios(Planned(shell: shell, base: base, chosen: chosen, seen: seen))
   end
 end
 
@@ -679,30 +763,32 @@ end
 # Under `--isolate` or `--coverage` (each child writes its own LCOV part) each scenario runs in a child of its
 # own; else
 # in the lane's worker.
-def run_scenario(
-  config: Config,
-  patterns: List[Match.Pattern],
-  base: String,
-  item: Gherkin.Scenario,
-  cover: String,
-  isolate: Bool,
-  slot: Slot,
-) -> Played
+def run_scenario(config: Config, patterns: List[Match.Pattern], job: Job, isolate: Bool, slot: Slot) -> Played
+  item = job.item.unwrap!
+  base = job.base
+  cover = job.cover
+  seen = job.seen
   started = Time.monotonic_ms()
   found = item.steps.map do |step| resolved_of(Match.resolve(patterns, step)) end
   failing = (0...found.size).to_a.filter do |i| found[i].index < 0 end
   ran = failing.size == 0
   run = Run(failed_at: item.steps.size, verdict: Report.Verdict.Pass)
   kept = slot
-  if not ran
+  if slot.broken.include?(seen.key)
+    run = Run(failed_at: 0, verdict: Report.Verdict.NotExecuted)
+    ran = false
+  elsif not ran
     at = failing[0]
     run = Run(failed_at: at, verdict: Report.Verdict.Fail(unresolved(patterns, item.steps[at])))
   elsif cover != "" or isolate
-    run = run_child(config, base, item, found, patterns, started, cover)
+    run = run_child(config, base, item, found, patterns, started, cover, seen)
   else
-    turn = run_worker(config, base, item, found, patterns, started, slot)
+    turn = run_worker(config, base, item, found, patterns, started, slot, seen)
     run = turn.run
     kept = turn.slot
+    if hook_failed?(run.verdict, "RUNTIME-BDD-BEFORE-ALL")
+      kept = kept.with(broken: kept.broken.push(seen.key))
+    end
   end
   steps = (0...item.steps.size).to_a.map do |i|
     status = Report.StepStatus.NotExecuted
@@ -743,6 +829,7 @@ def run_child(
   patterns: List[Match.Pattern],
   started: Int,
   cover: String,
+  seen: Seen,
 ) -> Run
   count = item.steps.size
   spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "scenario", cover))
@@ -752,7 +839,7 @@ def run_child(
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
   deadline = started + 30000
-  driven = drive(p, config, base, item, found, patterns, deadline)
+  driven = drive(p, config, base, item, found, patterns, deadline, seen)
   run = driven.run
   if run.failed_at == count
     _ = Process.channel_close(p, Child.left(deadline))
@@ -774,6 +861,7 @@ def run_worker(
   patterns: List[Match.Pattern],
   started: Int,
   slot: Slot,
+  seen: Seen,
 ) -> Turn
   count = item.steps.size
   deadline = started + 30000
@@ -782,31 +870,65 @@ def run_worker(
     spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "worker", ""))
     if not spawned.ok?
       run = Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
-      return Turn(run: run, slot: Slot(worker: none))
+      return Turn(run: run, slot: Slot(worker: none, held: none, broken: slot.broken))
     end
     _ = Process.close_stdin(spawned.unwrap!, 5000)
     worker = some(spawned.unwrap!)
   end
   p = worker.unwrap!
-  driven = drive(p, config, base, item, found, patterns, deadline)
+  driven = drive(p, config, base, item, found, patterns, deadline, seen)
   run = driven.run
   reuse = false
+  live = false
   if run.failed_at == count
     sent = Process.channel_send(p, "end\n", Child.left(deadline))
-    ending = Ending(verdict: Report.Verdict.Pass, reuse: false)
+    ending = Ending(verdict: Report.Verdict.Pass, reuse: false, live: false)
     if sent.ok?
       ending = await_done(p, deadline, item.span)
     else
-      ending = Ending(verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.span)), reuse: false)
+      failure = send_failure(p, sent.message, deadline, item.span)
+      ending = Ending(verdict: Report.Verdict.Fail(failure), reuse: false, live: false)
     end
     run = closed(count, ending.verdict, driven.asserts, item.span)
     reuse = ending.reuse and passed?(run.verdict)
+    live = ending.live
   end
   if not reuse
     Process.close(p)
-    return Turn(run: run, slot: Slot(worker: none))
+    return Turn(run: run, slot: Slot(worker: none, held: none, broken: slot.broken))
   end
-  Turn(run: run, slot: Slot(worker: some(p)))
+
+  held: Optional[Seen] = none
+  if live
+    held = some(seen)
+  end
+
+  Turn(run: run, slot: Slot(worker: some(p), held: held, broken: slot.broken))
+end
+
+# Whether the verdict is the failure of a hook of the step program (`code`).
+def hook_failed?(verdict: Report.Verdict, code: String) -> Bool
+  case verdict
+    Report.Verdict.Fail(problem) -> problem.code == code
+    _ -> false
+  end
+end
+
+# Asks the worker to run `after_all` of its feature and reads the answer: nothing when it ran well, else the failure,
+# located at the `Feature` line.
+def stopped(p: Process, held: Seen, deadline: Int) -> Optional[Report.Failure]
+  sent = Process.channel_send(p, "stop\n", Child.left(deadline))
+  return some(send_failure(p, sent.message, deadline, held.span)) if not sent.ok?
+
+  line = Process.channel_read_line(p, Child.left(deadline))
+  while line.ok?
+    record = Child.record_of(line.unwrap!)
+    event = Child.event_of(record)
+    return none if event == "stopped"
+    return some(record_error(record, held.span)) if event == "fail"
+    line = Process.channel_read_line(p, Child.left(deadline))
+  end
+  some(read_failure(p, line.message, deadline, held.span))
 end
 
 # Sends the settings line and the steps until one does not pass.
@@ -818,6 +940,7 @@ def drive(
   found: List[Match.Resolved],
   patterns: List[Match.Pattern],
   deadline: Int,
+  seen: Seen,
 ) -> Driven
   count = item.steps.size
   fields: Map[String, JSON.Value] = {
@@ -827,6 +950,9 @@ def drive(
     "seed": JSON.from(config.seed),
     "programs": JSON.from(run_folder(config)),
     "steps": JSON.from(scenario_steps(config, count)),
+    "feature": JSON.from(seen.key),
+    "feature_name": JSON.from(seen.name),
+    "feature_tags": JSON.from(seen.tags),
   }
 
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
@@ -1019,22 +1145,29 @@ def await_done(p: Process, deadline: Int, span: Report.Span) -> Ending
     if event == "after"
       hooks = true
     elsif event == "fail"
-      return Ending(verdict: Report.Verdict.Fail(record_error(record, span)), reuse: false)
+      return Ending(verdict: Report.Verdict.Fail(record_error(record, span)), reuse: false, live: false)
     elsif event == "done"
       printed = Process.read_available(p, Child.left(deadline))
       if not printed.ok?
-        return Ending(verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)), reuse: false)
+        return Ending(
+          verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)),
+          reuse: false,
+          live: false,
+        )
       end
       reuse = JSON.bool(JSON.get(record, "reuse").unwrap_or(JSON.null())).unwrap_or(false)
-      return Ending(verdict: Report.Verdict.Pass, reuse: reuse)
+      live = JSON.bool(JSON.get(record, "live").unwrap_or(JSON.null())).unwrap_or(false)
+      return Ending(verdict: Report.Verdict.Pass, reuse: reuse, live: live)
     end
     line = Process.channel_read_line(p, Child.left(deadline))
   end
-  return Ending(verdict: await_exit(p, deadline, span), reuse: false) if line.message == "process: end of input"
-  if line.message == "process: operation timed out"
-    return Ending(verdict: failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span), reuse: false)
+  if line.message == "process: end of input"
+    return Ending(verdict: await_exit(p, deadline, span), reuse: false, live: false)
   end
-  Ending(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), reuse: false)
+  if line.message == "process: operation timed out"
+    return Ending(verdict: failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span), reuse: false, live: false)
+  end
+  Ending(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), reuse: false, live: false)
 end
 
 # Why a child that has sent its last record is still running at the deadline: its after hooks when it said they run

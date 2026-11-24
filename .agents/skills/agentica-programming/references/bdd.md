@@ -72,7 +72,7 @@ end
 
 ```text
 BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
-BDD.run(steps: List[BDD.Step]) -> Void
+BDD.run(steps: List[BDD.Step], hooks: Optional[BDD.Hooks] = none) -> Void
 BDD.doc_string(ctx: BDD.Context) -> String
 BDD.table(ctx: BDD.Context) -> List[List[String]]
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
@@ -162,6 +162,17 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario
   (the next one gets a new worker); remaining steps are `not_executed`; other
   scenarios and files continue.
+- `BDD.run(steps, hooks: some(BDD.Hooks(before_all:, after_all:)))` sets a
+  feature up once per worker (`--jobs` lane): `before_all(BDD.Feature)` returns
+  JSON that `BDD.feature_state(ctx)` gives each scenario (a port, a folder), in a
+  task that owns the handles it opens (a `Process.spawn`ed server) until
+  `after_all(feature, state)` runs when the worker leaves the feature. The
+  runner resets nothing: scenarios leave the state as found (`Background`,
+  `BDD.after`). A failed scenario ends the worker, so the next gets a new
+  `before_all`; with `--isolate` they run per scenario. `before_all` failing or
+  taking over 25 s is `RUNTIME-BDD-BEFORE-ALL` (the feature's other scenarios on
+  that lane are `not_executed`); `after_all` failing is `RUNTIME-BDD-AFTER-ALL`
+  on the file.
 - A worker runs `main` once: state made in `main` before `BDD.run` and captured
   by steps (an `ATS` table, a `Channel`) is shared by its scenarios. Make it in
   a step, or run `agentica test --isolate` (a process per scenario, `main`

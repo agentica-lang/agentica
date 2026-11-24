@@ -141,7 +141,7 @@ Feature: Memory
 
 ```signature
 BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
-BDD.run(steps: List[BDD.Step]) -> Void
+BDD.run(steps: List[BDD.Step], hooks: Optional[BDD.Hooks] = none) -> Void
 ```
 
 El handler recibe el contexto y las capturas `{string}` y `{int}` como cadenas, en orden. Un bloque también sirve y ve las variables que lo rodean:
@@ -155,7 +155,39 @@ def main() -> Void
 end
 ```
 
-`BDD.run` pone los pasos integrados delante de la lista, ejecuta lo que pide `agentica test`, y nunca devuelve.
+`BDD.run` pone los pasos integrados delante de la lista, ejecuta lo que pide `agentica test`, y nunca devuelve. `hooks` prepara una característica una vez para sus escenarios ([Ganchos de característica](#feature-hooks)).
+
+## Ganchos de característica {#feature-hooks}
+
+```signature
+BDD.Feature(name: String, tags: List[String])
+BDD.Hooks(before_all: Fn[BDD.Feature, Result[JSON.Value]], after_all: Fn[BDD.Feature, JSON.Value, Result[Void]])
+BDD.feature_state(ctx: BDD.Context) -> JSON.Value
+```
+
+`before_all` inicia lo que necesita una característica entera, como un servidor para todos sus escenarios, y `after_all` lo detiene. Son `before(:all)` y `after(:all)` de RSpec, y `BDD.after` es el gancho de cada escenario.
+
+- Se ejecutan en el trabajador que corre los escenarios, una vez por característica y por trabajador: con `--jobs 4` una característica puede arrancar hasta cuatro veces, así que usa el puerto 0 y una carpeta propia. Con `--isolate` cada escenario tiene un proceso propio, así que se ejecutan en cada escenario.
+- `before_all` se ejecuta antes del primer escenario de la característica que toma el trabajador, en una tarea que queda viva hasta `after_all`. Un handle que abre (un programa iniciado con `Process.spawn`) pertenece a esa tarea, así que sobrevive a los escenarios y se cierra cuando la tarea termina. Devuelve el estado de la característica como JSON (un puerto, una carpeta) y cada escenario lo lee con `BDD.feature_state`. Sin ganchos es `null`.
+- `after_all` se ejecuta, con ese estado, cuando el trabajador deja la característica (el siguiente escenario es de otra característica, o el hueco no tiene más). Un trabajador que terminó por un escenario fallido no ejecuta ninguno: sus handles se cierran con él, y el siguiente escenario recibe un trabajador nuevo y un `before_all` nuevo.
+- El runner no restablece nada. Cada escenario debe dejar lo que creó `before_all` como lo encontró: restablécelo en un paso `Background` o en un gancho `BDD.after`.
+- Un `before_all` que devuelve un `error`, falla o tarda más de 25 segundos hace fallar al escenario que lo necesitaba con `RUNTIME-BDD-BEFORE-ALL`, en su primer paso. Los demás escenarios de esa característica en el hueco de ese trabajador quedan `not_executed`. Un `after_all` que devuelve un `error` o falla es `RUNTIME-BDD-AFTER-ALL` en el archivo de la característica, en su línea `Feature`, y la ejecución termina con `1`.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def start(feature: BDD.Feature) -> Result[JSON.Value]
+  server = try Process.spawn("agentica", ["server.agc"], Process.Options(timeout_ms: 20000))
+  port = try Process.read_line(server, 5000)
+  ok(JSON.object({"port": JSON.from(port.to_i!)}))
+end
+
+def stop(feature: BDD.Feature, state: JSON.Value) -> Result[Void] = ok()
+
+def main() -> Void
+  BDD.run([], hooks: some(BDD.Hooks(before_all: &start, after_all: &stop)))
+end
+```
 
 ## BDD.assert {#bddassert}
 
