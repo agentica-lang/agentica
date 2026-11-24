@@ -206,15 +206,31 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   agc_fail_argument(vm, code, message, -1, span);
 }
 
-void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {
+static agc_outcome *text_failure(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
   agc_outcome *o = vm->outcome;
   o->kind = AGC_FAILED;
   o->code = code;
   o->text = message;
   o->message = message->data;
   o->message_len = message->bytes;
-  o->span = report_span(vm, span, argument);
+  o->span = span;
+  return o;
+}
+
+void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {
+  text_failure(vm, code, message, report_span(vm, span, argument));
   raise_failure(vm);
+}
+
+/* A failure that happened in another task and reaches this one (a link): its span is already the reported one, and its
+   stack is the original's, or none. */
+void agc_fail_again(agc_vm *vm, const char *code, const agc_string *message, uint32_t span, const agc_stack *stack) {
+  agc_outcome *o = text_failure(vm, code, message, span);
+  if (stack)
+    o->stack = *stack;
+  else
+    o->stack.shown = false;
+  unwind(vm);
 }
 
 void agc_exit(agc_vm *vm, int64_t code) {

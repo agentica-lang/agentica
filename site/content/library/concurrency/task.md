@@ -90,7 +90,7 @@ Task.spawn_link(function: Fn[A, R], argument: A) -> Task[R]
 Starts the task like `Task.spawn` (the same forms and the block) and links it to the caller before it can run.
 
 - A link joins the two tasks in both directions and lasts until either ends. Only `Task.spawn_link` makes one: a running task cannot be linked or unlinked.
-- A crash of one end ends the other with the same diagnostic: the same code, message and place, so an await or a monitor of it reports the original error. The task fails when it is next to run, and none of its own code runs in between. When the crash reaches `main`, the run ends with that diagnostic.
+- A crash of one end ends the other with the same diagnostic: the same code, message and place, so an await or a monitor of it reports the original error. The task fails when it is next to run, and none of its own code runs in between. A task that is in a turn on another scheduler when the crash arrives finishes that turn, and if it returns in it, it ends with its own result. When the crash reaches `main`, the run ends with that diagnostic.
 - The crash goes on through the links of the tasks it reaches: a crashed child ends its parent, which ends its other linked children, and so on. Tasks that are not linked follow the task tree as before: a crash cancels the children of the crashed task.
 - A return or a cancel leaves the other task running. A cancel of a parent still reaches its children, as for any task. A task that ended before the crash arrives is not failed.
 - One crash counts once. It is printed when it happens, the tasks it reaches print and count nothing, and an await or a monitor of any of them observes it, so the run exits 1 only when none does.

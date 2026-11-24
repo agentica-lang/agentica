@@ -724,8 +724,10 @@ static void crash(agc_vm *vm, agc_task *t) {
     next = child->next_sibling;
     if (!child->linked)
       cancel_tree(vm, child, NULL, t);
-    else if (link_deliver(vm, child, t))
+    else {
+      link_deliver(vm, child, t);
       hold(vm, child, t);
+    }
   }
   if (t->linked && t->parent) link_deliver(vm, t->parent, t);
   finish_task(vm, t);
@@ -769,7 +771,7 @@ static void link_fail(agc_vm *vm, agc_task *t) {
   agc_task *origin = atomic_load_explicit(&t->link_origin, memory_order_acquire);
   if (!origin || t->link_failed) return;
   t->link_failed = true;
-  agc_fail_text(vm, origin->crash_code, origin->crash_message, origin->crash_span);
+  agc_fail_again(vm, origin->crash_code, origin->crash_message, origin->crash_span, origin->crash_stack);
 }
 
 static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
@@ -1497,6 +1499,7 @@ static bool awaits_caller(agc_vm *vm, const agc_task *target) {
 
 static agc_value outcome(agc_vm *vm, agc_task *target, uint32_t span, bool result) {
   if (target->crashed) {
+    link_fail(vm, vm->task);
     agc_task_observe(vm, target);
     if (result) return agc_error_string(vm, AGC_KIND_TASK_CRASHED, target->crash);
     agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);

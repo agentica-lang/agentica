@@ -1130,6 +1130,8 @@ uint64_t agc_value_units(agc_value v);
    scheduler's catch, so cchecker checks what a path to one holds. */
 CC_JUMPS _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 CC_JUMPS _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
+CC_JUMPS _Noreturn void agc_fail_again(agc_vm *vm, const char *code, const agc_string *message, uint32_t span,
+                                       const agc_stack *stack);
 /* __fail_arg: fails at argument number `argument` of the call a prelude function was given (agc_fail's rule for the
    span), or at the call when there is no such argument span. */
 CC_JUMPS _Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message,
