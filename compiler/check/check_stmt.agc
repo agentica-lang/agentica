@@ -700,11 +700,25 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     return error(State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help))
   end
 
+  return narrow_pattern(cx, st, pattern, value_type) if T.narrow_int?(value_type) and T.is?(pattern_type, "Int")
+
   if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
     return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span))
   end
 
   ok(true)
+end
+
+# An integer pattern of a case on a narrow integer type takes that type: CHECK-INT-RANGE when it does not hold it.
+def narrow_pattern(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
+  case pattern.value
+    Ast.LitValue.Whole(value) if T.narrow_fits?(value_type, value) -> ok(true)
+    Ast.LitValue.Whole(value) ->
+      error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, "#{value}"), pattern.span))
+    Ast.LitValue.Huge(digits) ->
+      error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, digits), pattern.span))
+    _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "not an integer pattern", pattern.span))
+  end
 end
 
 def check_variant(

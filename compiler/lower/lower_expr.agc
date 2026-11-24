@@ -937,6 +937,8 @@ def deep_equality?(type: Types.Type) -> Bool
     return false if Types.is?(type, flat)
   end
 
+  return false if Types.narrow_int?(type)
+
   true
 end
 

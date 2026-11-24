@@ -31,6 +31,12 @@ MAX_DIGITS = 9
 SIMPLE = {
   "i": T.Type.Int,
   "f": T.Type.Float,
+  "c": T.Type.Int8,
+  "d": T.Type.Int16,
+  "e": T.Type.Int32,
+  "g": T.Type.UInt8,
+  "h": T.Type.UInt16,
+  "k": T.Type.UInt32,
   "b": T.Type.Bool,
   "s": T.Type.String,
   "n": T.Type.Nil,
@@ -71,6 +77,12 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
   case type
     T.Type.Int -> ok("i")
     T.Type.Float -> ok("f")
+    T.Type.Int8 -> ok("c")
+    T.Type.Int16 -> ok("d")
+    T.Type.Int32 -> ok("e")
+    T.Type.UInt8 -> ok("g")
+    T.Type.UInt16 -> ok("h")
+    T.Type.UInt32 -> ok("k")
     T.Type.Bool -> ok("b")
     T.Type.String -> ok("s")
     T.Type.Nil -> ok("n")

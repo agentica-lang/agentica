@@ -1,7 +1,7 @@
 ---
 title: Int and Float
 weight: 2
-description: Convert between Int, Float and String, round, clamp and other number helpers, and work on the bits of an Int or a Float.
+description: Convert between Int, Float, String and the narrow integer types, round, clamp and other number helpers, and work on the bits of an Int or a Float.
 ---
 
 Arithmetic never mixes `Int` and `Float`. Use these methods to convert: `n.to_f`, `x.to_i` and `x.to_i!`, and `to_s` for the text.
@@ -92,6 +92,48 @@ end
 ```output
 8
 9
+```
+
+## Int8, Int16, Int32, UInt8, UInt16 and UInt32
+
+```signature
+UInt8.to_int(uint8: UInt8) -> Int
+Int.to_uint8(int: Int) -> Result[UInt8]
+Int.to_uint8!(int: Int) -> UInt8
+```
+
+The integer types narrower than `Int`, each with its own range: `Int8` holds `-128` to `127`, `Int16` `-32768` to `32767`, `Int32` `-2147483648` to `2147483647`, `UInt8` `0` to `255`, `UInt16` `0` to `65535` and `UInt32` `0` to `4294967295`. `Int64` is another name of `Int`, and `Float64` of `Float`.
+
+An integer literal takes the narrow type that its place expects: an annotation, a parameter, a struct field, a return type, a list or map item, or a `case` pattern on a value of that type. A minus before it is part of it, so `x: Int8 = -128` checks. A literal outside the type is `CHECK-INT-RANGE` at the literal. A value is never converted on its own: `to_int` gives the `Int`, `n.to_uint8` gives a Result that is an error when `n` is outside `0` to `255`, and `n.to_uint8!` stops the program there with `RUNTIME-INTEGER-OVERFLOW`. The same three methods exist for each narrow type: `to_int8`, `to_int16`, `to_int32`, `to_uint16` and `to_uint32`.
+
+```agentica
+struct Pixel
+  r: UInt8
+  g: UInt8
+end
+
+def main() -> Void
+  p = Pixel(r: 255, g: 0)
+  low: Int8 = -128
+  puts(p.inspect)
+  puts(p.r.to_int + low.to_int)
+  puts(300.to_uint8.ok?)
+  puts(200.to_uint8! == p.r)
+end
+```
+
+```output
+Pixel(r: 255, g: 0)
+127
+false
+false
+```
+
+```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
+def main() -> Void
+  n = 70000
+  puts(n.to_uint16!)
+end
 ```
 
 ## abs, pow and gcd

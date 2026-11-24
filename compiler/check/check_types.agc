@@ -797,10 +797,12 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     end
 
     return ok(Types.Type.Void)
-  elsif name == "Int"
+  elsif name == "Int" or name == "Int64"
     return ok(Types.Type.Int)
-  elsif name == "Float"
+  elsif name == "Float" or name == "Float64"
     return ok(Types.Type.Float)
+  elsif Types.NARROW_INTS.has_key?(name)
+    return ok(Types.narrow_int(name))
   elsif name == "Bool"
     return ok(Types.Type.Bool)
   elsif name == "String"
@@ -946,6 +948,12 @@ def shared_type_names(cx: State.Cx) -> List[String]
   [
     "Int",
     "Float",
+    "Int8",
+    "Int16",
+    "Int32",
+    "UInt8",
+    "UInt16",
+    "UInt32",
     "Bool",
     "String",
     "Nil",
@@ -1307,7 +1315,8 @@ end
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
   # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
   # of a constant). A Ref is a number in the VM.
-  plain = primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
+  plain = primitive?(type) or Types.narrow_int?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes")
+  plain = plain or Types.is?(type, "Address")
   plain = plain or ref?(type)
   if plain or Types.is?(type, "Json")
     return passed(seen)
