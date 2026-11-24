@@ -10,6 +10,7 @@
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
+import T from "../syntax/types"
 import Signature from "signature"
 
 ## One parameter of a function: its name, its type as written and the source text of its default value.
@@ -73,10 +74,13 @@ end
 
 ## The exported API of a parsed program, in source order. Private declarations and imports are left out. `origins` maps
 ## each name the program re-exports to the item of the original declaration (doc_origins.agc); a re-export without an
-## entry is left out.
-def of_program(program: Ast.Program, text: String, origins: Map[String, Item]) -> Module
+## entry is left out. The module at `path` that writes its types through the module name (T.reexporting_stem) has its
+## own types written so too (`HTTP.App`), as the types it re-exports are.
+def of_program(program: Ast.Program, text: String, origins: Map[String, Item], path: String) -> Module
   items = declared_through(program, text, origins).filter do |item: Item| item.exported end
-  Module(doc: cleaned(program.module_doc), items: items.map do |item: Item| exported_only(item) end)
+  own = own_types(program, path)
+  items = items.map do |item: Item| qualified(exported_only(item), own) end
+  Module(doc: cleaned(program.module_doc), items: items)
 end
 
 ## Every declaration of a parsed program that is not an import, private ones included, in source order. A re-export
@@ -137,6 +141,86 @@ def summary(doc: Optional[String]) -> Optional[String]
 end
 
 private
+
+# The types that the program declares, by name, with the name written through the module (`App` is `HTTP.App`) when
+# the file at `path` is a module that does so; none for another file.
+def own_types(program: Ast.Program, path: String) -> Map[String, String]
+  file = path
+  if !file.end_with?(".agc")
+    file = "#{path}.agc"
+  end
+
+  stem = T.reexporting_stem(file)
+  names: Map[String, String] = {}
+  return names if stem == ""
+
+  for declaration in program.declarations
+    own = type_name_of(declaration)
+    if own != ""
+      names = names.put(own, "#{stem}.#{own}")
+    end
+  end
+
+  names
+end
+
+def type_name_of(declaration: Ast.Decl) -> String
+  case declaration
+    Ast.Decl.Struct(node) -> node.name
+    Ast.Decl.Enum(node) -> node.name
+    Ast.Decl.TypeAlias(node) -> node.name
+    Ast.Decl.Export(node) -> type_name_of(node.declaration)
+    _ -> ""
+  end
+end
+
+# The item with its types as `own` writes them. The name that a declaration gives is not a type to write, so a struct
+# or an enum keeps its signature, and an alias or a constant is written after its `=` or `:`.
+def qualified(item: Item, own: Map[String, String]) -> Item
+  return item if own.size == 0
+
+  item.with(signature: qualified_signature(item, own), detail: qualified_detail(item.detail, own))
+end
+
+def qualified_signature(item: Item, own: Map[String, String]) -> String
+  return T.replaced_names(item.signature, own, true) if item.kind == "function"
+
+  separator = ""
+  if item.kind == "alias"
+    separator = " = "
+  elsif item.kind == "constant"
+    separator = ": "
+  end
+
+  return item.signature if separator == ""
+
+  at = item.signature.index_of(separator)
+  return item.signature if at.none?
+
+  head = item.signature.slice(0, at.unwrap! + separator.length)
+  rest = item.signature.slice(head.length, item.signature.length - head.length)
+  head + T.replaced_names(rest, own, true)
+end
+
+def qualified_detail(detail: Detail, own: Map[String, String]) -> Detail
+  case detail
+    Detail.Function(parameters, result) ->
+      Detail.Function(
+        parameters.map do |parameter: Parameter| parameter.with(type: T.replaced_names(parameter.type, own, true)) end,
+        T.replaced_names(result, own, true),
+      )
+    Detail.Struct(fields) ->
+      Detail.Struct(fields.map do |field: Field| field.with(type: T.replaced_names(field.type, own, true)) end)
+    Detail.Enum(variants) ->
+      Detail.Enum(
+        variants.map do |variant: Variant|
+          variant.with(payload: variant.payload.map do |type: String| T.replaced_names(type, own, true) end)
+        end,
+      )
+    Detail.Module(items) -> Detail.Module(items.map do |item: Item| qualified(item, own) end)
+    Detail.Plain -> detail
+  end
+end
 
 # The item a top-level declaration gives: none for an import. The doc of an `export` sits on the export.
 def items_of(declaration: Ast.Decl, text: String, origins: Map[String, Item]) -> List[Item]
