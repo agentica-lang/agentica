@@ -664,10 +664,11 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
   sort_entry *entries = kind == SORT_TEXT ? agc_alloc(bytes) : agc_alloc_atomic(bytes);
   agc_list_cursor cursor;
   agc_value key;
+  bool unsigned_keys = agc_is(agc_list_get(keys, 0), AGC_T_UINT64);
   agc_list_cursor_begin(&cursor, keys, 0);
   for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
     entries[k].item = carry ? agc_value_word(key) : k;
-    if (kind == SORT_INT && agc_is(key, AGC_T_UINT64))
+    if (kind == SORT_INT && unsigned_keys)
       entries[k].key = agc_as_uint64(vm, key);
     else if (kind == SORT_INT)
       entries[k].key = int_order(agc_is(key, AGC_T_REF) ? (int64_t)agc_as_ref(vm, key) : agc_as_int(vm, key));

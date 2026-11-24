@@ -345,6 +345,7 @@ agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value) {
 /* Plain digits only, no sign: the text of a number out of the Int range that a UInt64 may still hold. */
 agc_number_status agc_parse_uint64(const uint8_t *s, size_t len, uint64_t *value) {
   if (len == 0) return AGC_NUMBER_INVALID;
+  if (len > 20) return AGC_NUMBER_OVERFLOW;
   for (size_t k = 0; k < len; k++)
     if (s[k] < '0' || s[k] > '9') return AGC_NUMBER_INVALID;
   uint64_t n = 0;
