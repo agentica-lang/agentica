@@ -2,12 +2,12 @@
 title: Estructuras de datos
 weight: 1
 description: Listas, mapas, conjuntos, colas, heaps, rangos, bytes, pipelines perezosos y valores opcionales, y cuándo usar cada uno.
-source_hash: "03930284bf05"
+source_hash: "03b0b07cb881"
 ---
 
 - [List](/library/data-structures/list/): valores de un tipo, en orden. Recórrelos, ordénalos, transfórmalos o filtralos.
-- [Map](/library/data-structures/map/): busca un valor por clave (`Int`, `String`, `Bytes` o `Ref`), en orden de inserción. Búsquedas y contadores.
-- [Set](/library/data-structures/set/): cada `Int`, `String`, `Bytes` o `Ref` una vez, en el orden en que se añadió por primera vez. Duplicados y pertenencia.
+- [Map](/library/data-structures/map/): busca un valor por clave (un entero, `String`, `Bytes` o `Ref`), en orden de inserción. Búsquedas y contadores.
+- [Set](/library/data-structures/set/): cada entero, `String`, `Bytes` o `Ref` una vez, en el orden en que se añadió por primera vez. Duplicados y pertenencia.
 - [Queue](/library/data-structures/queue/) (`std/queue`): primero en entrar, primero en salir, de cadenas.
 - [Heap](/library/data-structures/heap/) (`std/heap`): una cola de prioridad de cualquier tipo; `pop` da el primer valor según tu orden.
 - [Range](/library/data-structures/range/): `0...n` cuenta sin una lista. Úsalo en `for`.

@@ -512,7 +512,7 @@ static uint32_t *read_field_types(reader *r, const agc_program *p, uint32_t coun
 
 /* How deep the element types of type i nest, from those of the types before it. */
 static uint16_t type_depth(const agc_type *t, const uint16_t *depth) {
-  bool nests = t->kind >= AGC_TYPE_LIST && t->kind != AGC_TYPE_STRUCT && t->kind != AGC_TYPE_ENUM &&
+  bool nests = !agc_type_scalar(t->kind) && t->kind != AGC_TYPE_STRUCT && t->kind != AGC_TYPE_ENUM &&
                t->kind != AGC_TYPE_INSTANCE;
   return nests ? (uint16_t)(depth[t->arg] + 1) : 0;
 }
@@ -529,8 +529,9 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_INSTANCE) reject(r, "unknown type kind %u", (unsigned)t->kind);
-    if (t->kind < AGC_TYPE_LIST) continue;
+    uint32_t last = r->format == AGC_FORMAT_PREVIOUS ? AGC_TYPE_INSTANCE : AGC_TYPE_UINT32;
+    if (t->kind > last) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (agc_type_scalar(t->kind)) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
     /* the enum and instance indexes are checked with their sections */
@@ -747,13 +748,16 @@ static void load_instances(reader *r, agc_program *p) {
   if (!r->base) check_json_names(r, p);
 }
 
-/* True when the default fits the field type at index t: a constant of its scalar kind, an empty List or Map, or a
-   variant without a payload of its enum. */
+/* True when the default fits the field type at index t: a constant of its scalar kind (an Int in range for a narrow
+   integer), an empty List or Map, or a variant without a payload of its enum. */
 static bool default_fits(const agc_program *p, uint32_t t, const agc_field_default *d) {
   const agc_type *type = &p->types[t];
   switch (d->kind) {
     case AGC_DEFAULT_CONSTANT: {
       agc_value c = p->constants[d->number];
+      int64_t least, greatest;
+      if (agc_type_narrow(type->kind, &least, &greatest))
+        return agc_is(c, AGC_T_INT) && c.as.i >= least && c.as.i <= greatest;
       return (type->kind == AGC_TYPE_INT && agc_is(c, AGC_T_INT)) ||
              (type->kind == AGC_TYPE_FLOAT && agc_is(c, AGC_T_FLOAT)) ||
              (type->kind == AGC_TYPE_BOOL && agc_is(c, AGC_T_BOOL)) ||
@@ -936,7 +940,7 @@ static agc_string *joined(reader *r, const agc_string *base, const agc_string *a
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
-  if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
+  if (r->format != AGC_FORMAT_VERSION && r->format != AGC_FORMAT_PREVIOUS) reject(r, "unsupported format version");
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 

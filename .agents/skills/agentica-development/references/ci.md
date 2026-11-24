@@ -107,7 +107,9 @@ the `checks` job (`mk/bootstrap.mk` says what it compares). It checks the merge
 commit, so when another `compiler/` change lands first, merge master and refresh
 again. The same holds after any `VERSION` change on master (a release, a patch
 or its forward-port): the version is in the stage0 bytes. Case (b) cannot pass
-it: say so in the PR, and the owner approves by hand.
+it: say so in the PR, and the owner approves by hand. A format bump passes it
+when the loader still reads the previous format (`AGC_FORMAT_PREVIOUS` in
+`vm/value.h`, format 6 until the next release).
 
 ## Windows console
 

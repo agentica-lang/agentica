@@ -546,7 +546,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 11 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 17 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -1135,13 +1135,19 @@ static void prelude_tests(void) {
   char error[160] = "";
   agc_program *p;
 
-  /* The flag is 0 or 1. Version 5, the format before it, is refused by both loaders like any other old format. */
+  /* The flag is 0 or 1. Version 5, the format before it, is refused by both loaders like any other old format; version
+     6 still loads (AGC_FORMAT_PREVIOUS). */
   spec s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
   assert(loads(s, NULL));
   s.funcs[1].prelude = 2;
   assert(!loads(s, "bad prelude flag"));
   s = base();
-  s.version = AGC_FORMAT_VERSION - 1;
+  s.version = AGC_FORMAT_PREVIOUS;
+  buffer six = build(s);
+  assert(agc_load(six.data, six.len, &p, error, sizeof error));
+  assert(agc_load_front_end(six.data, six.len, &p, error, sizeof error, NULL));
+  free(six.data);
+  s.version = AGC_FORMAT_PREVIOUS - 1;
   buffer old = build(s);
   assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
   assert(!agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL) && strstr(error, "format version"));
@@ -1344,7 +1350,7 @@ static buffer error_tables(const char *const *fields, uint32_t count, bool optio
   u32(&t, types ? 6 : 0);
   for (uint32_t k = 0; types && k < 6; k++) {
     u8(&t, kinds[k]);
-    if (kinds[k] >= AGC_TYPE_LIST) u32(&t, args[k]);
+    if (!agc_type_scalar(kinds[k])) u32(&t, args[k]);
   }
   u32(&t, types ? 1 : 0);
   if (types) {
@@ -1475,9 +1481,10 @@ static void json_enum_tests(void) {
   free(three.data);
 }
 
-/* The Instances section (docs/vm/03-ir-and-bytecode.md 4.6). The tables have the struct Box(value), an Int type (0) and
-   a type of kind instance (1) of instance `instance_arg`, and no decodable struct or enum. */
-static buffer instance_tables(uint32_t kind, uint32_t instance_arg) {
+/* The Instances section (docs/vm/03-ir-and-bytecode.md 4.6). The tables have the struct Box(value), a type of kind
+   `field` (0, Int in instance_tables) and a type of kind instance (1) of instance `instance_arg`, and no decodable
+   struct or enum. */
+static buffer field_tables(uint8_t field, uint32_t kind, uint32_t instance_arg) {
   buffer t;
   t.data = malloc(512);
   assert(t.data);
@@ -1487,12 +1494,16 @@ static buffer instance_tables(uint32_t kind, uint32_t instance_arg) {
   u32(&t, 1);
   str(&t, "value");
   u32(&t, 2);
-  u8(&t, AGC_TYPE_INT);
+  u8(&t, field);
   u8(&t, (uint8_t)kind);
   u32(&t, instance_arg);
   u32(&t, 0);
   u32(&t, 0);
   return t;
+}
+
+static buffer instance_tables(uint32_t kind, uint32_t instance_arg) {
+  return field_tables(AGC_TYPE_INT, kind, instance_arg);
 }
 
 /* An empty Decodable enums section, then the instances: each of struct `index`, named `names[k]`, with the field type
@@ -1553,7 +1564,7 @@ static void json_instance_tests(void) {
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
   buffer good = instance_tail(1, 0, one, 0);
   assert(loads_instances(AGC_TYPE_INSTANCE, 0, &good, NULL));
-  assert(!loads_instances(AGC_TYPE_INSTANCE + 1, 0, &good, "unknown type kind"));
+  assert(!loads_instances(AGC_TYPE_UINT32 + 1, 0, &good, "unknown type kind"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 1, &good, "instance index out of range"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, NULL, "instance index out of range"));
   buffer range = instance_tail(1, 1, one, 0);
@@ -1634,6 +1645,53 @@ static void field_default_tests(void) {
   assert(!loads(s, "empty field defaults section"));
   free(t.data);
   free(tail.data);
+}
+
+/* A narrow integer kind is a scalar with no operand, and a field default of one must be an Int in its range. */
+static void narrow_default_tests(void) {
+  static const struct {
+    uint8_t field;
+    int64_t value;
+    const char *reason;
+  } cases[] = {
+    {AGC_TYPE_UINT16, 300, NULL},
+    {AGC_TYPE_UINT8, 300, "field default does not fit its type"},
+    {AGC_TYPE_INT8, -128, NULL},
+    {AGC_TYPE_INT8, -129, "field default does not fit its type"},
+    {AGC_TYPE_UINT32, 4294967295, NULL},
+    {AGC_TYPE_UINT32, -1, "field default does not fit its type"},
+  };
+  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+    buffer t = field_tables(cases[k].field, AGC_TYPE_INSTANCE, 0);
+    buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 2);
+    spec s = base();
+    s.tables = &t;
+    s.tail = &tail;
+    s.extra_kind = 4;
+    s.extra_int = cases[k].value;
+    assert(loads(s, cases[k].reason) == (cases[k].reason == NULL));
+    free(t.data);
+    free(tail.data);
+  }
+}
+
+/* A format-6 file (AGC_FORMAT_PREVIOUS) loads, but has no narrow integer kind. */
+static void previous_format_tests(void) {
+  static const struct {
+    uint8_t field;
+    const char *reason;
+  } cases[] = {{AGC_TYPE_INT, NULL}, {AGC_TYPE_INT8, "unknown type kind 11"}, {AGC_TYPE_UINT32, "unknown type kind 16"}};
+  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+    buffer t = field_tables(cases[k].field, AGC_TYPE_INSTANCE, 0);
+    buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 0);
+    spec s = base();
+    s.version = AGC_FORMAT_PREVIOUS;
+    s.tables = &t;
+    s.tail = &tail;
+    assert(loads(s, cases[k].reason) == (cases[k].reason == NULL));
+    free(t.data);
+    free(tail.data);
+  }
 }
 
 /* A session may repeat a JSON name, which a type declared again keeps: a second Box[Int] loads over the first. A field
@@ -2453,7 +2511,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 11"));
+  assert(!loads_types(1, "unknown type kind 17"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));
@@ -2575,6 +2633,8 @@ int main(void) {
   json_enum_tests();
   json_instance_tests();
   field_default_tests();
+  narrow_default_tests();
+  previous_format_tests();
   session_json_names();
   error_struct_tests();
   stored_name_tests();

@@ -5,8 +5,8 @@ description: Lists, maps, sets, queues, heaps, ranges, bytes, lazy pipelines and
 ---
 
 - [List](/library/data-structures/list/): values of one type, in order. Walk, sort, map, select.
-- [Map](/library/data-structures/map/): find a value by key (`Int`, `String`, `Bytes` or `Ref`), in insertion order. Lookups and counters.
-- [Set](/library/data-structures/set/): each `Int`, `String`, `Bytes` or `Ref` once, in first-added order. Duplicates and membership.
+- [Map](/library/data-structures/map/): find a value by key (an integer, `String`, `Bytes` or `Ref`), in insertion order. Lookups and counters.
+- [Set](/library/data-structures/set/): each integer, `String`, `Bytes` or `Ref` once, in first-added order. Duplicates and membership.
 - [Queue](/library/data-structures/queue/) (`std/queue`): first in, first out, of strings.
 - [Heap](/library/data-structures/heap/) (`std/heap`): a priority queue of any type; `pop` gives the first value in your order.
 - [Range](/library/data-structures/range/): `0...n` counts without a list. Use it in `for`.

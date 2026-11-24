@@ -7,7 +7,7 @@
 MAX_U16 = 65_535
 
 ## The format version of the .agcb header (docs/vm/03-ir-and-bytecode.md 4.6).
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 
 ## The deepest nesting of List and Map in a JSON field type the loader accepts.
 MAX_TYPE_DEPTH = 1024

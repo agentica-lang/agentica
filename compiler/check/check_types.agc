@@ -60,15 +60,16 @@ def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String
   ok(Types.to_text(target))
 end
 
-## True for Int, String, Bytes and Ref, the types of a Map key or a Set element.
+## True for Int, the narrow integer types, String, Bytes and Ref, the types of a Map key or a Set element.
 def key_type?(type: ResolvedType) -> Bool
-  Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes") or ref?(type)
+  integer = Types.is?(type, "Int") or Types.narrow_int?(type)
+  integer or Types.is?(type, "String") or Types.is?(type, "Bytes") or ref?(type)
 end
 
 ## True for Ref, the token of Ref.new.
 def ref?(type: ResolvedType) -> Bool = Types.is?(type, "Opaque") and Types.name(type) == "Ref"
 
-## True when the type may be a Map key or a Set element where cx checks: Int, String, Bytes and Ref, and in the files
+## True when the type may be a Map key or a Set element where cx checks: key_type?, and in the files
 ## of the prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
 def key_here?(cx: State.Cx, type: ResolvedType) -> Bool = key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
 
@@ -845,7 +846,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
         cx,
         st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int, String, Bytes or Ref, found #{Types.to_text(key)}",
+        "a Map key must be an integer, String, Bytes or Ref, found #{Types.to_text(key)}",
         args[0].span,
       ),
     )
@@ -854,7 +855,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
-# ATS[K, V]: the key as a Map key (Int, String, Bytes or Ref; CHECK-MAP-KEY-TYPE otherwise), and a value that
+# ATS[K, V]: the key as a Map key (key_type?; CHECK-MAP-KEY-TYPE otherwise), and a value that
 # ats_value? accepts (CHECK-ATS-VALUE on the value type).
 def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   map = try resolve_map(cx, st, args)
@@ -872,7 +873,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType
         cx,
         st,
         "CHECK-SET-ELEMENT-TYPE",
-        "a Set element must be Int, String, Bytes or Ref, found #{Types.to_text(element)}",
+        "a Set element must be an integer, String, Bytes or Ref, found #{Types.to_text(element)}",
         arg.span,
       ),
     )
@@ -1173,7 +1174,7 @@ def refused_in_field(cx: State.Cx, found: Walk, name: String, index: Int, why: S
 end
 
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
-  if primitive?(type) or Types.is?(type, "Json")
+  if primitive?(type) or Types.narrow_int?(type) or Types.is?(type, "Json")
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
     return refused(seen) if json_null_item?(type)
@@ -1197,7 +1198,8 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
 end
 
 def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
-  if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
+  scalar = Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
+  if scalar or Types.narrow_int?(type)
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
     return refused(seen) if json_null_item?(type)

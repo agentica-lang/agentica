@@ -1,6 +1,6 @@
-"""The parts of the typed JSON peers (json-field-vectors.py, json-optional-vectors.py, json-enum-vectors.py) that the
-models share: the scalar rules of JSON.decode, the Optional and list rules of both directions, the text JSON.encode
-writes for a scalar, and the writer of a vectors file.
+"""The parts of the typed JSON peers (json-field-vectors.py, json-optional-vectors.py, json-enum-vectors.py,
+json-sized-vectors.py) that the models share: the scalar rules of JSON.decode, the Optional and list rules of both
+directions, the text JSON.encode writes for a scalar, and the writer of a vectors file.
 
 Python's json module and the rules of docs/grammar/06b-builtins.md only; no code is shared with the VM.
 """
@@ -10,11 +10,23 @@ import math
 
 INT_MIN, INT_MAX = -(2**63), 2**63 - 1
 
+# The integer types by name, with their least and greatest values.
+RANGES = {
+    "Int": (INT_MIN, INT_MAX),
+    "Int8": (-(2**7), 2**7 - 1),
+    "Int16": (-(2**15), 2**15 - 1),
+    "Int32": (-(2**31), 2**31 - 1),
+    "UInt8": (0, 2**8 - 1),
+    "UInt16": (0, 2**16 - 1),
+    "UInt32": (0, 2**32 - 1),
+}
+
 EXPECTED = {
     "Int": "signed 64-bit Int",
     "Float": "finite Float",
     "Bool": "Bool",
     "String": "String",
+    **{name: f"{name} from {low} to {high}" for name, (low, high) in RANGES.items() if name != "Int"},
 }
 
 
@@ -35,9 +47,11 @@ def is_int(value):
 
 
 def scalar_kind_ok(value, kind):
-    """The top kind check of a nullable scalar before it is decoded: a Float takes any number, even one too big."""
-    if kind == "Int":
-        return is_int(value) and INT_MIN <= value <= INT_MAX
+    """The top kind check of a nullable scalar before it is decoded: a Float takes any number, even one too big, and an
+    integer type only an integer in its range."""
+    if kind in RANGES:
+        low, high = RANGES[kind]
+        return is_int(value) and low <= value <= high
     if kind == "Float":
         return is_int(value) or isinstance(value, float)
     if kind == "Bool":
@@ -46,11 +60,7 @@ def scalar_kind_ok(value, kind):
 
 
 def decode_scalar(value, kind, path):
-    """An Int, Float, Bool or String as JSON.decode reads it."""
-    if kind == "Int":
-        if not (is_int(value) and INT_MIN <= value <= INT_MAX):
-            fail(path, EXPECTED[kind])
-        return value
+    """An integer type, Float, Bool or String as JSON.decode reads it."""
     if kind == "Float":
         if not (is_int(value) or isinstance(value, float)) or not math.isfinite(float(value)):
             fail(path, EXPECTED[kind])

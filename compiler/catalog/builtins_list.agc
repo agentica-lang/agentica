@@ -238,7 +238,7 @@ ROWS: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: (
-      "Group elements by an Int, String, Bytes or Ref key; keys in order of first appearance, elements in " +
+      "Group elements by an integer, String, Bytes or Ref key; keys in order of first appearance, elements in " +
       "order; O(n)."
     ),
     alternatives: [],
@@ -494,7 +494,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Count equal Int, String, Bytes or Ref elements; keys in order of first appearance; O(n).",
+    description: "Count equal integer, String, Bytes or Ref elements; keys in order of first appearance; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -504,7 +504,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Drop repeated Int, String, Bytes or Ref elements, keeping the first of each; O(n).",
+    description: "Drop repeated integer, String, Bytes or Ref elements, keeping the first of each; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

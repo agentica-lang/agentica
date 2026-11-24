@@ -89,8 +89,8 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `Float64` are `Int` and `Float`; all ten names are reserved.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
-  keeps insertion order, `K` is `Int`, `String`, `Bytes` or `Ref`. `Set[T]`:
-  distinct, immutable, first-insertion order, `T` is a key type
+  keeps insertion order, `K` is `Int`, a narrow integer, `String`, `Bytes` or
+  `Ref`. `Set[T]`: distinct, immutable, first-insertion order, `T` is a key type
   (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, `==` in any order, not
   JSON-encodable.
 - `Bytes`: immutable byte string (`references/bytes.md`); `Bytes` is a reserved

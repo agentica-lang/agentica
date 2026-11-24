@@ -1,1 +1,1 @@
-ERROR CHECK-MAP-KEY-TYPE 26:2:8-29:2:11 "a Map key must be Int, String, Bytes or Ref, found Float" - signature="main() -> Void" file="map-key-type.agc"
+ERROR CHECK-MAP-KEY-TYPE 26:2:8-29:2:11 "a Map key must be an integer, String, Bytes or Ref, found Float" - signature="main() -> Void" file="map-key-type.agc"

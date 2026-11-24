@@ -20,18 +20,19 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 - Typed decoding uses a type-expression AST node accepted only in JSON type
   argument positions. JSON.decode returns located-path Result errors, validates
-  signed Int/finite Float bounds, and ignores extra fields. Recursive type
-  validation visits each struct once. The source may be a String or a JSON.Value
-  (two catalog forms, one rule and one VM builtin that skips the parse for a
-  JSON.Value). JSON.schema uses the same eligibility check, emits 64-bit bounds
-  and $defs/$ref for nested or recursive types, and lists in required every
-  field that is not a JSON.Field or an Optional. JSON.Field[T] is only the
-  direct type of a struct field (CHECK-JSON-FIELD-PLACE, checked before the
-  decodable and encodable walks; the walk looks inside Optional). Optional[T] is
-  type kind 8, valid at any depth; the encoders unwrap Optional values anywhere
-  (program->optional, found by the loader), and JSON.Field[Optional[T]] and
-  Optional[Nil] are refused by the walks. JSON.from shares encode eligibility
-  and non-finite diagnostics.
+  signed Int, narrow integer (type kinds 11 to 16) and finite Float bounds, and
+  ignores extra fields. Recursive type validation visits each struct once. The
+  source may be a String or a JSON.Value (two catalog forms, one rule and one VM
+  builtin that skips the parse for a JSON.Value). JSON.schema uses the same
+  eligibility check, emits the bounds of each integer type and $defs/$ref for
+  nested or recursive types, and lists in required every field that is not a
+  JSON.Field or an Optional. JSON.Field[T] is only the direct type of a struct
+  field (CHECK-JSON-FIELD-PLACE, checked before the decodable and encodable
+  walks; the walk looks inside Optional). Optional[T] is type kind 8, valid at
+  any depth; the encoders unwrap Optional values anywhere (program->optional,
+  found by the loader), and JSON.Field[Optional[T]] and Optional[Nil] are
+  refused by the walks. JSON.from shares encode eligibility and non-finite
+  diagnostics.
 
 - `JSON.Value` is opaque; `==` compares it as JSON. `JSON` is a reserved name;
   `JSON.Value` and `JSON.Field` are members of its family.

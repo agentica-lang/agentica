@@ -161,11 +161,29 @@ static agc_value frame_value(const agc_program *p, decode_frame *f) {
   return agc_struct_value(f->record);
 }
 
+/* The error text of a narrow integer kind, without and with "or null". */
+static const char *const narrow_expected[][2] = {
+  {"Int8 from -128 to 127", "Int8 from -128 to 127 or null"},
+  {"Int16 from -32768 to 32767", "Int16 from -32768 to 32767 or null"},
+  {"Int32 from -2147483648 to 2147483647", "Int32 from -2147483648 to 2147483647 or null"},
+  {"UInt8 from 0 to 255", "UInt8 from 0 to 255 or null"},
+  {"UInt16 from 0 to 65535", "UInt16 from 0 to 65535 or null"},
+  {"UInt32 from 0 to 4294967295", "UInt32 from 0 to 4294967295 or null"},
+};
+
+/* True when j is an integer that the narrow kind holds. */
+static bool narrow_fits(const agc_json *j, int64_t least, int64_t greatest) {
+  return j->kind == AGC_JSON_INT && j->scalar.as.i >= least && j->scalar.as.i <= greatest;
+}
+
 /* The top kind check that a JSON.Field or an Optional makes before it decodes its T
    (docs/vm/02-reference-behavior.md §2.7): the text of the error, with "or null", or NULL when the JSON value has the
    kind T starts with. A failure deeper inside T keeps its own path and text. An Optional T makes its own check. */
 static const char *nullable_mismatch(const agc_json *j, uint32_t kind) {
   bool number = j->kind == AGC_JSON_INT || j->kind == AGC_JSON_BIG || j->kind == AGC_JSON_FLOAT;
+  int64_t least, greatest;
+  if (agc_type_narrow(kind, &least, &greatest))
+    return narrow_fits(j, least, greatest) ? NULL : narrow_expected[kind - AGC_TYPE_INT8][1];
   switch (kind) {
     case AGC_TYPE_OPTIONAL: return NULL;
     case AGC_TYPE_INT: return j->kind == AGC_JSON_INT ? NULL : "signed 64-bit Int or null";
@@ -310,6 +328,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
   for (;;) {
     agc_value v = agc_void();
     double x;
+    int64_t least, greatest;
     agc_charge(vm, 1);
     const agc_json *j = kind == ABSENT_FIELD || kind == DEFAULT_FIELD ? NULL : agc_as_json(vm, item);
     if (kind == DEFAULT_FIELD) {
@@ -333,6 +352,10 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
       continue;
     } else if (kind == AGC_TYPE_INT) {
       if (j->kind != AGC_JSON_INT) return decode_error(vm, stack, depth, "signed 64-bit Int");
+      v = j->scalar;
+    } else if (agc_type_narrow(kind, &least, &greatest)) {
+      if (!narrow_fits(j, least, greatest))
+        return decode_error(vm, stack, depth, narrow_expected[kind - AGC_TYPE_INT8][0]);
       v = j->scalar;
     } else if (kind == AGC_TYPE_FLOAT) {
       if (!agc_json_to_float(vm, j, &x)) return decode_error(vm, stack, depth, "finite Float");
@@ -431,10 +454,11 @@ static agc_value reference(const agc_string *name) {
 }
 
 static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_value *schemas) {
-  if (t->kind == AGC_TYPE_INT) {
+  int64_t least = INT64_MIN, greatest = INT64_MAX;
+  if (t->kind == AGC_TYPE_INT || agc_type_narrow(t->kind, &least, &greatest)) {
     static const char *const keys[] = {"type", "minimum", "maximum"};
-    agc_value values[] = {json_text("integer"), agc_json_leaf(AGC_JSON_INT, agc_int(INT64_MIN)),
-                          agc_json_leaf(AGC_JSON_INT, agc_int(INT64_MAX))};
+    agc_value values[] = {json_text("integer"), agc_json_leaf(AGC_JSON_INT, agc_int(least)),
+                          agc_json_leaf(AGC_JSON_INT, agc_int(greatest))};
     return object_of(3, keys, values);
   }
   if (t->kind == AGC_TYPE_FLOAT) return typed("number");
@@ -518,7 +542,7 @@ static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen
       }
       return;
     }
-    if (type->kind < AGC_TYPE_LIST) return;
+    if (agc_type_scalar(type->kind)) return;
     t = type->arg;
   }
 }

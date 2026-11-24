@@ -4,7 +4,7 @@ weight: 2
 description: Functions for Map[K, V]. Each one is also a method on maps.
 ---
 
-Maps are immutable and keep the order in which keys were added. Keys are `Int`, `String`, `Bytes` or [`Ref`](/library/data-structures/ref/).
+Maps are immutable and keep the order in which keys were added. Keys are `Int` or a narrow integer type (`UInt8` and the like), `String`, `Bytes` or [`Ref`](/library/data-structures/ref/).
 
 `a == b` is true when the two maps have the same keys with equal values, in any order; the value type must have equality (not `Fn`, `Task`, `Channel` or a handle).
 
