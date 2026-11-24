@@ -246,7 +246,50 @@ def std_written(modules: List[LinkedModule], file: String) -> Map[String, String
     end
   end
 
-  written
+  written_apart(modules, here, written)
+end
+
+# A re-exported std/ type that `written` writes with a bare name that a user type the file sees also has (its own, or
+# one of a file it imports) is written as the builtin (`HttpWire.Request`).
+def written_apart(modules: List[LinkedModule], here: LinkedModule, written: Map[String, String]) -> Map[String, String]
+  bare = T.REEXPORTED_TYPES.keys.filter do |original: String|
+    !T.to_text_as(T.Type.Struct(original, []), written).include?(".") and written.has_key?(original)
+  end
+
+  return written if bare.size == 0
+
+  seen: List[String] = []
+  for module in modules
+    if module.key == here.key or (!module.key.start_with?("std/") and imported?(here, module))
+      for decl in module.declarations
+        seen = seen.push(declared_name(decl))
+      end
+    end
+  end
+
+  apart = written
+  for original in bare
+    if seen.include?(T.to_text_as(T.Type.Struct(original, []), written))
+      apart = apart.put(original, original)
+    end
+  end
+
+  apart
+end
+
+def imported?(here: LinkedModule, module: LinkedModule) -> Bool
+  (
+    here.aliases.values.include?(module.key) or
+    here.named.values.any? do |linked: String| module.prefix != "" and linked.start_with?(module.prefix) end
+  )
+end
+
+def declared_name(decl: Ast.Decl) -> String
+  case decl
+    Ast.Decl.Struct(node) -> T.display_name(node.name)
+    Ast.Decl.Enum(node) -> T.display_name(node.name)
+    _ -> ""
+  end
 end
 
 ## The prefix of a linked name: "@2::" of "@2::User", "" for a bare name.

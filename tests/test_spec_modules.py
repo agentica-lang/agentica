@@ -485,21 +485,26 @@ class TestModuleRules:
     def test_a_type_mismatch_writes_a_std_type_as_the_file_imported_it(self):
         """A file that imports std/http as W reads `W.Request`, one that imports Request by name reads `Request`, and
         one that binds HTTP to a module of its own never reads `HTTP.Request` for the builtin type: it reads the
-        builtin name, as it does when a user type has the written name too. The type of a user file stays bare."""
+        builtin name, as it does when a user type has the written name too. The type of a user file stays bare, and a user type that the file does not see
+        (a private one of a module it never imports) changes nothing."""
         mine = "struct Request\n  n: Int\nend\n\ndef make() -> Request\n  return Request(n: 1)\nend\n"
         through = 'import H from "std/http"\n\ndef client() -> H.Client\n  return H.client().unwrap!\nend\n'
         take = "\ndef take(r: %s) -> Void\nend\n\ndef main() -> Void\n  take(%s)\nend\n"
         clash = 'import HTTP from "mine"\nimport W from "std/http"\n' + take % ("W.Request", "HTTP.make()")
         shadow = 'import HTTP from "mine"\nimport {Request} from "std/http"\n' + take % ("Request", "HTTP.make()")
         named = 'import {Request} from "std/http"\n' + take % ("Request", "1")
+        unseen = 'import {Request} from "std/http"\nimport Other from "other"\n' + take % ("Request", "Other.n()")
+        other = 'import Mine from "mine"\n\ndef n() -> Int = Mine.make().n\n'
         builtin = 'import HTTP from "through"\n\ndef main() -> Void\n  x: Int = HTTP.client()\nend\n'
         results = self.checks([
             ({"root.agc": clash, "mine.agc": mine}, "root.agc", None),
             ({"root.agc": shadow, "mine.agc": mine}, "root.agc", None),
             ({"root.agc": named}, "root.agc", None),
+            ({"root.agc": unseen, "other.agc": other, "mine.agc": mine}, "root.agc", None),
             ({"root.agc": builtin, "through.agc": through}, "root.agc", None)])
         expected = [("W.Request", "Request", ((8, 8), (8, 19))), ("HttpWire.Request", "Request", ((8, 8), (8, 19))),
-                    ("Request", "Int", ((7, 8), (7, 9))), ("Int", "HttpWire.Client", ((4, 12), (4, 25)))]
+                    ("Request", "Int", ((7, 8), (7, 9))), ("Request", "Int", ((8, 8), (8, 17))),
+                    ("Int", "HttpWire.Client", ((4, 12), (4, 25)))]
         for checked, (want, found, span) in zip(results, expected):
             problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
             assert (problem["expected"], problem["actual"]) == (want, found)

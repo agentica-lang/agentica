@@ -299,28 +299,38 @@ def run(
   taken: Reuse.Taken,
 ) -> Result[Recovered]
   result = check_all(linked, settings, main_required, recover, taken)
-  return error(Failure.pack(settled(Failure.unpack(result.message), linked))) if !result.ok?
+  return error(Failure.pack(settled([Failure.unpack(result.message)], linked)[0])) if !result.ok?
 
   done = result.unwrap!
-  ok(done.with(problems: done.problems.map do |found: Failure.Problem| settled(found, linked) end))
+  ok(done.with(problems: settled(done.problems, linked)))
 end
 
-def settled(found: Failure.Problem, linked: Linker.Linked) -> Failure.Problem
-  hint = ""
-  case found.help
-    Diag.Help.Hint(text) -> hint = text
-    Diag.Help.NoHelp -> hint = ""
+# The problems with the re-exported std/ names of each written as its file writes them, computed once for each file.
+def settled(problems: List[Failure.Problem], linked: Linker.Linked) -> List[Failure.Problem]
+  names: Map[String, Map[String, String]] = {}
+  out: List[Failure.Problem] = []
+  for found in problems
+    if mentions_std?(found)
+      if !names.has_key?(found.file)
+        names = names.put(found.file, std_names(linked, found.file))
+      end
+
+      out = out.push(renamed(found, names[found.file]))
+    else
+      out = out.push(found)
+    end
   end
 
-  texts = [found.message, found.expected, found.actual, found.callee, found.signature, hint]
-  return found if !texts.any? do |text: String| mentions_std?(text) end
+  out
+end
 
-  names = std_names(linked, found.file)
+def renamed(found: Failure.Problem, names: Map[String, String]) -> Failure.Problem
   return found if names.size == 0
 
   help = found.help
-  if hint != ""
-    help = Diag.Help.Hint(T.replaced_names(hint, names, false))
+  case found.help
+    Diag.Help.Hint(text) -> help = Diag.Help.Hint(T.replaced_names(text, names, false))
+    Diag.Help.NoHelp -> help = found.help
   end
 
   found.with(
@@ -337,42 +347,30 @@ def settled(found: Failure.Problem, linked: Linker.Linked) -> Failure.Problem
 end
 
 # What a message prints for each re-exported std/ type (`HTTP.Request`), to what the file writes (Linker.std_written).
-# A name that a user type has too is written as the builtin (`HttpWire.Request`), so the two never read alike.
 def std_names(linked: Linker.Linked, file: String) -> Map[String, String]
   written = Linker.std_written(linked.modules, file)
   names: Map[String, String] = {}
   for original in T.REEXPORTED_TYPES.keys
-    canonical = T.REEXPORTED_TYPES[original]
     text = T.to_text_as(T.Type.Struct(original, []), written)
-    if user_type?(linked.modules, text)
-      text = original
-    end
-
-    if text != canonical
-      names = names.put(canonical, text)
+    if text != T.REEXPORTED_TYPES[original]
+      names = names.put(T.REEXPORTED_TYPES[original], text)
     end
   end
 
   names
 end
 
-# Whether a file that is not of the standard library declares a struct or an enum written `name`.
-def user_type?(modules: List[Linker.LinkedModule], name: String) -> Bool
-  modules.any? do |module: Linker.LinkedModule|
-    !module.key.start_with?("std/") and module.declarations.any? do |decl: Ast.Decl| declares?(decl, name) end
+# Whether a text of the problem holds a re-exported std/ type as a message prints it.
+def mentions_std?(found: Failure.Problem) -> Bool
+  hint = ""
+  case found.help
+    Diag.Help.Hint(text) -> hint = text
+    Diag.Help.NoHelp -> hint = ""
   end
-end
 
-def declares?(decl: Ast.Decl, name: String) -> Bool
-  case decl
-    Ast.Decl.Struct(node) -> T.display_name(node.name) == name
-    Ast.Decl.Enum(node) -> T.display_name(node.name) == name
-    _ -> false
-  end
-end
-
-def mentions_std?(text: String) -> Bool
-  T.REEXPORTED_TYPES.values.any? do |canonical: String| text.include?(canonical) end
+  texts = [found.message, found.expected, found.actual, found.callee, found.signature, hint]
+  texts = texts.concat(found.labels.map do |label: Failure.Label| label.text end)
+  texts.any? do |text: String| T.REEXPORTED_TYPES.values.any? do |canonical: String| text.include?(canonical) end end
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends
