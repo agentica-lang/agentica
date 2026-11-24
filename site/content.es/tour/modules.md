@@ -2,7 +2,7 @@
 title: Módulos e importaciones
 weight: 13
 description: Divide un programa en archivos, haz públicas las declaraciones y usa la biblioteca estándar.
-source_hash: "94b1905711b2"
+source_hash: "810a0ea99ff1"
 ---
 
 ## Un archivo, un módulo {#one-file-one-module}
@@ -331,7 +331,7 @@ Un manifiesto que declara dependencias necesita un `agentica.lock` a su lado, co
 - `agentica install` descarga en `deps/` lo que nombra el bloqueo; nunca cambia el bloqueo.
 - `agentica add NAME URL --tag TAG` (o `--ref COMMIT`, `--version REQUIREMENT`, `--subdir DIR`, `--workspace`) añade una dependencia a `agentica.toml`, al bloqueo y a `deps/`. `OWNER/REPO` en lugar de la URL es `https://github.com/OWNER/REPO`, y los archivos guardan la URL completa; otra fuente es `PKG-SOURCE-INVALID`. Un tag `NAME-X.Y.Z` sin `--subdir` toma la carpeta `NAME` del repositorio cuando el paquete está ahí y no en su raíz.
 - `agentica update [NAME]` vuelve a descargar los fijados por tag, toma el tag más alto que cumple cada `version` y repara un bloqueo desactualizado.
-- `version = "~> 0.8"` toma el tag más alto `X.Y.Z` o `vX.Y.Z` (`NAME-X.Y.Z` con un `subdir`) que cumple un requisito como lo lee RubyGems: términos unidos por comas con `~>`, `>=`, `>`, `<=`, `<` y `==`, donde `~> 0.8` significa `>= 0.8.0, < 1.0.0` y `~> 0.8.1` significa `>= 0.8.1, < 0.9.0`. El bloqueo guarda el `tag` elegido y la `version`, así que una compilación e `install` siguen exactos y sin red; solo `add` y `update` listan los tags. Un requisito que ningún tag cumple es `PKG-VERSION-UNSATISFIED`. Por ahora un nombre tiene un solo requisito en todo el árbol.
+- `version = "~> 0.8"` toma el tag más alto `X.Y.Z` o `vX.Y.Z` (`NAME-X.Y.Z` con un `subdir`) que cumple un requisito como lo lee RubyGems: términos unidos por comas con `~>`, `>=`, `>`, `<=`, `<` y `==`, donde `~> 0.8` significa `>= 0.8.0, < 1.0.0` y `~> 0.8.1` significa `>= 0.8.1, < 0.9.0`. El bloqueo guarda el `tag` elegido y la `version`, así que una compilación e `install` siguen exactos y sin red; solo `add` y `update` listan los tags. Un requisito que ningún tag cumple es `PKG-VERSION-UNSATISFIED`. Los requisitos del proyecto y de cada paquete que pide el mismo repositorio se cumplen en un solo tag, y un `tag` que es una versión cuenta como esa versión exacta; `add` y `update` toman el tag más alto que los cumple todos, y el mensaje de `PKG-VERSION-UNSATISFIED` dice quién pidió qué.
 
 ```sh
 agentica install

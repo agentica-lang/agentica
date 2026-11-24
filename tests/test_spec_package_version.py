@@ -10,6 +10,7 @@ assert codes and the file and key path, never message text (AGENTS.md).
 """
 import re
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -322,19 +323,171 @@ def test_a_lock_tag_that_does_not_satisfy_its_version_is_invalid_and_a_changed_r
     assert_at_key(problem, "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.bond")
 
 
-def test_a_package_that_asks_for_a_version_is_resolved_and_two_requirements_of_one_name_are_a_conflict(ws, remotes):
-    remotes.publish(REPOSITORY, FILES, tag="1.0.0")
-    remotes.publish(REPOSITORY, FILES, tag="1.4.0")
-    middle = 'name = "middle"\n\n[dependencies]\nbond = %s\n' % inline_table(
-        dependency(remotes.url(REPOSITORY), version="~> 1.0"))
-    middle_commit = remotes.publish("owner/middle", {"middle.agc": BANG, "agentica.toml": middle}, tag="v1")
-    ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1")})
-    result = plain(ws, remotes, "update")
-    assert (result.code, result.stdout) == (0, "added bond@1.4.0\nadded middle@v1\n"), result.stderr
+def package(remotes, path, tag="v1", **needs):
+    """Publishes a package whose manifest asks for the dependencies `needs` (name -> inline table). Returns the commit."""
+    text = 'name = "%s"\n\n[dependencies]\n' % path.split("/")[1]
+    text += "".join("%s = %s\n" % (name, inline_table(entry)) for name, entry in needs.items())
+    return remotes.publish(path, {path.split("/")[1] + ".agc": BANG, "agentica.toml": text}, tag=tag)
 
-    # The project asks for the same name with another requirement: one source for a name, as before.
-    ws.write_manifest({"middle": dependency(remotes.url("owner/middle"), tag="v1"),
-                       "bond": dependency(remotes.url(REPOSITORY), version=">= 1.0")})
+
+def locked_tags(ws, remotes):
+    """Runs `update` and returns {name: tag} of what it locked."""
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    return {entry["name"]: entry["tag"] for entry in lock_of(ws)}
+
+
+def bond_tags(remotes, *tags):
+    for tag in tags:
+        remotes.publish(REPOSITORY, FILES, tag=tag)
+
+
+def test_the_requirements_of_a_tree_meet_in_one_tag_and_the_pass_starts_again_for_a_stricter_one(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0", "2.0.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, version="< 1.3"))
+    package(remotes, "owner/other", bond=dependency(url, version="~>1.0"))
+    ws.write_manifest({"bond": dependency(url, version="~> 1.0"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1"),
+                       "other": dependency(remotes.url("owner/other"), tag="v1")})
+
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    locked = {entry["name"]: entry for entry in lock_of(ws)}
+    assert (locked["bond"]["tag"], locked["bond"]["version"]) == ("1.2.0", "~> 1.0")
+    # The lock is what the manifest asks for, so the build stays offline, and a requirement spelled another way is no change.
+    assert command(ws, remotes, "install")[0].code == 0
+    ws.write_manifest({"bond": dependency(url, version="~>1.0"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1"),
+                       "other": dependency(remotes.url("owner/other"), tag="v1")})
+    assert command(ws, remotes, "install")[0].code == 0
+    assert plain(ws, remotes, "update").stdout == "nothing to update\n"
+
+    # A newer tag that satisfies every ask is taken by `update`; one that `middle` rules out is not.
+    bond_tags(remotes, "1.2.9", "1.3.1")
+    assert plain(ws, remotes, "update").stdout == "updated bond@1.2.9\n"
+
+
+def test_a_tag_pin_is_an_exact_version_that_the_requirements_of_the_tree_must_meet(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, tag="1.2.0"))
+    package(remotes, "owner/other", bond=dependency(url, version="~> 1.0"))
+    # A requirement first, then the pin of a package: the pass starts again and takes the pinned tag.
+    ws.write_manifest({"other": dependency(remotes.url("owner/other"), tag="v1"),
+                       "middle": dependency(remotes.url("owner/middle"), tag="v1")})
+    result = plain(ws, remotes, "update")
+    assert result.code == 0, result.stderr
+    assert {entry["name"]: entry["tag"] for entry in lock_of(ws)}["bond"] == "1.2.0"
+
+    # The pin first, then a requirement it meets: nothing moves, and the lock keeps the pin as the project wrote it.
+    ws.write_manifest({"bond": dependency(url, tag="1.2.0"), "other": dependency(remotes.url("owner/other"), tag="v1")})
+    assert plain(ws, remotes, "update").code == 0
+    entry = {entry["name"]: entry for entry in lock_of(ws)}["bond"]
+    assert (entry["tag"], "version" in entry) == ("1.2.0", False)
+
+
+def test_asks_that_no_tag_meets_are_pkg_version_unsatisfied_at_the_manifest_that_asked(ws, remotes):
+    bond_tags(remotes, "1.0.0", "1.2.0", "1.4.0", "2.0.0")
+    url = remotes.url(REPOSITORY)
+    package(remotes, "owner/middle", bond=dependency(url, version=">= 2.0"))
+    ws.write_manifest({"bond": dependency(url, version="~> 1.0"), "middle": dependency(remotes.url("owner/middle"), tag="v1")})
+    _, problem = command(ws, remotes, "update")
+    assert_at_key(problem, "PKG-VERSION-UNSATISFIED", ws.project / "agentica.toml", "dependencies.bond.version")
+    assert not (ws.project / "agentica.lock").exists()
+
+    # A pinned tag that a requirement of a package rules out is the same failure, at that package's dependency.
+    middle_commit = package(remotes, "owner/middle", bond=dependency(url, version="< 1.3"))
+    ws.write_manifest({"bond": dependency(url, tag="1.4.0"), "middle": dependency(remotes.url("owner/middle"), tag="v1")})
+    _, problem = command(ws, remotes, "update")
+    folder = ws.folder(remotes.url("owner/middle"), middle_commit)
+    assert_at_key(problem, "PKG-VERSION-UNSATISFIED", folder / "agentica.toml", "dependencies.bond.version")
+
+    # Two different pins of one name stay what they were.
+    middle_commit = package(remotes, "owner/middle", bond=dependency(url, tag="1.2.0"))
     _, problem = command(ws, remotes, "update")
     folder = ws.folder(remotes.url("owner/middle"), middle_commit)
     assert_at_key(problem, "PKG-SOURCE-CONFLICT", folder / "agentica.toml", "dependencies.bond")
+
+
+@pytest.mark.parametrize("old, new", [
+    (dict(version="~> 1.0"), dict(version="~> 2.0")),
+    (dict(tag="1.0.0"), dict(tag="2.0.0")),
+], ids=["requirements", "pins"])
+def test_the_asks_of_a_package_that_moves_to_an_older_tag_are_left_behind(ws, remotes, old, new):
+    gamma = remotes.url("owner/gamma")
+    for tag in ["1.0.0", "1.5.0", "2.0.0", "2.1.0"]:
+        remotes.publish("owner/gamma", {"gamma.agc": BANG}, tag=tag)
+    package(remotes, "owner/alpha", tag="1.0.0", gamma=dependency(gamma, **old))
+    package(remotes, "owner/alpha", tag="2.0.0", gamma=dependency(gamma, **new))
+    alpha = remotes.url("owner/alpha")
+    package(remotes, "owner/beta", alpha=dependency(alpha, version="~> 1.0"))
+    # The project takes alpha 2.0.0 first, then beta rules it out: alpha 1.0.0 and its own ask of gamma take over.
+    ws.write_manifest({"alpha": dependency(alpha, version=">= 1.0"),
+                       "beta": dependency(remotes.url("owner/beta"), tag="v1")})
+
+    locked = locked_tags(ws, remotes)
+    assert (locked["alpha"], locked["gamma"]) == ("1.0.0", "1.0.0" if "tag" in old else "1.5.0")
+    assert command(ws, remotes, "install")[0].code == 0
+
+
+def test_a_package_that_asks_nothing_at_an_older_tag_frees_the_name_that_its_newer_tag_held(ws, remotes):
+    """xx 2.0.0 asks yy ~> 2.0 and zz rules xx 2.0.0 out: xx 1.0.0 asks nothing of yy, so yy still takes its newest."""
+    for tag in ["1.0.0", "2.0.0", "2.1.0"]:
+        remotes.publish("owner/yy", {"yy.agc": BANG}, tag=tag)
+    yy, xx = remotes.url("owner/yy"), remotes.url("owner/xx")
+    package(remotes, "owner/xx", tag="1.0.0")
+    package(remotes, "owner/xx", tag="2.0.0", yy=dependency(yy, version="~> 2.0"))
+    package(remotes, "owner/zz", xx=dependency(xx, version="~> 1.0"))
+    ws.write_manifest({"yy": dependency(yy, version=">= 1.0"), "xx": dependency(xx, version=">= 1.0"),
+                       "zz": dependency(remotes.url("owner/zz"), tag="v1")})
+
+    locked = locked_tags(ws, remotes)
+    assert (locked["yy"], locked["xx"], locked["zz"]) == ("2.1.0", "1.0.0", "v1")
+
+
+def test_a_package_that_leaves_the_tree_takes_its_asks_with_it(ws, remotes):
+    """aa 2.0.0 brings in dd, which asks cc ~> 2.0; bb rules aa 2.0.0 out, and aa 1.0.0 asks cc ~> 1.0 and has no dd."""
+    for tag in ["1.0.0", "1.4.0", "1.9.0", "2.0.0"]:
+        remotes.publish("owner/cc", {"cc.agc": BANG}, tag=tag)
+    cc, aa = remotes.url("owner/cc"), remotes.url("owner/aa")
+    package(remotes, "owner/dd", cc=dependency(cc, version="~> 2.0"))
+    package(remotes, "owner/aa", tag="1.0.0", cc=dependency(cc, version="~> 1.0"))
+    package(remotes, "owner/aa", tag="2.0.0", dd=dependency(remotes.url("owner/dd"), tag="v1"))
+    package(remotes, "owner/bb", aa=dependency(aa, version="~> 1.0"))
+    ws.write_manifest({"aa": dependency(aa, version=">= 1.0"), "bb": dependency(remotes.url("owner/bb"), tag="v1")})
+
+    locked = locked_tags(ws, remotes)
+    assert locked == {"aa": "1.0.0", "bb": "v1", "cc": "1.9.0"}
+
+
+def test_an_override_ignores_the_asks_of_the_packages_even_when_another_name_makes_the_pass_start_again(ws, remotes):
+    for tag in ["1.0.0", "1.2.0", "2.0.0"]:
+        remotes.publish(REPOSITORY, FILES, tag=tag)
+    for tag in ["1.0.0", "1.2.0", "1.4.0"]:
+        remotes.publish("owner/cc", {"cc.agc": BANG}, tag=tag)
+    bond, cc = remotes.url(REPOSITORY), remotes.url("owner/cc")
+    package(remotes, "owner/middle", bond=dependency(bond, version="~> 2.0"))
+    package(remotes, "owner/other", cc=dependency(cc, version="< 1.3"))
+    (ws.project / "agentica.toml").write_text(
+        'name = "app"\n\n[dependencies]\nbond = { git = "%s", version = "~> 1.0", override = true }\n'
+        'cc = { git = "%s", version = "~> 1.0" }\nmiddle = { git = "%s", tag = "v1" }\n'
+        'other = { git = "%s", tag = "v1" }\n' % (bond, cc, remotes.url("owner/middle"), remotes.url("owner/other")),
+        encoding="utf-8")
+
+    locked = locked_tags(ws, remotes)
+    assert (locked["bond"], locked["cc"]) == ("1.2.0", "1.2.0")
+
+
+def test_asks_that_never_settle_on_a_tag_are_pkg_version_unsatisfied_at_a_dependency(ws, remotes):
+    """Each version of two packages asks for the other version of the other one, so no pair of tags is a fixed point."""
+    urls = {name: remotes.url("owner/" + name) for name in ["pp", "qq"]}
+    package(remotes, "owner/pp", tag="1.0.0", qq=dependency(urls["qq"], version="~> 2.0"))
+    package(remotes, "owner/pp", tag="2.0.0", qq=dependency(urls["qq"], version="~> 1.0"))
+    package(remotes, "owner/qq", tag="1.0.0", pp=dependency(urls["pp"], version="~> 1.0"))
+    package(remotes, "owner/qq", tag="2.0.0", pp=dependency(urls["pp"], version="~> 2.0"))
+    ws.write_manifest({"pp": dependency(urls["pp"], version=">= 1.0"), "qq": dependency(urls["qq"], version=">= 1.0")})
+
+    result, problem = command(ws, remotes, "update")
+    assert (result.code, problem["code"]) == (1, "PKG-VERSION-UNSATISFIED")
+    assert (problem["key_path"], Path(problem["file"]).name) == ("dependencies.qq", "agentica.toml")

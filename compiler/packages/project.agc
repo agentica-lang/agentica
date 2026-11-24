@@ -164,17 +164,19 @@ def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Manifest.
 end
 
 ## Checks the dependencies of a manifest against the lock: each must be in the lock, with the same source and pin. A
-## missing one is PKG-LOCK-STALE. One with another source is PKG-LOCK-STALE for the manifest of the project (the lock
-## is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package (one name cannot stand for two sources in one
-## build). A dependency that is a member of the workspace `members` must be locked as a member, and any other as a
-## fetched package: the same two codes; a dependency with `workspace = true` must be locked as a workspace entry and
-## any other not: the same two codes. The root manifest and the lock must agree on `override`. `owner` is the lock name
-## of the package whose manifest this is ("" for the project's). A package manifest is checked by
-## `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as overridden keeps the source of
-## the root, so the source a package asks for is not compared. A package of a workspace dependency (`owner` has a
-## namespace) that asks for a sibling, a folder of its own workspace, finds it under the namespace and is not compared
-## either: its own pin is ignored. The test group of a package (`group = "test"`) is its own and is not in the lock of
-## the project, so it is not checked. The failure names the manifest and `dependencies.<name>`.
+## missing one is PKG-LOCK-STALE. One with another source is PKG-LOCK-STALE for the manifest of the project (the
+## lock is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package (one name cannot stand for two sources
+## in one build), unless the dependency of a package is a `version`, or a `tag` that is a version, and the locked
+## tag meets it (`GitSource.meets?`). A dependency that is a member of the workspace `members` must be locked as a
+## member, and any other as a fetched package: the same two codes; a dependency with `workspace = true` must be
+## locked as a workspace entry and any other not: the same two codes. The root manifest and the lock must agree on
+## `override`. `owner` is the lock name of the package whose manifest this is ("" for the project's). A package
+## manifest is checked by `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as
+## overridden keeps the source of the root, so the source a package asks for is not compared. A package of a
+## workspace dependency (`owner` has a namespace) that asks for a sibling, a folder of its own workspace, finds it
+## under the namespace and is not compared either: its own pin is ignored. The test group of a package (`group =
+## "test"`) is its own and is not in the lock of the project, so it is not checked. The failure names the manifest
+## and `dependencies.<name>`.
 def check_dependencies(
   lock: Lock.Lock,
   manifest: Manifest.Manifest,
@@ -215,7 +217,8 @@ def check_dependencies(
       return error(stale(manifest.file, path, message))
     end
 
-    if !GitSource.same?(dependency.source, locked.source)
+    versioned = of_package and GitSource.meets?(locked.source, dependency.source)
+    if !GitSource.same?(dependency.source, locked.source) and !versioned
       wanted = GitSource.describe(dependency.source)
       message = "#{dependency.name} is #{wanted}, but #{LOCK_FILE} has #{GitSource.describe(locked.source)}"
       return error(conflict(manifest.file, path, message)) if of_package
