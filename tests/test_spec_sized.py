@@ -79,6 +79,24 @@ RULES = {
     "a compound assignment with a literal above the type": (main("a: UInt8 = 1", "a += 300"), "CHECK-INT-RANGE", "300"),
     "a literal tree above the context": (main("x: UInt8 = 200 + 300"), "CHECK-INT-RANGE", "300"),
     "two narrow types in %": (main("a: UInt8 = 1", "b: UInt16 = 2", "puts(a % b)"), "CHECK-TYPE-MISMATCH", "%"),
+    "the bit, wrapping and widening methods": (
+        main("a: UInt8 = 200", "b: Int8 = -100", "n = 300", "c: UInt16 = a.to_uint16", "d: Int32 = b.to_int32",
+             "e: UInt8 = n.wrap_uint8", "f: Int8 = n.wrap_int8",
+             "g: UInt8 = a.bit_not.bit_and(15).bit_or(1).bit_xor(a)",
+             "h: Int8 = b.shift_left(1).shift_right(1).shift_right_unsigned(1)", "i: UInt8 = a.wrapping_add(100)",
+             "j: Int8 = b.wrapping_sub(100).wrapping_mul(3)", "k: Int = n.wrapping_add(1)", "l: Float = a.to_f",
+             "puts(\"#{c} #{d} #{e} #{f} #{g} #{h} #{i} #{j} #{k} #{l}\")"), None, None),
+    "a bit method takes its own type": (main("a: UInt8 = 1", "b: UInt16 = 2", "puts(a.bit_and(b))"),
+                                        "CHECK-TYPE-MISMATCH", "b"),
+    "a literal argument of a bit method is typed by the method": (main("a: UInt8 = 1", "puts(a.bit_or(256))"),
+                                                                  "CHECK-INT-RANGE", "256"),
+    "no widening that can lose a value": (main("a: UInt8 = 1", "puts(a.to_int8)"), "CHECK-UNKNOWN-METHOD", "a.to_int8"),
+    "no widening to the same type": (main("a: UInt8 = 1", "puts(a.to_uint8)"), "CHECK-UNKNOWN-METHOD", "a.to_uint8"),
+    "no signed widening to an unsigned type": (main("a: Int8 = 1", "puts(a.to_uint32)"), "CHECK-UNKNOWN-METHOD",
+                                               "a.to_uint32"),
+    "wrap_<type> is on Int only": (main("a: UInt16 = 1", "puts(a.wrap_uint8)"), "CHECK-UNKNOWN-METHOD", "a.wrap_uint8"),
+    "wrap_<type> gives the type, not a Result": (main("n = 1", "x: Result[UInt8] = n.wrap_uint8"),
+                                                 "CHECK-TYPE-MISMATCH", "n.wrap_uint8"),
     "no unary minus on an unsigned value": (main("a: UInt8 = 1", "puts(-a)"), "CHECK-TYPE-MISMATCH", "-"),
     # JSON, keys and the list sums of the narrow types come in later pull requests of #984.
     "no JSON.encode yet": (main("a: UInt8 = 1", "puts(JSON.encode(a))"), "CHECK-NOT-ENCODABLE", "a"),
@@ -131,6 +149,9 @@ def halting_cases() -> dict[str, tuple[str, str, str]]:
             shown = "-" if operator == "neg" else operator
             cases[f"{name} {operator}"] = (
                 main(f"a: {name} = {start}", f"puts({expression})"), "RUNTIME-INTEGER-OVERFLOW", shown)
+        for method in ("shift_left", "shift_right", "shift_right_unsigned"):
+            cases[f"{name} {method} -1"] = (
+                main(f"a: {name} = 1", f"puts(a.{method}(-1))"), "RUNTIME-INVALID-COUNT", "-1")
         for operator in ("/", "%"):
             cases[f"{name} {operator} 0"] = (
                 main(f"a: {name} = 1", f"puts(a {operator} 0)"), "RUNTIME-DIVISION-BY-ZERO", operator)

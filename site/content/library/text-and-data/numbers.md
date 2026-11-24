@@ -143,6 +143,44 @@ def main() -> Void
 end
 ```
 
+```signature
+UInt8.bit_not(uint8: UInt8) -> UInt8
+UInt8.shift_left(uint8: UInt8, count: Int) -> UInt8
+UInt8.wrapping_add(uint8: UInt8, other: UInt8) -> UInt8
+Int.wrap_uint8(int: Int) -> UInt8
+Int.wrapping_add(int: Int, other: Int) -> Int
+UInt8.to_uint16(uint8: UInt8) -> UInt16
+UInt8.to_f(uint8: UInt8) -> Float
+```
+
+Each narrow type has the bit methods of `Int` (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `shift_right_unsigned`), read at the width of the type: the result is the low bits, read back in the type. `bit_not` of an unsigned value flips the bits within its width (`UInt8` `0` gives `255`), and of a signed value it is `-1 - x`. `shift_left` drops the bits that leave the width, and a count of the width or more gives `0`. `shift_right` copies the sign bit of a signed type and fills an unsigned one with zeros; `shift_right_unsigned` always fills with zeros, so on `Int8` `-100` it shifts the 8 bits `156`. A negative count stops the program with `RUNTIME-INVALID-COUNT`.
+
+The operators stop on overflow; for arithmetic that wraps, `wrapping_add`, `wrapping_sub` and `wrapping_mul` keep the low bits of the result in the type, on every narrow type and on `Int` (the low 64 bits). `n.wrap_uint8` is the `UInt8` of the low 8 bits of an `Int`, and never fails: the same six `wrap_` methods exist for the other types (`wrap_int8`, `wrap_int16`, `wrap_int32`, `wrap_uint16` and `wrap_uint32`).
+
+A conversion that cannot fail is a plain method with no Result: `x.to_uint16` on a `UInt8`, and the same for every widening that holds all the values of the source (a signed type to a wider signed type, an unsigned type to a wider unsigned or signed type). `to_f` gives the `Float` of any narrow value. Any other conversion goes through `Int`: `x.to_i.to_uint8!`.
+
+```agentica
+def main() -> Void
+  a: UInt8 = 200
+  b: Int8 = -100
+  puts(a.bit_not)
+  puts(a.shift_left(1))
+  puts(b.shift_right_unsigned(1))
+  puts(a.wrapping_add(100))
+  puts(300.wrap_uint8)
+  puts(a.to_uint16 + 1000)
+end
+```
+
+```output
+55
+144
+78
+44
+44
+1200
+```
+
 ## abs, pow and gcd
 
 ```signature

@@ -20,6 +20,15 @@ programs are valid and how they run.
   -(64 + 64)` halts at `64 + 64`. `/` truncates toward zero and `%` takes the
   sign of the dividend. An unsigned value has no unary minus
   (`CHECK-TYPE-MISMATCH`)
+- The narrow integer types have the bit methods of `Int` (`bit_and`, `bit_or`,
+  `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `shift_right_unsigned`) at
+  their width: the result is the low bits, read back in the type; `bit_not` of an
+  unsigned value flips the bits within the width, and a count of the width or
+  more shifts out every bit. `wrapping_add`, `wrapping_sub` and `wrapping_mul`
+  (on `Int` too) and `n.wrap_<type>` keep the low bits and never fail. A
+  widening that holds every value of the source is a plain method
+  (`x.to_uint16`), `to_f` gives a Float, and any other conversion goes through
+  `Int`
 - `Bool`: Only `true` and `false`; there is no truthiness
 - `String`: Unicode text; concatenation with `+`, repetition with `* Int`
 - `Bytes`: Immutable byte string, one byte for each item (`0..255`); no literal
