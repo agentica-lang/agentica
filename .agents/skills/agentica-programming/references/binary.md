@@ -33,8 +33,8 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
   `try n.to_uint16`. `x.to_i` gives the `Int` of a narrow reader result.
 - `read_u64_*` gives a `UInt64` (`0 .. 18446744073709551615`, hashes, IDs);
   `read_i64_*` reads the same bytes as an `Int`, negative on a top bit set.
-- Floats: `f32` is a `Float32` (`x.to_float32` rounds a `Float`); every NaN is written as the canonical NaN.
-  `-0.0`, infinities and subnormals are exact.
+- Floats: `f32` is a `Float32` (`x.to_float32` rounds a `Float`); every NaN is
+  written as the canonical NaN. `-0.0`, infinities and subnormals are exact.
 - Join writer results with `Bytes.concat(parts)`, not `+` in a loop
   (`bytes.md`). Build `parts` with `map`:
   `values.map do |v| Binary.write_i64_be(v) end`.
@@ -61,8 +61,8 @@ Float.from_bits(bits: UInt64) -> Float                   # any UInt64; any NaN p
 
 - A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count.
 - Write masks in hex or binary: `0xFF`, `0xFFFF`, `0b1010`.
-- `x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits >= 9223372036854775808`
-  tests the sign of a Float (not NaN: use `x != x`).
+- `x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits >=
+  9223372036854775808` tests the sign of a Float (not NaN: use `x != x`).
 
 ## Text bytes
 

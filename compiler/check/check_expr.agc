@@ -1059,9 +1059,9 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
       "make both sides one type: x.#{to_int(narrow)} gives the Int of a #{name}, " +
       "n.to_#{name.downcase}! the #{name} of an Int"
     )
-  elsif T.is?(sides.left, "Float32") and (T.sized_int?(sides.right) or T.is?(sides.right, "Int"))
+  elsif T.is?(sides.left, "Float32") and converts_to_float32?(sides.right)
     return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.right)}"
-  elsif T.is?(sides.right, "Float32") and (T.sized_int?(sides.left) or T.is?(sides.left, "Int"))
+  elsif T.is?(sides.right, "Float32") and converts_to_float32?(sides.left)
     return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.left)}"
   elsif either_string and either_error
     return ERROR_TEXT_HELP
@@ -1085,6 +1085,9 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
 
   ""
 end
+
+# True for Int and the narrow integer types, which have to_float32; UInt64 has not.
+def converts_to_float32?(type: T.Type) -> Bool = T.is?(type, "Int") or (T.sized_int?(type) and !T.uint64?(type))
 
 def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   if CheckTypes.number?(sides.left) and CheckTypes.number?(sides.right)
