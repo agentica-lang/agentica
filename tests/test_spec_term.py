@@ -152,6 +152,12 @@ RULES = {
     "Term.decode does not build an instance of a generic enum": (
         GENERIC + "struct H\n  x: Maybe[Int]\nend\n\n" + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, H))"),
         "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Bytes field, which only Term holds": (
+        "struct H\n  raw: Bytes\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Nil field, which only Term holds": (
+        "struct H\n  nothing: Nil\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Map with Int keys, which only Term holds": (
+        "struct H\n  m: Map[Int, Int]\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
     "Term.decode takes two arguments": (main("puts(Term.decode(Term.encode(1).unwrap!))"), "CHECK-ARITY",
                                         "Term.decode(Term.encode(1).unwrap!)"),
     "Term.encode takes one argument": (main("puts(Term.encode(1, 2))"), "CHECK-ARITY", "Term.encode(1, 2)"),

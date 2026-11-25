@@ -153,6 +153,8 @@ ERRORS = [
     ("wrong field type", "Pair", encode(CborMap([("x", "a"), ("y", "s")])), "x: expected signed 64-bit Int"),
     ("missing field", "Pair", encode(CborMap([("x", 1)])), '$: missing field "y"'),
     ("duplicate field", "Pair", encode(CborMap([("x", 1), ("x", 2), ("y", "s")])), '$: duplicate field "x"'),
+    ("duplicate ignored key", "Pair", encode(CborMap([("x", 1), ("z", 1), ("y", "s"), ("z", 2)])),
+     '$: duplicate field "z"'),
     ("key that is not text", "Pair", encode(CborMap([(1, 1)])), "$: expected String key"),
     ("head longer than needed", "Pair", b"\xa2\x61x\x18\x01\x61y\x61s", "x: head is not the shortest form"),
     ("indefinite array", "Lists", b"\xa1\x61v\x9f\x01\xff", "v: indefinite lengths are not allowed"),
@@ -242,26 +244,43 @@ def test_input_past_64_mib_is_refused_before_it_is_read(tmp_path):
     assert result.stdout.splitlines() == ["$: larger than 67108864 bytes"]
 
 
-FUZZ_TYPE = "Entry"
-FUZZ_SEEDS = [
-    CborMap([("id", 7), ("hits", CborMap([(2, 1), (1, 5)])), ("names", CborMap([("k", 9)])), ("raw", bytes([1, 2])),
-             ("score", F64.of(1.5)), ("ratio", None), ("big", 2**63), ("tag", "t"), ("nothing", None)]),
-    CborMap([("id", -7), ("hits", CborMap()), ("names", CborMap()), ("raw", b""), ("score", F64.of(-0.0)),
-             ("ratio", None), ("big", 0), ("tag", None), ("nothing", None)]),
-]
-FUZZ_PROGRAM_TYPES = """struct Entry
+FUZZ_TYPES = """struct Leaf
+  n: Int
+  s: String
+end
+
+enum Shape
+  Dot
+  Box(Int, List[Leaf])
+end
+
+struct Doc
   id: Int
+  shape: Shape
+  items: List[Leaf]
+  f: JSON.Field[Int]
+  tag: Optional[String]
   hits: Map[Int, Int]
   names: Map[String, UInt8]
-  raw: Bytes
-  score: Float
-  ratio: Nil
-  big: UInt64
-  tag: Optional[String]
-  nothing: Nil
 end
 
 """
+FUZZ_FIELDS = ["id", "shape", "items", "f", "tag", "hits", "names"]
+
+
+def leaf(n, s):
+    return CborMap([("n", n), ("s", s)])
+
+
+FUZZ_SEEDS = [
+    CborMap([("id", 7), ("shape", ["Box", [3, [leaf(1, "a"), leaf(-2, "")]]]), ("items", [leaf(5, "x")]),
+             ("f", ["Value", [9]]), ("tag", "t"), ("hits", CborMap([(2, 1), (1, 5)])), ("names", CborMap([("k", 9)]))]),
+    CborMap([("id", -7), ("shape", ["Dot", []]), ("items", []), ("f", ["Absent", []]), ("tag", None),
+             ("hits", CborMap()), ("names", CborMap())]),
+    CborMap([("extra", [1, CborMap([("deep", [None])])]), ("names", CborMap([("a", 1), ("b", 2)])), ("id", 1),
+             ("shape", ["Box", [0, []]]), ("items", [leaf(1, "é"), leaf(2, "b"), leaf(3, "c")]), ("f", ["Null", []]),
+             ("tag", "u"), ("hits", CborMap([(-1, 1)]))]),
+]
 
 
 def mutate(data, rng):
@@ -282,14 +301,25 @@ def mutate(data, rng):
     return bytes(data)
 
 
+def known_fields(item):
+    return {key: value for key, value in item if key in FUZZ_FIELDS}
+
+
 def test_a_mutation_of_valid_bytes_never_crashes_and_never_passes_what_the_peer_refuses(tmp_path):
     rng = random.Random(994)
     inputs = [encode(seed) for seed in FUZZ_SEEDS]
-    inputs += [mutate(rng.choice(inputs[:2]), rng) for _ in range(400)]
-    program = FUZZ_PROGRAM_TYPES + HELPERS + """def try_line(line: String) -> Void
-  case Term.decode(hex(line.strip), Entry)
-    ok(value) -> puts("ok #{OpenSSL.Digest.hexencode(Term.encode(value).unwrap!)}")
+    inputs += [mutate(rng.choice(inputs[:len(FUZZ_SEEDS)]), rng) for _ in range(1500)]
+    program = FUZZ_TYPES + HELPERS + """def try_line(line: String) -> Void
+  case Term.decode(hex(line.strip), Doc)
+    ok(value) -> try_again(Term.encode(value).unwrap!)
     error(_) -> puts("error")
+  end
+end
+
+def try_again(bytes: Bytes) -> Void
+  case Term.decode(bytes, Doc)
+    ok(value) -> puts("ok #{OpenSSL.Digest.hexencode(bytes)} #{OpenSSL.Digest.hexencode(Term.encode(value).unwrap!)}")
+    error(e) -> puts("again #{e.message}")
   end
 end
 
@@ -312,9 +342,12 @@ end
         if line == "error":
             continue
         accepted += 1
+        marker, written, again = line.split(" ")
+        assert marker == "ok", line
         try:
-            decode(data)
+            read = decode(data)
         except PeerError:
             pytest.fail(f"the VM accepted {data.hex()}, which the peer refuses")
-        assert line == "ok " + data.hex() or decode(bytes.fromhex(line[3:])) is not None
-    assert accepted >= 2
+        assert written == again, f"{data.hex()} is not stable: {written} then {again}"
+        assert known_fields(decode(bytes.fromhex(written))) == known_fields(read), data.hex()
+    assert accepted >= len(FUZZ_SEEDS) + 20

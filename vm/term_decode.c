@@ -8,7 +8,6 @@
 #include "services.h"
 
 #include <inttypes.h>
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -32,6 +31,7 @@ typedef struct {
   size_t matched;              /* STRUCT: the fields read */
   bool int_keys;               /* MAP: the keys are Ints */
   uint8_t *seen;               /* STRUCT: a flag for each field read */
+  agc_map *ignored;            /* STRUCT: the keys that name no field, to refuse a repeated one */
   agc_value key;               /* MAP: the key of the entry being read */
   agc_value value;             /* OPTIONAL: the value inside */
   agc_struct *record;
@@ -284,7 +284,8 @@ static bool read_field_key(decoder *d, frame *f, want_t *w, agc_value *error) {
     *error = fail(d, "expected String key", NULL, 0);
     return false;
   }
-  if (h.arg > d->len - d->at || !agc_utf8_chars(d->data + d->at, (size_t)h.arg, &(size_t){0})) {
+  size_t chars = 0;
+  if (h.arg > d->len - d->at || !agc_utf8_chars(d->data + d->at, (size_t)h.arg, &chars)) {
     *error = fail(d, h.arg > d->len - d->at ? "unexpected end of data" : "invalid UTF-8", NULL, 0);
     return false;
   }
@@ -304,6 +305,15 @@ static bool read_field_key(decoder *d, frame *f, want_t *w, agc_value *error) {
   if (found != NO_FIELD && f->seen[found]) {
     *error = fail(d, "duplicate field ", key, n);
     return false;
+  }
+  if (found == NO_FIELD) {
+    agc_map *ignored = f->ignored ? f->ignored : agc_as_map(d->vm, d->vm->rt->empty_map);
+    size_t before = ignored->size;
+    f->ignored = agc_map_put(d->vm, ignored, agc_string_value(agc_make_string((const char *)key, n, chars)), agc_nil());
+    if (f->ignored->size == before) {
+      *error = fail(d, "duplicate field ", key, n);
+      return false;
+    }
   }
   f->field = found;
   f->next++;
@@ -393,6 +403,7 @@ static bool open_enum(decoder *d, const want_t *w, const head *h, agc_value *v, 
   const uint32_t *types = plain ? p->enums[w->arg].payload_types : NULL;
   const agc_variant_def *found = NULL;
   size_t offset = 0; /* the payload types of the variants before the one found */
+  agc_charge(d->vm, count / 8);
   for (uint32_t k = 0; k < count && !found; k++) {
     const agc_variant_def *candidate = &p->variants[first + k];
     if (same_bytes(candidate->name, name, (size_t)tag.arg)) found = candidate;
