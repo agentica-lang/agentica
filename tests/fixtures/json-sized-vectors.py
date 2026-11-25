@@ -1,7 +1,7 @@
 """Writes tests/fixtures/vm/json-sized-vectors.stdin, the vectors that json-sized-vectors.agc checks.
 
-The peer is Python's json module plus the model of typed JSON in json_typed_peer.py, with the ranges of the narrow
-integer types (Int8 to UInt32) as Python ints, sharing no code with the VM. It decodes each document into the Sample
+The peer is Python's json module plus the model of typed JSON in json_typed_peer.py, with the ranges of the sized
+integer types (Int8 to UInt64) as Python ints, sharing no code with the VM. It decodes each document into the Sample
 struct of the fixture and writes one line of four fields joined by a tab, as json-optional-vectors.py does: the
 document, "ok" and the text JSON.encode gives or "error" and the message, and "same", "changed" or "-".
 
@@ -20,7 +20,7 @@ HEADER = (
     "(Python json module); do not edit by hand"
 )
 
-NARROW = ["Int8", "Int16", "Int32", "UInt8", "UInt16", "UInt32"]
+NARROW = ["Int8", "Int16", "Int32", "UInt8", "UInt16", "UInt32", "UInt64"]
 
 # The struct of json-sized-vectors.agc: one field of each narrow type, then the types inside an Optional, a List and a
 # Map.
@@ -28,12 +28,15 @@ STRUCTS = {
     "Sample": [(name.lower(), name) for name in NARROW]
     + [
         ("byte", ("optional", "UInt8")),
+        ("big", ("optional", "UInt64")),
         ("shorts", ("list", "Int16")),
         ("counts", ("map", "UInt32")),
     ],
 }
 
-GOOD = {"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}
+GOOD = {
+    "int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {},
+}
 
 
 def document(**changes) -> str:
@@ -47,11 +50,13 @@ def documents() -> list[str]:
     for name in NARROW:
         field = name.lower()
         low, high = RANGES[name]
-        for value in (low - 1, low, high, high + 1, 2**63, 1.0, "1", None, True):
+        for value in (low - 1, low, high, high + 1, 2**63, 1.0, "1", None, True, high - 1):
             found.append(document(**{field: value}))
         found.append(document(**{field: ...}))
     for value in (-1, 256, 0.5, "x", 2**64):
         found.append(document(byte=value))
+    for value in (-1, 2**63, 2**64 - 1, 2**64, 0.5, "x", None):
+        found.append(document(big=value))
     found += [
         document(shorts=[1, 32768]),
         document(shorts=[None]),

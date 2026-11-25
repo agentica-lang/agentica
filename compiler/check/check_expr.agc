@@ -160,10 +160,10 @@ end
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal, expected: T.Type) -> Result[State.Out]
   target = narrow_target(expected)
   case node.value
-    Ast.LitValue.Whole(value) if T.narrow_int?(target) ->
+    Ast.LitValue.Whole(value) if T.sized_int?(target) ->
       narrow_literal(cx, st, value, "#{value}", false, target, node.span)
     Ast.LitValue.Whole(_) -> ok(State.Out(st: st, type: T.Type.Int))
-    Ast.LitValue.Huge(digits) if T.narrow_int?(target) -> narrow_literal(cx, st, 0, digits, true, target, node.span)
+    Ast.LitValue.Huge(digits) if T.sized_int?(target) -> narrow_literal(cx, st, 0, digits, true, target, node.span)
     Ast.LitValue.Huge(_) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
     Ast.LitValue.Real(number, text) ->
@@ -187,8 +187,8 @@ def narrow_target(expected: T.Type) -> T.Type
   T.Type.Unknown
 end
 
-# True for the narrow integer types and Float32, which a literal takes from its context.
-def sized?(type: T.Type) -> Bool = T.narrow_int?(type) or T.is?(type, "Float32")
+# True for the sized integer types and Float32, which a literal takes from its context.
+def sized?(type: T.Type) -> Bool = T.sized_int?(type) or T.is?(type, "Float32")
 
 # A float literal of type (Float or Float32), with its value and its text: CHECK-FLOAT-RANGE when it rounds to an
 # infinity there.
@@ -218,9 +218,12 @@ def narrow_literal(
   target: T.Type,
   span: Source.Span,
 ) -> Result[State.Out]
-  if huge or !T.narrow_fits?(target, value)
-    return error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(target, text), span))
+  fits = T.narrow_fits?(target, value)
+  if huge
+    fits = T.uint64?(target) and T.uint64_digits_fit?(text)
   end
+
+  return error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(target, text), span)) if !fits
 
   ok(State.Out(st: st, type: target))
 end
@@ -762,7 +765,7 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -
   end
 
   operand = try unary_operand(cx, st, node, inner)
-  if node.op == "minus" and T.narrow_int?(target) and integer_literal?(node.operand)
+  if node.op == "minus" and T.sized_int?(target) and integer_literal?(node.operand)
     # A minus before an integer literal is part of it: -128 is an Int8.
     return negative_literal(cx, operand.st, node, target)
   end
@@ -952,10 +955,10 @@ end
 # sized type that its other side or its context gives it (fitting).
 def literal_tree?(node: Ast.Expr) -> Bool = number_tree?(node, false) or number_tree?(node, true)
 
-# `type` when it is a sized type that the literals of node take: a narrow integer type for a tree of integer literals,
+# `type` when it is a sized type that the literals of node take: a sized integer type for a tree of integer literals,
 # Float32 for one of float literals. Else Unknown, and a literal keeps its own type.
 def fitting(node: Ast.Expr, type: T.Type) -> T.Type
-  return type if T.narrow_int?(type) and number_tree?(node, false)
+  return type if T.sized_int?(type) and number_tree?(node, false)
   return type if T.is?(type, "Float32") and number_tree?(node, true)
 
   T.Type.Unknown
@@ -1058,6 +1061,13 @@ def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) ->
   error(Failure.pack(base.with(expected: left, actual: right, labels: labels)))
 end
 
+# The method that gives the Int of a sized integer type: to_i, which a UInt64 has as a Result, so to_i! there.
+def to_int(type: T.Type) -> String
+  return "to_i!" if T.uint64?(type)
+
+  "to_i"
+end
+
 def same_help(sides: Sides, with_to_s: Bool) -> String
   either_int = T.is?(sides.left, "Int") or T.is?(sides.right, "Int")
   either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
@@ -1065,20 +1075,25 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_error = T.error?(sides.left) or T.error?(sides.right)
   narrow = sides.left
   other = sides.right
-  if !T.narrow_int?(narrow)
+  if !T.sized_int?(narrow)
     narrow = sides.right
     other = sides.left
   end
 
-  if T.narrow_int?(narrow) and T.narrow_int?(other)
+  if T.sized_int?(narrow) and T.sized_int?(other)
+    name = T.tag(narrow)
+    gives = "x.#{to_int(narrow)} gives the Int of either side"
+    if to_int(narrow) != to_int(other)
+      gives = "x.#{to_int(narrow)} gives the Int of #{name} values, x.#{to_int(other)} of #{T.tag(other)} values"
+    end
+
+    return "make both sides one type: #{gives}, n.to_#{name.downcase}! the #{name} of an Int"
+  elsif T.sized_int?(narrow) and T.is?(other, "Int")
     name = T.tag(narrow)
     return (
-      "make both sides one type: x.to_i gives the Int of either side, " +
+      "make both sides one type: x.#{to_int(narrow)} gives the Int of a #{name}, " +
       "n.to_#{name.downcase}! the #{name} of an Int"
     )
-  elsif T.narrow_int?(narrow) and T.is?(other, "Int")
-    name = T.tag(narrow)
-    return "make both sides one type: x.to_i gives the Int of a #{name}, n.to_#{name.downcase}! the #{name} of an Int"
   elsif either_string and either_error
     return ERROR_TEXT_HELP
   elsif either_float and (T.is?(sides.left, "Float32") or T.is?(sides.right, "Float32"))
@@ -1145,7 +1160,7 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if T.narrow_int?(sides.left) or T.narrow_int?(sides.right)
+  if T.sized_int?(sides.left) or T.sized_int?(sides.right)
     try same_types(cx, sides, node, false)
     return ok(sides.left)
   end

@@ -331,10 +331,11 @@ end
 # The default a missing key gives. A none or a JSON.Field variant is Required: a missing key already gives it.
 def field_default(cx: Lowering.Cx, value: Ast.Expr) -> Ir.FieldDefault
   case value
-    Ast.Expr.Literal(node) -> literal_default(node.value, false, cx.types[node.id])
+    Ast.Expr.Literal(node) -> literal_default(node.value, false, Types.uint64?(cx.types[node.id]), cx.types[node.id])
     Ast.Expr.Unary(node) ->
       case node.operand
-        Ast.Expr.Literal(operand) -> literal_default(operand.value, true, cx.types[operand.id])
+        Ast.Expr.Literal(operand) ->
+          literal_default(operand.value, true, Types.uint64?(cx.types[node.id]), cx.types[operand.id])
         _ -> Ir.FieldDefault.Required
       end
 
@@ -349,13 +350,18 @@ def field_default(cx: Lowering.Cx, value: Ast.Expr) -> Ir.FieldDefault
   end
 end
 
-def literal_default(value: Ast.LitValue, negative: Bool, type: Types.Type) -> Ir.FieldDefault
+def literal_default(value: Ast.LitValue, negative: Bool, uint64: Bool, type: Types.Type) -> Ir.FieldDefault
   case value
     Ast.LitValue.Whole(number) ->
+      return Ir.FieldDefault.Value(Ir.Imm.UInt64(0)) if uint64 and negative
+      return Ir.FieldDefault.Value(Ir.Imm.UInt64(number)) if uint64
       return Ir.FieldDefault.Value(Ir.Imm.Int(-number)) if negative
 
       Ir.FieldDefault.Value(Ir.Imm.Int(number))
-    Ast.LitValue.Huge(_) -> Ir.FieldDefault.Value(Ir.Imm.Int(-9_223_372_036_854_775_807 - 1))
+    Ast.LitValue.Huge(digits) ->
+      return Ir.FieldDefault.Value(Ir.Imm.UInt64(Types.uint64_bits(digits))) if uint64 and !negative
+
+      Ir.FieldDefault.Value(Ir.Imm.Int(-9_223_372_036_854_775_807 - 1))
     Ast.LitValue.Real(number, text) ->
       return Ir.FieldDefault.Value(Ir.real(-number, "-#{text}", type)) if negative
 

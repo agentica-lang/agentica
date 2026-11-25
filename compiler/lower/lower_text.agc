@@ -229,6 +229,7 @@ def imm_text(imm: Ir.Imm) -> String
     Ir.Imm.Nil -> "nil"
     Ir.Imm.Bool(flag) -> flag.to_s
     Ir.Imm.Int(number) -> "int:#{number}"
+    Ir.Imm.UInt64(number) -> "uint64:#{number}"
     Ir.Imm.Float(number) -> "float:bits:#{Float.to_bits(number)}"
     Ir.Imm.Float32(text) -> "float32:#{text}"
     Ir.Imm.Text(text) -> Text.quote(text)

@@ -8,7 +8,9 @@ struct Sample
   uint8: UInt8
   uint16: UInt16
   uint32: UInt32
+  uint64: UInt64
   byte: Optional[UInt8]
+  big: Optional[UInt64]
   shorts: List[Int16]
   counts: Map[String, UInt32]
 end

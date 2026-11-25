@@ -2,7 +2,7 @@
 title: Lista
 weight: 1
 description: Funciones de List[T]. Cada una es también un método de las listas.
-source_hash: "c3d8cab90882"
+source_hash: "b230396d582d"
 ---
 
 Las listas son inmutables: cada función da una lista nueva. `xs.length` es `xs.size`, `push` es `append`, `select` es `filter`.
@@ -92,7 +92,7 @@ end
 List.sort(list: List[T]) -> List[T]
 ```
 
-Ordena valores `Int`, `Float`, `String` o `Ref`, de menor a mayor (un `Ref` según cuándo se creó); cualquier otro tipo de elemento es `CHECK-TYPE-MISMATCH`. El orden es estable y O(n log n). Las cadenas se ordenan por punto de código, así que `"B"` va antes que `"a"`, y un `NaN` va al final.
+Ordena valores `Int`, [enteros con tamaño](/library/text-and-data/numbers/#int8-int16-int32-uint8-uint16-and-uint32) (un `UInt64` como número sin signo), `Float`, `String` o `Ref`, de menor a mayor (un `Ref` según cuándo se creó); cualquier otro tipo de elemento es `CHECK-TYPE-MISMATCH`. El orden es estable y O(n log n). Las cadenas se ordenan por punto de código, así que `"B"` va antes que `"a"`, y un `NaN` va al final.
 
 ```agentica
 def main() -> Void
@@ -112,7 +112,7 @@ end
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
-Ordena de forma ascendente por la clave que da la función (un `Int`, `Float`, `String` o `Ref`; otro tipo de clave es `CHECK-TYPE-MISMATCH`). La función se ejecuta una vez por elemento, de izquierda a derecha. Las claves iguales conservan su orden, y el costo es O(n log n) más las llamadas a la función de clave.
+Ordena de forma ascendente por la clave que da la función (un `Int`, un entero con tamaño, `Float`, `String` o `Ref`; otro tipo de clave es `CHECK-TYPE-MISMATCH`). La función se ejecuta una vez por elemento, de izquierda a derecha. Las claves iguales conservan su orden, y el costo es O(n log n) más las llamadas a la función de clave.
 
 ```agentica
 def main() -> Void

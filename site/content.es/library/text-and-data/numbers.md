@@ -1,8 +1,8 @@
 ---
 title: Int y Float
 weight: 2
-description: Convierte entre Int, Float, Float32, String y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "f2a257b5f90d"
+description: Convierte entre Int, Float, Float32, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
+source_hash: "a651ca665089"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -183,6 +183,48 @@ end
 ```
 
 Un tipo de menos bits es una clave de `Map` y un elemento de `Set`, como `Int`. En [JSON](/library/text-and-data/json/), `JSON.encode` lo escribe como un número, `JSON.decode` solo lee un entero dentro de su rango (si no, `r: expected UInt8 from 0 to 255`), y `JSON.schema` da su rango como `minimum` y `maximum`.
+
+## UInt64 {#uint64}
+
+```signature
+Int.to_uint64(int: Int) -> Result[UInt64]
+Int.to_uint64!(int: Int) -> UInt64
+Int.wrap_uint64(int: Int) -> UInt64
+UInt64.to_i(uint64: UInt64) -> Result[Int]
+UInt64.to_i!(uint64: UInt64) -> Int
+UInt64.to_f(uint64: UInt64) -> Float
+UInt32.to_uint64(uint32: UInt32) -> UInt64
+```
+
+`UInt64` guarda de `0` a `18446744073709551615`. Un literal en un lugar de `UInt64` puede ser mayor que el `Int` más grande (`x: UInt64 = 18446744073709551615`), y uno mayor es `CHECK-INT-RANGE`. A diferencia de los tipos de menos bits, en ejecución no es un `Int`: `+`, `-`, `*`, `/`, `%` y las comparaciones trabajan con el valor sin signo, así que `2^63` es mayor que `2^63 - 1`. Una suma o un producto sobre el rango y una resta bajo `0` detienen el programa con `RUNTIME-INTEGER-OVERFLOW`, un divisor cero con `RUNTIME-DIVISION-BY-ZERO`, y no hay menos unario. Un `Int` nunca pasa a `UInt64` solo: `n.to_uint64` es un Result de error bajo `0` (`n.to_uint64!` se detiene ahí), y `n.wrap_uint64` toma los 64 bits de `n`, así que `-1` da `18446744073709551615`. `x.to_i` es un Result de error sobre el `Int` más grande (`x.to_i!` se detiene), y `x.to_f` es el `Float` más cercano. `UInt8`, `UInt16` y `UInt32` se ensanchan con `to_uint64`. Los métodos de bits y `wrapping_add`, `wrapping_sub` y `wrapping_mul` trabajan con los 64 bits, y un conteo de desplazamiento de 64 o más da `0`. Un `UInt64` es una clave de `Map` y un elemento de `Set`, `List.sort` lo ordena como número sin signo, y en [JSON](/library/text-and-data/json/) es un número hasta `18446744073709551615`.
+
+```agentica
+def main() -> Void
+  top: UInt64 = 18446744073709551615
+  puts(top / 10)
+  puts(top > 9223372036854775807.to_uint64!)
+  puts(top.to_i.ok?)
+  puts((-1).wrap_uint64 == top)
+  puts(top.wrapping_add(2))
+  puts(top.shift_right(60))
+end
+```
+
+```output
+1844674407370955161
+true
+false
+true
+1
+15
+```
+
+```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
+def main() -> Void
+  top: UInt64 = 18446744073709551615
+  puts(top + 1)
+end
+```
 
 ## abs, pow y gcd {#abs-pow-and-gcd}
 

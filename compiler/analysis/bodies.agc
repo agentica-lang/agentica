@@ -674,6 +674,7 @@ def shape(type: Types.Type) -> Model.TypeShape
     Types.Type.UInt8 -> builtin("UInt8", [])
     Types.Type.UInt16 -> builtin("UInt16", [])
     Types.Type.UInt32 -> builtin("UInt32", [])
+    Types.Type.UInt64 -> builtin("UInt64", [])
     Types.Type.Float32 -> builtin("Float32", [])
     Types.Type.Bool -> builtin("Bool", [])
     Types.Type.String -> builtin("String", [])

@@ -179,6 +179,15 @@ behavior.
   - **Opcodes:** `ADD_I SUB_I MUL_I DIV_I MOD_I`, `NEG_I`
   - **Meaning:** Checked int64 ops. Fail at the operator span.
 
+- **Group:** UInt64
+  - **Opcodes:** `ADD_U SUB_U MUL_U DIV_U MOD_U`, `LT_U LE_U` (opcodes 55 to 61)
+  - **Meaning:** Unsigned uint64 ops on two UInt64 values (tag `AGC_T_UINT64`):
+    a sum or product above 2^64 - 1 and a difference below 0 fail with
+    `RUNTIME-INTEGER-OVERFLOW`, `DIV_U` and `MOD_U` fail on a zero divisor, and
+    `LT_U` and `LE_U` order the values as unsigned numbers. `>` and `>=` swap
+    the operands, and `EQ`, `NE` and `SAME` compare the 64 bits. An `Int` in
+    an operand is `RUNTIME-INTERNAL`.
+
 - **Group:** Float
   - **Opcodes:** `ADD_F SUB_F MUL_F DIV_F`, `NEG_F`
   - **Meaning:** IEEE. `DIV_F` fails on a zero divisor. Two Float32s (tag
@@ -249,7 +258,7 @@ behavior.
     never
     set is `RUNTIME-INTERNAL`.
 
-There are 55 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 62 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
 `vm/value.h`. New opcodes are appended at the end; that does not bump the
@@ -403,13 +412,14 @@ header and the entry.
 
 - **Section:** Constants
   - **Entry:** `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6
-    String, 7 Bytes, 9 Float32), then `i64`, `f64` bits or `str`. A Bytes is
-    written as a `str` but its bytes need not be UTF-8; the front end writes one
-    for `"text".bytes` on a literal without interpolation. A Float32 is the
-    decimal text of its literal, `[-]digits[.digits][(e|E)[+-]digits]`, which
-    the loader rounds once to the nearest binary32 (ties to even) with exact
-    integer arithmetic, no libc and no locale (`agc_read_float32`); any other
-    text, or one that rounds past the largest Float32, is refused
+    String, 7 Bytes, 8 UInt64, 9 Float32), then `i64`, `f64` bits or `str`. A
+    kind 8 is the 64 bits of a UInt64, written as the `i64` of the same bits. A
+    Bytes is written as a `str` but its bytes need not be UTF-8; the front end
+    writes one for `"text".bytes` on a literal without interpolation. A Float32
+    is the decimal text of its literal, `[-]digits[.digits][(e|E)[+-]digits]`,
+    which the loader rounds once to the nearest binary32 (ties to even) with
+    exact integer arithmetic, no libc and no locale (`agc_read_float32`); any
+    other text, or one that rounds past the largest Float32, is refused
 
 - **Section:** Structs
   - **Entry:** `str` display name, `u32` field count, each field's `str` name
@@ -417,8 +427,8 @@ header and the entry.
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
     Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JSON.Field, 8
-    Optional, 9 Enum, 10 struct instance, 11 to 16 Int8, Int16, Int32, UInt8,
-    UInt16 and UInt32, 18 Float32) and, for 4 to 10, a `u32` operand:
+    Optional, 9 Enum, 10 struct instance, 11 to 17 Int8, Int16, Int32, UInt8,
+    UInt16, UInt32 and UInt64, 18 Float32) and, for 4 to 10, a `u32` operand:
     the item, value, `JSON.Field` or `Optional` payload type index (smaller
     than the entry's own), the struct index, the enum index or the index of a
     record of the Struct instances section. A file with a kind 7 entry has
@@ -517,10 +527,11 @@ header and the entry.
   type kind or constant kind does not: an older VM rejects the file as unknown.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
   such a file and the call fails at run time with a wrong value type. The
-  narrow integer kinds of the sized numeric types (11 to 16, issue #984), and
-  Float32's type kind 18 and constant kind 9, needed no bump for that reason.
-  Versions 7 and 8 are reserved by the rest of the sized numeric types and the
-  builtin `Time` types (issue #985).
+  sized integer kinds of the sized numeric types (11 to 17, issue #984), the
+  constant kind 8 and the opcodes 55 to 61 of UInt64, and Float32's type kind
+  18 and constant kind 9, needed no bump for that reason. Versions 7 and 8 are
+  reserved by the rest of the sized numeric types and the builtin `Time` types
+  (issue #985).
 - The C loader is the only reader of this format and has no compatibility
   shims.
 

@@ -1,74 +1,98 @@
 # json-sized-vectors.stdin: made by python3 tests/fixtures/json-sized-vectors.py (Python json module); do not edit by hand
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": null}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	same
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [-32768, 32767], "counts": {"a": 4294967295}, "byte": 255}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":255,"shorts":[-32768,32767],"counts":{"a":4294967295}}	same
-{"int8": -129, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": -128, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":-128,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 127, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":127,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 128, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": 9223372036854775808, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": 1.0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": "1", "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": null, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int8": true, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
-{"int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int8: expected required field	-
-{"int8": 0, "int16": -32769, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": -32768, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":-32768,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 32767, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":32767,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 32768, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": 9223372036854775808, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": 1.0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": "1", "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": null, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": true, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int16: expected required field	-
-{"int8": 0, "int16": 0, "int32": -2147483649, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": -2147483648, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":-2147483648,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 2147483647, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":2147483647,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 2147483648, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": 9223372036854775808, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": 1.0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": "1", "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": null, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "int32": true, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
-{"int8": 0, "int16": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	int32: expected required field	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": -1, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 255, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":255,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 256, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 9223372036854775808, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 1.0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": "1", "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": null, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": true, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
-{"int8": 0, "int16": 0, "int32": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint8: expected required field	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": -1, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 65535, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":65535,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 65536, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 9223372036854775808, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 1.0, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": "1", "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": null, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": true, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint16: expected required field	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": -1, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 4294967295, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":4294967295,"byte":null,"shorts":[],"counts":{}}	changed
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 4294967296, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 9223372036854775808, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 1.0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": "1", "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": null, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": true, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "shorts": [], "counts": {}}	error	uint32: expected required field	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": -1}	error	byte: expected UInt8 from 0 to 255 or null	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": 256}	error	byte: expected UInt8 from 0 to 255 or null	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": 0.5}	error	byte: expected UInt8 from 0 to 255 or null	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": "x"}	error	byte: expected UInt8 from 0 to 255 or null	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}, "byte": 18446744073709551616}	error	byte: expected UInt8 from 0 to 255 or null	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [1, 32768], "counts": {}}	error	shorts[1]: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [null], "counts": {}}	error	shorts[0]: expected Int16 from -32768 to 32767	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {"a": -1}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {"a": 4294967296}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-
-{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {"a": null}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": null}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [-32768, 32767], "counts": {"a": 4294967295}, "byte": 255}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":255,"big":null,"shorts":[-32768,32767],"counts":{"a":4294967295}}	changed
+{"int8": -129, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": -128, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":-128,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 127, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":127,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 128, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": 9223372036854775808, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": 1.0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": "1", "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": null, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": true, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected Int8 from -128 to 127	-
+{"int8": 126, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":126,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int8: expected required field	-
+{"int8": 0, "int16": -32769, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": -32768, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":-32768,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 32767, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":32767,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 32768, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": 9223372036854775808, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": 1.0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": "1", "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": null, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": true, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": 32766, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":32766,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int16: expected required field	-
+{"int8": 0, "int16": 0, "int32": -2147483649, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": -2147483648, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":-2147483648,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 2147483647, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":2147483647,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 2147483648, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": 9223372036854775808, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": 1.0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": "1", "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": null, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": true, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected Int32 from -2147483648 to 2147483647	-
+{"int8": 0, "int16": 0, "int32": 2147483646, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":2147483646,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	int32: expected required field	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": -1, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 255, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":255,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 256, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 9223372036854775808, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 1.0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": "1", "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": null, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": true, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected UInt8 from 0 to 255	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 254, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":254,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint8: expected required field	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": -1, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 65535, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":65535,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 65536, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 9223372036854775808, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 1.0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": "1", "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": null, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": true, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected UInt16 from 0 to 65535	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 65534, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":65534,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint16: expected required field	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": -1, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 4294967295, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":4294967295,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 4294967296, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 9223372036854775808, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 1.0, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": "1", "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": null, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": true, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 4294967294, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":4294967294,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint64": 0, "shorts": [], "counts": {}}	error	uint32: expected required field	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": -1, "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 18446744073709551615, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":18446744073709551615,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 18446744073709551616, "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 9223372036854775808, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":9223372036854775808,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 1.0, "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": "1", "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": null, "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": true, "shorts": [], "counts": {}}	error	uint64: expected UInt64 from 0 to 18446744073709551615	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 18446744073709551614, "shorts": [], "counts": {}}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":18446744073709551614,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "shorts": [], "counts": {}}	error	uint64: expected required field	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": -1}	error	byte: expected UInt8 from 0 to 255 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": 256}	error	byte: expected UInt8 from 0 to 255 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": 0.5}	error	byte: expected UInt8 from 0 to 255 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": "x"}	error	byte: expected UInt8 from 0 to 255 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "byte": 18446744073709551616}	error	byte: expected UInt8 from 0 to 255 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": -1}	error	big: expected UInt64 from 0 to 18446744073709551615 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": 9223372036854775808}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":9223372036854775808,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": 18446744073709551615}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":18446744073709551615,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": 18446744073709551616}	error	big: expected UInt64 from 0 to 18446744073709551615 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": 0.5}	error	big: expected UInt64 from 0 to 18446744073709551615 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": "x"}	error	big: expected UInt64 from 0 to 18446744073709551615 or null	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {}, "big": null}	ok	{"int8":0,"int16":0,"int32":0,"uint8":0,"uint16":0,"uint32":0,"uint64":0,"byte":null,"big":null,"shorts":[],"counts":{}}	changed
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [1, 32768], "counts": {}}	error	shorts[1]: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [null], "counts": {}}	error	shorts[0]: expected Int16 from -32768 to 32767	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {"a": -1}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {"a": 4294967296}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-
+{"int8": 0, "int16": 0, "int32": 0, "uint8": 0, "uint16": 0, "uint32": 0, "uint64": 0, "shorts": [], "counts": {"a": null}}	error	counts["a"]: expected UInt32 from 0 to 4294967295	-

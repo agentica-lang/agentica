@@ -15,8 +15,9 @@ import Ir from "ir"
 ## The ops that write only R[a], after reading every operand, so R[a] may be an operand.
 DESTINATION_OPS = Set.new([
   "move", "const", "global", "add-i", "sub-i", "mul-i", "div-i", "mod-i", "neg-i", "not", "lt-i", "le-i", "eq", "ne",
-  "add-f", "sub-f", "mul-f", "div-f", "neg-f", "lt-f", "le-f", "concat", "to-text", "list", "list-len", "list-get",
-  "struct", "field", "enum", "is-variant", "payload", "same", "map", "map-get", "struct-with",
+  "add-f", "sub-f", "mul-f", "div-f", "neg-f", "lt-f", "le-f", "add-u", "sub-u", "mul-u", "div-u", "mod-u", "lt-u",
+  "le-u", "concat", "to-text", "list", "list-len", "list-get", "struct", "field", "enum", "is-variant", "payload",
+  "same", "map", "map-get", "struct-with",
 ])
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
@@ -287,6 +288,7 @@ def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.UInt8 -> true
     Types.Type.UInt16 -> true
     Types.Type.UInt32 -> true
+    Types.Type.UInt64 -> true
     Types.Type.Float32 -> true
     Types.Type.Float -> true
     Types.Type.Bool -> true

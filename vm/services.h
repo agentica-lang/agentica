@@ -68,6 +68,7 @@ agc_finder agc_finder_new(const uint8_t *p, size_t m);
 size_t agc_finder_find(const agc_finder *f, const uint8_t *t, size_t n, size_t from);
 agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
+agc_number_status agc_parse_uint64(const uint8_t *s, size_t len, uint64_t *value);
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
 /* The Float nearest to [+-]digits[.digits][(e|E)[+-]digits] (checked by the caller), ties to even. */
 double agc_read_double(const char *s, size_t len);

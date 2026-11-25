@@ -39,17 +39,20 @@ VM_BUILTINS = Set.new([
   "UInt8.wrapping_mul", "UInt8.shift_left", "UInt8.bit_not", "Int.wrap_uint16", "UInt16.wrapping_add",
   "UInt16.wrapping_sub", "UInt16.wrapping_mul", "UInt16.shift_left", "UInt16.bit_not", "Int.wrap_uint32",
   "UInt32.wrapping_add", "UInt32.wrapping_sub", "UInt32.wrapping_mul", "UInt32.shift_left", "UInt32.bit_not",
-  "Time.now_ms", "Time.monotonic_ms", "Time.monotonic_ns", "Time.Date.new", "Time.TimeOfDay.new",
-  "Time.NaiveDateTime.new", "Time.DateTime.new", "Time.Date.leap?", "Time.Date.days_in_month", "Random.int",
-  "Random.float", "JSON.parse", "JSON.encode", "JSON.from", "JSON.object", "JSON.array", "JSON.null", "JSON.null?",
-  "JSON.get", "JSON.at", "JSON.string", "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode",
-  "JSON.schema", "JSON.node", "File.open", "File.read_bytes.bytes", "File.read_line", "File.write",
-  "File.write_bytes.bytes", "File.flush", "File.close", "File.each_line", "File.read_text", "File.sha256.bytes",
-  "File.replace", "File.seek", "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock",
-  "Zlib.deflate.bytes", "Zlib.inflate.bytes", "Zlib.gzip.bytes", "Zlib.gunzip.bytes", "Zlib.crc32.bytes", "Dir.list",
-  "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename",
-  "ATS.new", "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.clear", "ATS.add", "ATS.push",
-  "ATS.size", "ATS.keys", "ATS.to_map", "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new",
+  "UInt64.to_int", "UInt64.to_int!", "UInt64.to_float", "UInt64.from_narrow", "Int.to_uint64", "Int.to_uint64!",
+  "Int.wrap_uint64", "UInt64.bit_and", "UInt64.bit_or", "UInt64.bit_xor", "UInt64.bit_not", "UInt64.shift_left",
+  "UInt64.shift_right", "UInt64.wrapping_add", "UInt64.wrapping_sub", "UInt64.wrapping_mul", "Time.now_ms",
+  "Time.monotonic_ms", "Time.monotonic_ns", "Time.Date.new", "Time.TimeOfDay.new", "Time.NaiveDateTime.new",
+  "Time.DateTime.new", "Time.Date.leap?", "Time.Date.days_in_month", "Random.int", "Random.float", "JSON.parse",
+  "JSON.encode", "JSON.from", "JSON.object", "JSON.array", "JSON.null", "JSON.null?", "JSON.get", "JSON.at",
+  "JSON.string", "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode", "JSON.schema",
+  "JSON.node", "File.open", "File.read_bytes.bytes", "File.read_line", "File.write", "File.write_bytes.bytes",
+  "File.flush", "File.close", "File.each_line", "File.read_text", "File.sha256.bytes", "File.replace", "File.seek",
+  "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock", "Zlib.deflate.bytes",
+  "Zlib.inflate.bytes", "Zlib.gzip.bytes", "Zlib.gunzip.bytes", "Zlib.crc32.bytes", "Dir.list", "Dir.mkdir",
+  "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename", "ATS.new",
+  "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.clear", "ATS.add", "ATS.push", "ATS.size",
+  "ATS.keys", "ATS.to_map", "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new",
   "Channel.send", "Channel.recv", "Channel.close", "Channel.closed?", "Channel.empty?", "Channel.address",
   "Address.send", "Process.spawn.options", "Process.send", "Process.send_bytes.bytes", "Process.read_line",
   "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait", "Process.close", "TCP.connect", "TCP.listen",
@@ -121,6 +124,12 @@ VM_BUILTINS = Set.new([
 INT_OPS: Map[String, String] = {
   "plus": "add-i", "minus": "sub-i", "multiply": "mul-i", "divide": "div-i", "modulo": "mod-i", "less": "lt-i",
   "less-equal": "le-i", "greater": "lt-i", "greater-equal": "le-i",
+}
+
+## The same for two UInt64.
+UINT64_OPS: Map[String, String] = {
+  "plus": "add-u", "minus": "sub-u", "multiply": "mul-u", "divide": "div-u", "modulo": "mod-u", "less": "lt-u",
+  "less-equal": "le-u", "greater": "lt-u", "greater-equal": "le-u",
 }
 
 ## The most parts of an interpolation that `.bytes` writes with one builtin (INTERPOLATED_PARTS in vm/bytes.c).

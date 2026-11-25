@@ -154,6 +154,8 @@ Int.to_uint16
 Int.to_uint16!
 Int.to_uint32
 Int.to_uint32!
+Int.to_uint64
+Int.to_uint64!
 Int.to_uint8
 Int.to_uint8!
 Int.upto
@@ -162,6 +164,7 @@ Int.wrap_int32
 Int.wrap_int8
 Int.wrap_uint16
 Int.wrap_uint32
+Int.wrap_uint64
 Int.wrap_uint8
 Int.wrapping_add
 Int.wrapping_mul
@@ -514,6 +517,19 @@ UInt32.shift_left
 UInt32.wrapping_add
 UInt32.wrapping_mul
 UInt32.wrapping_sub
+UInt64.bit_and
+UInt64.bit_not
+UInt64.bit_or
+UInt64.bit_xor
+UInt64.from_narrow
+UInt64.shift_left
+UInt64.shift_right
+UInt64.to_float
+UInt64.to_int
+UInt64.to_int!
+UInt64.wrapping_add
+UInt64.wrapping_mul
+UInt64.wrapping_sub
 UInt8.bit_not
 UInt8.shift_left
 UInt8.wrapping_add

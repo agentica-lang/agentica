@@ -109,6 +109,7 @@ def constant_key(imm: Ir.Imm) -> String
     Ir.Imm.Nil -> "n"
     Ir.Imm.Bool(flag) -> "b#{flag}"
     Ir.Imm.Int(number) -> "i#{number}"
+    Ir.Imm.UInt64(number) -> "u#{number}"
     Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
     Ir.Imm.Float32(text) -> "g#{text}"
     Ir.Imm.Text(text) -> "s#{text}"
@@ -350,6 +351,7 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Nil -> [1]
     Ir.Imm.Bool(flag) -> flag_bytes(flag)
     Ir.Imm.Int(number) -> [4].concat(Wire.i64(number))
+    Ir.Imm.UInt64(number) -> [8].concat(Wire.i64(number))
     Ir.Imm.Float(number) -> [5].concat(Wire.f64(number))
     Ir.Imm.Float32(text) -> [9].concat(Wire.string(text))
     Ir.Imm.Text(text) -> [6].concat(Wire.string(text))

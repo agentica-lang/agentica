@@ -20,6 +20,7 @@ def method_modules() -> Map[String, String]
     "Int8": "Int8",
     "UInt16": "UInt16",
     "UInt32": "UInt32",
+    "UInt64": "UInt64",
     "UInt8": "UInt8",
     "Json": "JSON",
     "Lazy": "Lazy",

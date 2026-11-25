@@ -38,7 +38,7 @@ def plan(
   at = 0
   while at < constants.size
     by_name = by_name.put(constants[at].name, at)
-    value = literal_value(constants[at].value, types)
+    value = literal_value(types, constants[at].value)
     case value
       some(imm) -> literals = literals.put(constants[at].name, imm)
       none -> literals = literals
@@ -80,18 +80,36 @@ def plan(
 end
 
 ## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
-## initializer. types are the checked types by node id.
-def literal_value(value: Ast.Expr, types: List[Types.Type]) -> Optional[Ir.Imm]
+## initializer.
+def literal_value(types: List[Types.Type], value: Ast.Expr) -> Optional[Ir.Imm]
   case value
-    Ast.Expr.Literal(node) -> plain(node.value, types[node.id])
+    Ast.Expr.Literal(node) ->
+      return uint64_value(node.value, false) if Types.uint64?(types[node.id])
+
+      plain(node.value, types[node.id])
     Ast.Expr.Unary(node) ->
       return none if node.op != "minus"
 
       case node.operand
-        Ast.Expr.Literal(inner) -> negated(inner.value, types[inner.id])
+        Ast.Expr.Literal(inner) ->
+          return uint64_value(inner.value, true) if Types.uint64?(types[node.id])
+
+          negated(inner.value, types[inner.id])
         _ -> none
       end
 
+    _ -> none
+  end
+end
+
+## The value of an integer literal of type UInt64, which a minus before it (`-0`) leaves zero.
+def uint64_value(value: Ast.LitValue, negative: Bool) -> Optional[Ir.Imm]
+  case value
+    Ast.LitValue.Whole(number) -> some(Ir.Imm.UInt64(number))
+    Ast.LitValue.Huge(digits) ->
+      return none if negative
+
+      some(Ir.Imm.UInt64(Types.uint64_bits(digits)))
     _ -> none
   end
 end

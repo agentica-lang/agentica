@@ -329,6 +329,13 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_DIV_F:
       case AGC_OP_LT_F:
       case AGC_OP_LE_F:
+      case AGC_OP_ADD_U:
+      case AGC_OP_SUB_U:
+      case AGC_OP_MUL_U:
+      case AGC_OP_DIV_U:
+      case AGC_OP_MOD_U:
+      case AGC_OP_LT_U:
+      case AGC_OP_LE_U:
       case AGC_OP_CONCAT:
       case AGC_OP_LIST_GET:
       case AGC_OP_MAP_GET:
@@ -530,8 +537,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_FLOAT32 || t->kind == AGC_TYPE_UINT32 + 1)
-      reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_FLOAT32) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (agc_type_scalar(t->kind)) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -760,6 +766,7 @@ static bool default_fits(const agc_program *p, uint32_t t, const agc_field_defau
       if (agc_type_narrow(type->kind, &least, &greatest))
         return agc_is(c, AGC_T_INT) && c.as.i >= least && c.as.i <= greatest;
       return (type->kind == AGC_TYPE_INT && agc_is(c, AGC_T_INT)) ||
+             (type->kind == AGC_TYPE_UINT64 && agc_is(c, AGC_T_UINT64)) ||
              (type->kind == AGC_TYPE_FLOAT && agc_is(c, AGC_T_FLOAT)) ||
              (type->kind == AGC_TYPE_FLOAT32 && agc_is(c, AGC_T_FLOAT32)) ||
              (type->kind == AGC_TYPE_BOOL && agc_is(c, AGC_T_BOOL)) ||
@@ -1012,6 +1019,7 @@ static void load(reader *r, agc_program *p) {
       }
       case 6: p->constants[i] = agc_string_value(read_string(r)); break;
       case 7: p->constants[i] = agc_bytes_value(read_bytes(r)); break;
+      case 8: p->constants[i] = agc_uint64(read_u64(r)); break;
       case 9: {
         /* A Float32 literal, as its decimal text: rounded here once, so it is never rounded through a double. */
         uint32_t len = read_u32(r);

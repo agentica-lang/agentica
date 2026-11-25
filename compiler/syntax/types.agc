@@ -26,6 +26,8 @@ NARROW_INTS: Map[String, List[Int]] = {
   "UInt32": [0, 4294967295],
 }
 
+## The decimal digits of the greatest UInt64. It has its own tag in the VM, and its range does not fit an Int.
+UINT64_MAX_DIGITS = "18446744073709551615"
 ## 2^128 - 2^103 as a Float and as its digits: a float literal from it up rounds to an infinity in Float32.
 FLOAT32_HALFWAY = 340282356779733661637539395458142568448.0
 FLOAT32_HALFWAY_DIGITS = "340282356779733661637539395458142568448"
@@ -59,6 +61,7 @@ enum Type
   UInt8
   UInt16
   UInt32
+  UInt64
   Float32
   Bool
   String
@@ -104,6 +107,7 @@ def tag(type: Type) -> String
     Type.UInt8 -> "UInt8"
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
+    Type.UInt64 -> "UInt64"
     Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"
@@ -138,17 +142,48 @@ def is?(type: Type, word: String) -> Bool = tag(type) == word
 ## True for Int8, Int16, Int32, UInt8, UInt16 and UInt32.
 def narrow_int?(type: Type) -> Bool = NARROW_INTS.has_key?(tag(type))
 
-## True for UInt8, UInt16 and UInt32.
-def unsigned?(type: Type) -> Bool = narrow_int?(type) and NARROW_INTS[tag(type)][0] == 0
+## True for UInt64, the integer type that has a tag of its own in the VM.
+def uint64?(type: Type) -> Bool = tag(type) == "UInt64"
 
-## True when the narrow integer type holds the value.
+## True for a narrow integer type and for UInt64: the types whose literals the context gives, and that the operators
+## take two of.
+def sized_int?(type: Type) -> Bool = narrow_int?(type) or uint64?(type)
+
+## True for UInt8, UInt16, UInt32 and UInt64.
+def unsigned?(type: Type) -> Bool = uint64?(type) or (narrow_int?(type) and NARROW_INTS[tag(type)][0] == 0)
+
+## True when the sized integer type holds the value. UInt64 holds every Int from 0 up.
 def narrow_fits?(type: Type, value: Int) -> Bool
+  return value >= 0 if uint64?(type)
+
   bounds = NARROW_INTS[tag(type)]
   value >= bounds[0] and value <= bounds[1]
 end
 
-## The message of a literal (its text) that the narrow integer type does not hold: "300 is outside UInt8, 0 to 255".
+## True when the digits of an integer literal, past the Int range, are no more than the greatest UInt64. A literal with
+## a prefix or a sign (the Huge text of a long hex literal, `-5`) is not.
+def uint64_digits_fit?(digits: String) -> Bool
+  return false if digits.length > UINT64_MAX_DIGITS.length or !digits.split("").all? do |c: String| digit?(c) end
+  return true if digits.length < UINT64_MAX_DIGITS.length
+
+  head = digits.slice(0, 19).to_i!
+  head < 1844674407370955161 or (head == 1844674407370955161 and digits.slice(19, 1).to_i! <= 5)
+end
+
+## The Int that holds the 64 bits of a UInt64 literal above the greatest Int (a Huge literal): its value less 2^64.
+## With 2^64 = 10 * 1844674407370955161 + 6, the sum 10 * head + last - 2^64 is computed as
+## 10 * (head - 1844674407370955160) + last - 16, which stays in the Int range. The checker has seen the digits fit
+## (uint64_digits_fit?).
+def uint64_bits(digits: String) -> Int
+  head = digits.slice(0, digits.length - 1).to_i!
+  last = digits.slice(digits.length - 1, 1).to_i!
+  10 * (head - 1844674407370955160) + (last - 16)
+end
+
+## The message of a literal (its text) that the sized integer type does not hold: "300 is outside UInt8, 0 to 255".
 def narrow_outside(type: Type, text: String) -> String
+  return "#{text} is outside UInt64, 0 to #{UINT64_MAX_DIGITS}" if uint64?(type)
+
   bounds = NARROW_INTS[tag(type)]
   "#{text} is outside #{tag(type)}, #{bounds[0]} to #{bounds[1]}"
 end
@@ -206,8 +241,18 @@ def float_outside(type: Type, text: String) -> String
   "#{text} is past the largest #{tag(type)}, #{largest}, and would be an infinity"
 end
 
-## The narrow integer type of that name (a key of NARROW_INTS).
+## The narrow integer type of that name (a key of NARROW_INTS), or UInt64.
 def narrow_int(name: String) -> Type = NARROW_TYPES[name]
+
+## True for a name of a sized integer type: a key of NARROW_INTS, or UInt64.
+def sized_name?(name: String) -> Bool = NARROW_INTS.has_key?(name) or name == "UInt64"
+
+## The sized integer type of that name (sized_name?).
+def sized_int(name: String) -> Type
+  return Type.UInt64 if name == "UInt64"
+
+  NARROW_TYPES[name]
+end
 
 ## True for no type (Unknown).
 def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
@@ -470,6 +515,7 @@ def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.UInt8 -> "UInt8"
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
+    Type.UInt64 -> "UInt64"
     Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"

@@ -72,6 +72,7 @@ PLAIN_KINDS = {
   "UInt8": T.Type.UInt8,
   "UInt16": T.Type.UInt16,
   "UInt32": T.Type.UInt32,
+  "UInt64": T.Type.UInt64,
   "Float32": T.Type.Float32,
   "String": T.Type.String,
   "Json": T.Type.Json,

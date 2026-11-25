@@ -691,8 +691,9 @@ def check_pattern(
   end
 end
 
-# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested. A
-# float pattern of a case on a Float32 is a Float32, recorded by its id for the lowering.
+# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested. The
+# state has the type of the value recorded at the pattern: the lowering reads it for an integer pattern of a UInt64
+# and a float pattern of a Float32.
 def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[State.St]
   pattern_type = literal_type(pattern.value)
   message = "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}"
@@ -702,9 +703,9 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     return error(State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help))
   end
 
-  if T.narrow_int?(value_type) and T.is?(pattern_type, "Int")
+  if T.sized_int?(value_type) and T.is?(pattern_type, "Int")
     try narrow_pattern(cx, st, pattern, value_type)
-    return ok(st)
+    return ok(State.record_type(st, pattern.id, value_type))
   end
 
   float32 = T.is?(value_type, "Float32") and T.is?(pattern_type, "Float")
@@ -726,6 +727,7 @@ def narrow_pattern(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, valu
     Ast.LitValue.Whole(value) if T.narrow_fits?(value_type, value) -> ok(true)
     Ast.LitValue.Whole(value) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, "#{value}"), pattern.span))
+    Ast.LitValue.Huge(digits) if T.uint64?(value_type) and T.uint64_digits_fit?(digits) -> ok(true)
     Ast.LitValue.Huge(digits) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", T.narrow_outside(value_type, digits), pattern.span))
     _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "not an integer pattern", pattern.span))

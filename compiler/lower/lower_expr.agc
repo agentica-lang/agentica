@@ -23,7 +23,7 @@ import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
   CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, CONCAT_PARTS, FLOAT_OPS, INTERPOLATED_PARTS, INT_MIN, INT_MIN_DIGITS,
-  INT_OPS, NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
+  INT_OPS, NATIVE_LAYOUTS, STRING_OPS, UINT64_OPS, VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -704,13 +704,22 @@ end
 
 def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int) -> Result[Lowering.Out]
   value = Ir.Imm.Nil
+  uint64 = Types.uint64?(cx.types[node.id])
   case node.value
-    Ast.LitValue.Whole(number) -> value = Ir.Imm.Int(number)
+    Ast.LitValue.Whole(number) ->
+      value = Ir.Imm.Int(number)
+      if uint64
+        value = Ir.Imm.UInt64(number)
+      end
+
     Ast.LitValue.Real(number, text) -> value = Ir.real(number, text, cx.types[node.id])
     Ast.LitValue.Text(text) -> value = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> value = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> value = Ir.Imm.Nil
-    Ast.LitValue.Huge(_) -> return error(Lowering.internal(cx, "lower: integer literal out of range", node.span))
+    Ast.LitValue.Huge(digits) ->
+      return error(Lowering.internal(cx, "lower: integer literal out of range", node.span)) if !uint64
+
+      value = Ir.Imm.UInt64(Types.uint64_bits(digits))
   end
 
   fx = Lowering.step(fx, node.span)
@@ -782,6 +791,11 @@ def lower_unary_checked(
         Ast.LitValue.Huge(digits) ->
           return lower_min_int(fx, node, literal, want) if node.op == "minus" and digits == INT_MIN_DIGITS
 
+        Ast.LitValue.Whole(number) ->
+          # -0 where a UInt64 is expected: the checker folded the minus into the literal.
+          zero = node.op == "minus" and number == 0
+          return lower_zero_uint64(fx, node, literal, want) if zero and Types.uint64?(Lowering.type_of(cx, expr))
+
         _ -> fx = fx
       end
 
@@ -790,6 +804,12 @@ def lower_unary_checked(
 
   try typed(cx, expr, known)
   lower_unary(cx, fx, node, want)
+end
+
+def lower_zero_uint64(fx: Lowering.Fx, node: Ast.Unary, literal: Ast.Literal, want: Int) -> Result[Lowering.Out]
+  fx = Lowering.step(Lowering.step(fx, node.span), literal.span)
+  made = Lowering.target(fx, want)
+  ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.UInt64(0), node.span), slot: made.slot))
 end
 
 def lower_min_int(fx: Lowering.Fx, node: Ast.Unary, literal: Ast.Literal, want: Int) -> Result[Lowering.Out]
@@ -877,6 +897,8 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     if Types.is?(side, "Float") or Types.is?(side, "Float32")
       # A Float32 runs the Float opcodes: the VM rounds the result of two Float32s to binary32 (vm/interp.c).
       ops = FLOAT_OPS
+    elsif Types.uint64?(side)
+      ops = UINT64_OPS
     elsif Types.is?(side, "String")
       ops = STRING_OPS
     end
@@ -952,7 +974,7 @@ def deep_equality?(type: Types.Type) -> Bool
     return false if Types.is?(type, flat)
   end
 
-  return false if Types.narrow_int?(type)
+  return false if Types.sized_int?(type)
 
   true
 end

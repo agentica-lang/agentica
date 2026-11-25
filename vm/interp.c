@@ -76,7 +76,7 @@
     (dst) = agc_fn_value(f_);                                                        \
   } while (0)
 
-/* SORT_INT also sorts Refs, by their numbers (below 2^63, so in the Int order). */
+/* SORT_INT also sorts Refs, by their numbers (below 2^63, so in the Int order), and UInt64 values, as unsigned. */
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
@@ -664,10 +664,13 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
   sort_entry *entries = kind == SORT_TEXT ? agc_alloc(bytes) : agc_alloc_atomic(bytes);
   agc_list_cursor cursor;
   agc_value key;
+  bool unsigned_keys = agc_is(agc_list_get(keys, 0), AGC_T_UINT64);
   agc_list_cursor_begin(&cursor, keys, 0);
   for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
     entries[k].item = carry ? agc_value_word(key) : k;
-    if (kind == SORT_INT)
+    if (kind == SORT_INT && unsigned_keys)
+      entries[k].key = agc_as_uint64(vm, key);
+    else if (kind == SORT_INT)
       entries[k].key = int_order(agc_is(key, AGC_T_REF) ? (int64_t)agc_as_ref(vm, key) : agc_as_int(vm, key));
     else if (kind == SORT_FLOAT)
       entries[k].key = float_order(agc_as_float(vm, key));
@@ -992,6 +995,7 @@ static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, c
 static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (tags_are(x, y, AGC_T_INT)) return agc_as_int(vm, *x) == agc_as_int(vm, *y);
   if (tags_are(x, y, AGC_T_FLOAT)) return agc_as_float(vm, *x) == agc_as_float(vm, *y);
+  if (tags_are(x, y, AGC_T_UINT64)) return agc_as_uint64(vm, *x) == agc_as_uint64(vm, *y);
   if (tags_are(x, y, AGC_T_NIL)) return 1;
   if (tags_are(x, y, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, *x), agc_as_string(vm, *y));
   if (tags_are(x, y, AGC_T_RANGE)) {
@@ -1185,6 +1189,59 @@ agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
   return status == AGC_STATUS_WRONG_TAG ? float32_neg(vm, dst, a) : status;
 }
 
+/* The operators of UInt64: no overflow wraps, and a result outside 0 to 2^64 - 1 is AGC_STATUS_OVERFLOW. */
+OP_HELPER agc_status agc_op_add_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_add_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_sub_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_sub_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_mul_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  uint64_t result;
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_mul_overflow(agc_as_uint64(vm, *a), agc_as_uint64(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_uint64(result);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_div_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  uint64_t divisor = agc_as_uint64(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  *dst = agc_uint64(agc_as_uint64(vm, *a) / divisor);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_mod_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  uint64_t divisor = agc_as_uint64(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  *dst = agc_uint64(agc_as_uint64(vm, *a) % divisor);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_lt_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_uint64(vm, *a) < agc_as_uint64(vm, *b));
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_le_u(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_UINT64)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_uint64(vm, *a) <= agc_as_uint64(vm, *b));
+  return AGC_STATUS_OK;
+}
+
 OP_HELPER agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
   int equal = equal_values(vm, a, b);
   if (equal < 0) return AGC_STATUS_WRONG_TAG;
@@ -1314,19 +1371,48 @@ static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_
   agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
 }
 
+/* The instruction that is running, read back from the frame as op_failed reads it, and its registers in *regs. */
+static inline agc_instr current_instr(agc_vm *vm, agc_value **regs) {
+  const agc_task *t = vm->task;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  *regs = t->regs + frame->base;
+  return vm->rt->program->functions[frame->function].code[frame->pc - 1];
+}
+
 /* A Float opcode of the turn loop whose operands are not Floats: two Float32s give their result, and anything else is
-   the failure of the instruction. The operands are read back as op_failed reads them. */
+   the failure of the instruction. */
 static __attribute__((noinline, cold)) void float_failed(agc_vm *vm, agc_status status) {
   if (status == AGC_STATUS_WRONG_TAG) {
-    const agc_task *t = vm->task;
-    const agc_frame *frame = &t->frames[t->frame_count - 1];
-    agc_instr in = vm->rt->program->functions[frame->function].code[frame->pc - 1];
-    agc_value *R = t->regs + frame->base;
+    agc_value *R;
+    agc_instr in = current_instr(vm, &R);
     status = in.op == AGC_OP_NEG_F ? float32_neg(vm, &R[in.a], &R[in.b])
                                    : float32_op(vm, &R[in.a], &R[in.b], &R[in.c], (agc_opcode)in.op);
     if (status == AGC_STATUS_OK) return;
   }
   op_failed(vm, status);
+}
+
+/* A UInt64 opcode of the turn loop, out of line so that the loop keeps the code of the Int and Float opcodes. */
+static __attribute__((noinline)) void unsigned_op(agc_vm *vm) {
+  agc_value *R;
+  agc_instr in = current_instr(vm, &R);
+  agc_status status;
+  switch ((agc_opcode)in.op) {
+    case AGC_OP_ADD_U: status = agc_op_add_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_SUB_U: status = agc_op_sub_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_MUL_U: status = agc_op_mul_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_DIV_U: status = agc_op_div_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_MOD_U: status = agc_op_mod_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    case AGC_OP_LT_U: status = agc_op_lt_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+    default: status = agc_op_le_u(vm, &R[in.a], &R[in.b], &R[in.c]); break;
+  }
+  if (status == AGC_STATUS_OVERFLOW) {
+    const agc_frame *frame = &vm->task->frames[vm->task->frame_count - 1];
+    const agc_function *f = &vm->rt->program->functions[frame->function];
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "UInt64 result is outside 0 to 18446744073709551615",
+             f->spans[frame->pc - 1]);
+  }
+  if (status != AGC_STATUS_OK) op_failed(vm, status);
 }
 
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
@@ -1786,6 +1872,13 @@ reload:
         }
         break;
       }
+      case AGC_OP_ADD_U:
+      case AGC_OP_SUB_U:
+      case AGC_OP_MUL_U:
+      case AGC_OP_DIV_U:
+      case AGC_OP_MOD_U:
+      case AGC_OP_LT_U:
+      case AGC_OP_LE_U: unsigned_op(vm); break;
       case AGC_OP_NO_MATCH: agc_no_match(vm, R[in.a], SPAN);
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);

@@ -12,6 +12,19 @@ programs are valid and how they run.
   these types where its context expects it (§4, "Literals"), and `x.to_i` and
   `n.to_uint8` and the like convert. `Int64` is another name of `Int`, and
   `Float64` of `Float`; the ten names are reserved
+- `UInt64`: Unsigned 64-bit integer, `0` to `18446744073709551615`. A literal
+  of a `UInt64` context may be above the greatest `Int`. It has a value kind of
+  its own in the VM: `+ - * / %` and `< <= > >=` are unsigned, `==` compares
+  the 64 bits, an `Int` and a `UInt64` never mix (`CHECK-TYPE-MISMATCH`), and
+  `n.to_uint64` (a `Result`, an error below 0), `n.to_uint64!` and
+  `n.wrap_uint64` (the 64 bits of `n`) convert from `Int`, `x.to_i` (a
+  `Result`, an error above the greatest `Int`) and `x.to_i!` back, and
+  `x.to_f` rounds to the nearest Float. A sum or product above the range, a
+  difference below 0 stop the program with `RUNTIME-INTEGER-OVERFLOW`, and `/`
+  and `%` by 0 with `RUNTIME-DIVISION-BY-ZERO`. There is no unary minus. The
+  bit methods and `wrapping_add`, `wrapping_sub` and `wrapping_mul` work on all
+  64 bits, a shift count of 64 or more gives 0, and `UInt8`, `UInt16` and
+  `UInt32` widen with `to_uint64`
 - `Float32`: IEEE 754 binary32. A float literal takes it where its context
   expects it (§4, "Literals"). `+ - * /`, `< <= > >=` and `== !=` take two
   `Float32`s, never a `Float32` and a `Float` (`CHECK-TYPE-MISMATCH`); there is
@@ -857,7 +870,7 @@ page](../../site/content/library/data-structures/bytes.md). The language fixes:
 ### Maps
 
 `Map[K, V]` has exactly two type arguments: `K` is `Int`, a narrow integer type
-(`UInt8` and the others), `String`, `Bytes` or `Ref`, and `V` is any type.
+(`UInt8` and the others), `UInt64`, `String`, `Bytes` or `Ref`, and `V` is any type.
 
 ```ruby
 stock: Map[String, Int] = {"apple": 3, "pear": 0}
@@ -877,7 +890,7 @@ more = Map.put(stock, "kiwi", 7)
 
 ### Sets
 
-`Set[T]` has one type argument, `Int`, a narrow integer type, `String`, `Bytes`
+`Set[T]` has one type argument, `Int`, a narrow integer type, `UInt64`, `String`, `Bytes`
 or `Ref`, like a `Map` key: any other element type is
 `CHECK-SET-ELEMENT-TYPE`. A set holds each value
 once and keeps the order of first insertion. Its functions are in the
