@@ -64,8 +64,6 @@ def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) -> Resu
 end
 
 ## Type.members: the list of StructMember for the fields the checker recorded, each name and type a constant text.
-## Like a list literal, one `list` instruction gathers at most MAX_CHUNK items and a struct with more fields is built
-## in chunks joined with List.concat.
 def lower_members(
   cx: State.Cx,
   fx: State.Fx,
@@ -74,11 +72,38 @@ def lower_members(
   want: Int,
 ) -> Result[State.Out]
   index = cx.structs["StructMember"].index
+  ok(
+    gather(fx, fields.size, span, want) do |part: State.Fx, from: Int, to: Int|
+      member_items(part, fields, from, to, index, span)
+    end,
+  )
+end
+
+## Type.values: the variants of an enum in declaration order, each a constant variant without a payload.
+def lower_values(
+  cx: State.Cx,
+  fx: State.Fx,
+  enum_name: String,
+  variants: List[String],
+  span: Source.Span,
+  want: Int,
+) -> Result[State.Out]
+  ids = variants.map do |variant: String| cx.variants["#{enum_name}.#{variant}"] end
+  ok(
+    gather(fx, ids.size, span, want) do |part: State.Fx, from: Int, to: Int|
+      value_items(part, ids, from, to, span)
+    end,
+  )
+end
+
+## A list of count items. One `list` instruction gathers at most MAX_CHUNK items, and a longer list is built in chunks
+## joined with List.concat, as a list literal is. fill puts the items from to (excluded) in consecutive registers
+## from the first free one, and gives the state with the free registers after them.
+def gather(fx: State.Fx, count: Int, span: Source.Span, want: Int, fill: Fn[State.Fx, Int, Int, State.Fx]) -> State.Out
   fx = State.step(fx, span)
   saved = fx.next
   fx = State.alloc(fx)
   base = fx.next - 1
-  count = fields.size
   if count == 0
     fx = State.emit_at(fx, "list", [base, base, 0], span)
   end
@@ -92,7 +117,7 @@ def lower_members(
 
     fx = fx.with(next: base + 1)
     start = fx.next
-    fx = member_items(fx, fields, at, at + size, index, span)
+    fx = fill.call(fx, at, at + size)
     if at == 0
       fx = State.emit_at(fx, "list", [base, start, size], span)
     else
@@ -109,7 +134,7 @@ def lower_members(
     dst = want
   end
 
-  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  State.Out(fx: State.release(fx, saved, want, dst), slot: dst)
 end
 
 ## Type.codec: a Codec.Info record of the linked name of the type and the list Type.members gives for its fields. The
@@ -369,6 +394,19 @@ def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want: Int) 
 end
 
 private
+
+# The variants ids[from, to) in consecutive registers, each an `enum` instruction without a payload.
+def value_items(fx: State.Fx, ids: List[Int], from: Int, to: Int, span: Source.Span) -> State.Fx
+  start = fx.next
+  at = from
+  while at < to
+    fx = State.alloc(fx)
+    fx = State.emit_at(fx, "enum", [fx.next - 1, fx.next - 1, ids[at]], span)
+    at += 1
+  end
+
+  fx.with(next: start + to - from)
+end
 
 # The StructMember of fields[from, to) in consecutive registers: a register for each, then two scratch registers
 # above them for the name and the type, which the `struct` instruction reads as consecutive fields.

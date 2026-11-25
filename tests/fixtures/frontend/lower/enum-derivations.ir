@@ -1,0 +1,39 @@
+program 0:1:1-16:1 entry=0 globals=0
+source 0 "enum-derivations.agc" chars=175
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
+enum "Color" v0="Red"/0 v1="Green"/0
+enum "Shape" v2="Dot"/0 v3="Circle"/1
+enum "Optional" v4="None"/0 v5="Some"/1
+fn0 "main" params=0 captures=0 slots=4 entry @ 0:11:1-16:1
+    step @ 0:12:3-13:1
+    step @ 0:12:3-12:26
+    step @ 0:12:8-12:25
+    step @ 0:12:8-12:20
+    enum r2 r2 v0 @ 0:12:8-12:20
+    enum r3 r3 v1 @ 0:12:8-12:20
+    list r1 r2 2 @ 0:12:8-12:20
+    move r0 r1 @ 0:12:8-12:20
+    call-builtin r0 "List.size" 1 @ 0:12:8-12:25 0:12:8-12:20
+    call-builtin r0 "puts" 1 @ 0:12:3-12:26 0:12:8-12:25
+    step @ 0:13:3-14:1
+    step @ 0:13:3-13:31
+    step @ 0:13:8-13:30
+    step @ 0:13:8-13:26
+    const r0 int:0 @ 0:13:8-13:26
+    const r1 "Color" @ 0:13:8-13:26
+    step @ 0:13:20-13:25
+    const r2 "Red" @ 0:13:20-13:25
+    call-builtin r0 "Enum.parse" 3 @ 0:13:8-13:26 0:13:8-13:26 0:13:8-13:26 0:13:20-13:25
+    call-builtin r0 "Result.ok?" 1 @ 0:13:8-13:30 0:13:8-13:26
+    call-builtin r0 "puts" 1 @ 0:13:3-13:31 0:13:8-13:30
+    step @ 0:14:3-15:1
+    step @ 0:14:3-14:29
+    step @ 0:14:8-14:28
+    step @ 0:14:8-14:23
+    step @ 0:14:21-14:22
+    const r1 int:1 @ 0:14:21-14:22
+    enum r0 r1 v3 @ 0:14:8-14:23
+    call-builtin r0 "Enum.name" 1 @ 0:14:8-14:28 0:14:8-14:23
+    call-builtin r0 "puts" 1 @ 0:14:3-14:29 0:14:8-14:28
+    const r0 void @ 0:11:1-16:1
+    return r0 @ 0:11:1-16:1

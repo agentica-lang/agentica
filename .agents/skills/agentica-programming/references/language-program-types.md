@@ -236,6 +236,12 @@ end
   fields in declaration order (`name: String`, `type: String` as source with
   aliases expanded). A field called `members` is still read as `user.members`.
 - `User.codec` is the `Codec[T]` of a struct or enum JSON can read (`json.md`).
+- `Color.values` is the `List[Color]` of the variants in declaration order, and
+  `Color.parse(text)` is a `Result[Color]` (an unknown name is an error that
+  lists the valid names). Both are on an enum with no type parameters and no
+  payload on any variant (else `CHECK-UNKNOWN-METHOD`); `parse` is not piped.
+  `value.name` is the bare variant name of any enum value, payload variants
+  included (`Shape.Circle(3).name` is `"Circle"`, `to_s` is `Shape.Circle(3)`).
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a

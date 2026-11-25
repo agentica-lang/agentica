@@ -11,6 +11,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - A cancelled `IO.read_bytes` or `IO.gets` on standard input no longer reads the bytes that arrive after the cancel on Linux and macOS: they stay for the next reader, such as a child process (#2013).
+### Added
+
+- `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
 ## [0.39.0] - 2026-11-25
 

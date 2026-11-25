@@ -17,6 +17,13 @@ import CheckTypes from "check_types"
 ## Checks target.name(args).
 def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
   try not_a_type(cx, st, node.target, node.safe)
+  case node.target
+    Ast.Expr.TypeName(type_name) ->
+      return check_parse(cx, st, node, type_name) if node.name == "parse" and !Calls.piped_method?(node)
+
+    _ -> st = st
+  end
+
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if node.name == "each" and foreach_call?(node.target)
     return error(
@@ -82,6 +89,8 @@ def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expect
         return check_members(cx, st, node, type_name)
       elsif node.name == "codec"
         return check_codec(cx, st, node, type_name)
+      elsif node.name == "values"
+        return check_values(cx, st, node, type_name)
       end
 
     _ -> st = st
@@ -206,6 +215,81 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
   )
 end
 
+# Type.values: the variants of an enum whose variants all have no payload, in declaration order, as a List of the enum.
+# Lowering builds the list from the names recorded here. A struct, a resource or an enum with a payload variant has no
+# values (CHECK-UNKNOWN-METHOD); an alias is refused as for Type.members (CHECK-UNKNOWN-TYPE).
+def check_values(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
+  name = try plain_enum(cx, st, node.span, type_name, "values")
+  variants = cx.enums[name].variants.map do |variant: Model.Variant| variant.name end
+  resolved = State.record_resolved(st, node.id, State.Resolved.Values(name, variants))
+  ok(State.Out(st: resolved, type: T.Type.List(T.Type.Enum(name, []))))
+end
+
+# Type.parse(text): the variant of the enum that has that name, as a Result of the enum; the error lists the valid
+# names. Only an enum that has values can be parsed, and the call takes one String, positional or as `text:`.
+def check_parse(cx: State.Cx, st: State.St, node: Ast.MethodCall, type_name: Ast.TypeName) -> Result[State.Out]
+  name = try plain_enum(cx, st, node.span, type_name, "parse")
+  if node.args.size + node.named.size != 1
+    return error(State.fail(cx, st, "CHECK-ARITY", "parse takes one argument, text", node.span))
+  end
+
+  argument = node.args.concat(node.named.map do |arg: Ast.NamedArg| arg.value end)[0]
+  if node.named.size > 0 and node.named[0].name != "text"
+    message = "parse has no parameter \"#{node.named[0].name}\""
+    return error(
+      State.fail_help(cx, st, "CHECK-UNKNOWN-ARGUMENT", message, node.named[0].span, "the parameter is text"),
+    )
+  end
+
+  given = try State.expr(cx, st, argument, T.Type.String)
+  first = cx.enums[name].variants[0].name
+  resolved = State.record_resolved(given.st, node.id, State.Resolved.Parse(name, first))
+  ok(State.Out(st: resolved, type: T.Type.Result(T.Type.Enum(name, []))))
+end
+
+# The linked name of the enum that `type_name` names, for Type.values and Type.parse (`member`): an enum with no type
+# parameters and no payload on any variant. Anything else is refused with the reason in `help`.
+def plain_enum(
+  cx: State.Cx,
+  st: State.St,
+  span: Source.Span,
+  type_name: Ast.TypeName,
+  member: String,
+) -> Result[String]
+  if type_name.args.size > 0
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "#{member} requires an enum name", type_name.span))
+  end
+
+  name = type_name.name
+  display = T.display_name(name)
+  if cx.aliases.has_key?(name)
+    target = try CheckTypes.alias_target_text(cx, st, name)
+    help = "#{display} names #{target}; use #{member} on the enum itself"
+    return error(State.fail_help(cx, st, "CHECK-UNKNOWN-TYPE", "a type alias is not a declared enum", span, help))
+  end
+
+  found = cx.enums.get(name)
+  why = "#{member} works on an enum whose variants have no payload; #{display} is not an enum"
+  if found.some?
+    why = enum_refusal(display, member, found.unwrap!)
+  end
+
+  return ok(name) if why == ""
+
+  error(State.fail_help(cx, st, "CHECK-UNKNOWN-METHOD", "#{display} has no method \"#{member}\"", span, why))
+end
+
+# Why an enum has no values: it has type parameters, or the variants that carry a payload. "" when it has values.
+def enum_refusal(display: String, member: String, shape: Model.EnumDef) -> String
+  return "#{member} does not work on the generic enum #{display}" if shape.parameters.size > 0
+
+  carrying = shape.variants.filter do |variant: Model.Variant| variant.payload.size > 0 end
+  return "" if carrying.size == 0
+
+  names = carrying.map do |variant: Model.Variant| variant.name end
+  "#{member} works on an enum whose variants have no payload; #{display} has a payload on #{names.join(", ")}"
+end
+
 # Type.codec: the codec of a struct or enum JSON.decode takes, a Codec[T]. Lowering builds the codec from the name and
 # the fields recorded here (none for an enum): the members of the codec are the ones Type.members gives. A type that
 # cannot be decoded is CHECK-NOT-DECODABLE, as for JSON.decode. A codec reads and writes every field, so a type that
@@ -314,8 +398,8 @@ def safe_result(member: State.Out, id: Int, target: State.Out, at: Int) -> Resul
   ok(State.Out(st: st, type: T.Type.Optional(member.type)))
 end
 
-# What the method is: "self", "text" (to_s) or "inspect" for a data value, the full name of a builtin, or "" when there
-# is none.
+# What the method is: "self", "text" (to_s), "inspect" or, for `name` on an enum value, "variant_name" for a data
+# value, the full name of a builtin, or "" when there is none.
 def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> String
   if kind != ""
     found = Names.resolve_method(cx, kind, name)
@@ -326,6 +410,8 @@ def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> Str
     return "text"
   elsif name == "inspect" and CheckTypes.data?(cx, target)
     return "inspect"
+  elsif name == "name" and T.is?(target, "Enum")
+    return "variant_name"
   end
 
   ""
@@ -364,7 +450,7 @@ def method_on(
     )
   end
 
-  if resolved == "self" or resolved == "text" or resolved == "inspect"
+  if resolved == "self" or resolved == "text" or resolved == "inspect" or resolved == "variant_name"
     return check_own_method(cx, target.st, id, resolved, type, name, args.size + named.size, span, expected)
   end
 
@@ -386,7 +472,8 @@ def method_on(
   Calls.check_call(cx, st, call, expected)
 end
 
-# to_s and inspect, and a to_s that is the receiver itself: they take no arguments and give a String (or the receiver).
+# to_s and inspect, and a to_s that is the receiver itself, and the name of the variant of an enum value: they take no
+# arguments and give a String (or the receiver).
 def check_own_method(
   cx: State.Cx,
   st: State.St,
@@ -407,6 +494,8 @@ def check_own_method(
     how = State.Resolved.Self(type)
   elsif resolved == "inspect"
     how = State.Resolved.Inspect(type)
+  elsif resolved == "variant_name"
+    how = State.Resolved.VariantName
   end
 
   checked = try State.ensure(cx, st, result, expected, span)
@@ -473,7 +562,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
   elsif kind != ""
     return kind_help(cx, target, kind, name)
   elsif CheckTypes.data?(cx, target)
-    return Help.near(name, ["to_s", "inspect"], [])
+    return Help.near(name, own_methods(target), [])
   end
 
   ""
@@ -511,12 +600,19 @@ def kind_help(cx: State.Cx, target: T.Type, kind: String, name: String) -> Strin
   "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
 end
 
+# The methods that a data value has besides the builtins of its kind: to_s and inspect, and name for an enum value.
+def own_methods(target: T.Type) -> List[String]
+  return ["to_s", "inspect", "name"] if T.is?(target, "Enum")
+
+  ["to_s", "inspect"]
+end
+
 # The methods of the kind, with to_s and inspect for a data value.
 def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
   names = Names.method_names(cx, kind)
   if CheckTypes.data?(cx, target)
     names = names.concat(
-      ["to_s", "inspect"].filter do |own: String| !names.any? do |known: String| known == own end end,
+      own_methods(target).filter do |own: String| !names.any? do |known: String| known == own end end,
     )
   end
 

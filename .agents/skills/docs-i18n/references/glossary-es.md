@@ -17,6 +17,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | archive | archivo comprimido | A TAR or ZIP archive, plain or gzipped |
 | arena | stays | `Native.arena` |
 | argument | argumento | A value passed to a call |
+| arithmetic | aritmética |  |
 | arm | rama | An alternative of `case`; a git branch stays branch |
 | array (JSON) | arreglo | A JSON array; Agentica's List is lista |
 | assertion | aserción |  |
@@ -105,6 +106,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | create | crear | To make a value; build is compilar |
 | cycle | ciclo |  |
 | dangling link | enlace colgado |  |
+| data | dato |  |
 | Data Table | tabla de datos |  |
 | daylight saving time | horario de verano |  |
 | deadline | plazo |  |
@@ -184,6 +186,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | give up | rendirse | A supervisor that stops restarting |
 | grace period | plazo de gracia |  |
 | grammar | gramática | The grammar of the language |
+| graph | grafo |  |
 | guard | guarda | A `case` guard; also the `if` of `return x if c` |
 | guide | guía | A style guide: guía de estilo |
 | halt | detenerse | Noun: detención |
@@ -204,6 +207,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | hook | stays |  |
 | host | stays |  |
 | I/O | E/S |  |
+| identity | identidad |  |
 | idle | inactivo |  |
 | immutable | inmutable |  |
 | implicit | implícito |  |
@@ -219,6 +223,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | integer | entero | The type `Int` stays |
 | interpolation | interpolación | `"#{...}"` stays in code |
 | interpreter | intérprete |  |
+| item | elemento | An element of a collection |
 | IV | stays |  |
 | JIT | stays |  |
 | job | trabajo |  |
@@ -282,6 +287,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | native | nativo | Native module: módulo nativo |
 | nested | anidado |  |
 | next | siguiente | Pager link |
+| node | nodo |  |
 | nonce | stays |  |
 | notice | aviso | A monitor notice |
 | object | objeto |  |
@@ -290,8 +296,10 @@ One line per term, sorted. "stays" means the term is not translated.
 | one for one | stays | The supervisor strategy |
 | opaque | opaco |  |
 | opcode | stays |  |
+| operation | operación |  |
 | operator | operador |  |
 | option | opción | A CLI flag is a flag; option names in code stay |
+| order | orden |  |
 | ORM | stays |  |
 | out of date | desactualizada |  |
 | out parameter | parámetro out |  |
@@ -312,6 +320,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | park | aparcar | A task that waits |
 | parse | analizar | Noun: análisis; parser stays |
 | parser | stays | Owner decision: the term stays |
+| part | parte | A part of the language specification |
 | passphrase | frase de contraseña |  |
 | path | ruta | A file path; `path` in code stays |
 | path (control flow) | camino | A file path is ruta |
@@ -369,6 +378,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | reply | respuesta |  |
 | repository | repositorio |  |
 | request | solicitud | An HTTP request |
+| reserved name | nombre reservado |  |
 | resize (noun) | cambio de tamaño | Of a terminal |
 | resolver | resolutor | Verb: resolver |
 | resource | recurso |  |
@@ -409,6 +419,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | ship | distribuir | A package |
 | short | corta | A short call or function |
 | side effect | efecto |  |
+| sidebar | barra lateral | The navigation column of a page |
 | signal | señal | An OS signal |
 | signature | firma | A function signature |
 | site | sitio | The documentation site |
@@ -461,8 +472,10 @@ One line per term, sorted. "stays" means the term is not translated.
 | time zone | zona horaria |  |
 | timeout | tiempo de espera | `timeout_ms` stays |
 | timer | temporizador |  |
+| token | token | A value that no other value equals |
 | tool | herramienta |  |
 | top-level code | código de nivel superior |  |
+| topological order | orden topológico |  |
 | tour | stays | Masculine: el tour ("haz el tour") |
 | trace | traza | tracing: rastreo; tracer: rastreador |
 | trailer | stays |  |
