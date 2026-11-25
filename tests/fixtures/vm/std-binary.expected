@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 5891,
+  "steps": 5893,
   "stdout": [
     "typed: 200 -56 258 -2 4294967295 -2147483648 18446744073709551615 -1",
     "typed: 0 mismatches",

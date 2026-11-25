@@ -51,7 +51,7 @@ def check(line: String) -> Int
     "json" -> got = decoded("{\"x\": #{fields[1]}}")
     "text" -> got = check_text(fields[1].to_i!, want)
     "int" -> got = bits(fields[1].to_i!.to_float32)
-    "float" -> got = bits(Float.from_bits(fields[1].to_i!).to_float32)
+    "float" -> got = bits(Float.from_bits(fields[1].to_i!.wrap_uint64).to_float32)
     "ops" -> got = operated(float32(fields[1].to_i!), float32(fields[2].to_i!), fields[6] != "x")
     _ -> got = "unknown vector"
   end

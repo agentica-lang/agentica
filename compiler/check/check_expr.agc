@@ -1059,6 +1059,10 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
       "make both sides one type: x.#{to_int(narrow)} gives the Int of a #{name}, " +
       "n.to_#{name.downcase}! the #{name} of an Int"
     )
+  elsif T.is?(sides.left, "Float32") and (T.sized_int?(sides.right) or T.is?(sides.right, "Int"))
+    return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.right)}"
+  elsif T.is?(sides.right, "Float32") and (T.sized_int?(sides.left) or T.is?(sides.left, "Int"))
+    return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.left)}"
   elsif either_string and either_error
     return ERROR_TEXT_HELP
   elsif either_float and (T.is?(sides.left, "Float32") or T.is?(sides.right, "Float32"))

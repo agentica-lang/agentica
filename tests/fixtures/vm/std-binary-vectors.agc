@@ -156,6 +156,24 @@ end
 
 def write_i64_le(text: String) -> Bytes = Binary.write_i64_le(text.to_i!)
 
+def read_f32_be(data: Bytes, offset: Int) -> Result[Float]
+  case Binary.read_f32_be(data, offset)
+    ok(value) -> ok(value.to_f)
+    error(message) -> error(message)
+  end
+end
+
+def read_f32_le(data: Bytes, offset: Int) -> Result[Float]
+  case Binary.read_f32_le(data, offset)
+    ok(value) -> ok(value.to_f)
+    error(message) -> error(message)
+  end
+end
+
+def write_f32_be(value: Float) -> Bytes = Binary.write_f32_be(value.to_float32)
+
+def write_f32_le(value: Float) -> Bytes = Binary.write_f32_le(value.to_float32)
+
 def tables() -> Tables
   int_readers: Map[String, Fn[Bytes, Int, Result[String]]] = {
     "u8_be": &read_u8_be, "u8_le": &read_u8_le, "i8_be": &read_i8_be, "i8_le": &read_i8_le, "u16_be": &read_u16_be,
@@ -172,12 +190,12 @@ def tables() -> Tables
   }
 
   float_readers: Map[String, Fn[Bytes, Int, Result[Float]]] = {
-    "f32_be": &Binary.read_f32_be, "f32_le": &Binary.read_f32_le, "f64_be": &Binary.read_f64_be,
+    "f32_be": &read_f32_be, "f32_le": &read_f32_le, "f64_be": &Binary.read_f64_be,
     "f64_le": &Binary.read_f64_le,
   }
 
   float_writers: Map[String, Fn[Float, Bytes]] = {
-    "f32_be": &Binary.write_f32_be, "f32_le": &Binary.write_f32_le, "f64_be": &Binary.write_f64_be,
+    "f32_be": &write_f32_be, "f32_le": &write_f32_le, "f64_be": &Binary.write_f64_be,
     "f64_le": &Binary.write_f64_le,
   }
 

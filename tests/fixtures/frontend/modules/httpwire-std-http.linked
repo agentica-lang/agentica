@@ -794,7 +794,7 @@ program #8 0:1:1-103:6:1
               left: name-ref #791 30568:530:6-30575:530:13 name="charset"
               right: literal #792 30579:530:17-30581:530:19 value=string:""
             right: method-call #798 30585:530:23-30634:530:72 name="include?"
-              target: const-ref #16926 30585:530:23-30598:530:36 name="@2::UTF8_CHARSETS"
+              target: const-ref #16930 30585:530:23-30598:530:36 name="@2::UTF8_CHARSETS"
               arg: method-call #797 30608:530:46-30633:530:71 name="replace"
                 target: name-ref #794 30608:530:46-30615:530:53 name="charset"
                 arg: literal #795 30624:530:62-30627:530:65 value=string:"_"
@@ -14495,1138 +14495,1142 @@ program #8 0:1:1-103:6:1
       body: return-stmt #1018 12582:378:3-12587:378:8 implicit
         value: literal #1017 12582:378:3-12587:378:8 value=bool:false
   module "std/binary.agc"
-    declaration: function-decl #16 966:12:1-1088:16:1 name="@4::read_u8" doc="Reads an unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`."
-      param: param #1 978:12:13-989:12:24 name="data"
-        type: type-ref #0 984:12:19-989:12:24 name="Bytes"
-      param: param #3 991:12:26-1002:12:37 name="offset"
-        type: type-ref #2 999:12:34-1002:12:37 name="Int"
-      result: type-ref #5 1007:12:42-1020:12:55 name="Result"
-        arg: type-ref #4 1014:12:49-1019:12:54 name="UInt8"
-      body: binding #11 1023:13:3-1061:14:1 name="value"
-        value: try-expr #10 1031:13:11-1060:13:40
-          operand: call #9 1035:13:15-1060:13:40 name="@4::load8" piped=false
-            arg: name-ref #6 1041:13:21-1045:13:25 name="data"
-            arg: name-ref #7 1047:13:27-1053:13:33 name="offset"
-            arg: literal #8 1055:13:35-1059:13:39 value=string:"u8"
-      body: return-stmt #15 1063:14:3-1083:14:23 implicit
-        value: call #14 1063:14:3-1083:14:23 name="ok" piped=false
-          arg: field-access #13 1066:14:6-1082:14:22 name="wrap_uint8"
-            target: name-ref #12 1066:14:6-1071:14:11 name="value"
-    declaration: function-decl #33 1199:18:1-1319:22:1 name="@4::read_i8" doc="Reads a signed 8-bit integer at `offset` as an `Int8`. Returns an error when the bytes are outside `data`."
-      param: param #18 1211:18:13-1222:18:24 name="data"
-        type: type-ref #17 1217:18:19-1222:18:24 name="Bytes"
-      param: param #20 1224:18:26-1235:18:37 name="offset"
-        type: type-ref #19 1232:18:34-1235:18:37 name="Int"
-      result: type-ref #22 1240:18:42-1252:18:54 name="Result"
-        arg: type-ref #21 1247:18:49-1251:18:53 name="Int8"
-      body: binding #28 1255:19:3-1293:20:1 name="value"
-        value: try-expr #27 1263:19:11-1292:19:40
-          operand: call #26 1267:19:15-1292:19:40 name="@4::load8" piped=false
-            arg: name-ref #23 1273:19:21-1277:19:25 name="data"
-            arg: name-ref #24 1279:19:27-1285:19:33 name="offset"
-            arg: literal #25 1287:19:35-1291:19:39 value=string:"i8"
-      body: return-stmt #32 1295:20:3-1314:20:22 implicit
-        value: call #31 1295:20:3-1314:20:22 name="ok" piped=false
-          arg: field-access #30 1298:20:6-1313:20:21 name="wrap_int8"
-            target: name-ref #29 1298:20:6-1303:20:11 name="value"
-    declaration: function-decl #50 1448:25:1-1581:29:1 name="@4::read_u16_be" doc="Reads a big-endian unsigned 16-bit integer at `offset` as a `UInt16`. Returns an error when the bytes are outside\n`data`."
-      param: param #35 1464:25:17-1475:25:28 name="data"
-        type: type-ref #34 1470:25:23-1475:25:28 name="Bytes"
-      param: param #37 1477:25:30-1488:25:41 name="offset"
-        type: type-ref #36 1485:25:38-1488:25:41 name="Int"
-      result: type-ref #39 1493:25:46-1507:25:60 name="Result"
-        arg: type-ref #38 1500:25:53-1506:25:59 name="UInt16"
-      body: binding #45 1510:26:3-1553:27:1 name="value"
-        value: try-expr #44 1518:26:11-1552:26:45
-          operand: call #43 1522:26:15-1552:26:45 name="@4::load16_be" piped=false
-            arg: name-ref #40 1532:26:25-1536:26:29 name="data"
-            arg: name-ref #41 1538:26:31-1544:26:37 name="offset"
-            arg: literal #42 1546:26:39-1551:26:44 value=string:"u16"
-      body: return-stmt #49 1555:27:3-1576:27:24 implicit
-        value: call #48 1555:27:3-1576:27:24 name="ok" piped=false
-          arg: field-access #47 1558:27:6-1575:27:23 name="wrap_uint16"
-            target: name-ref #46 1558:27:6-1563:27:11 name="value"
-    declaration: function-decl #67 1713:32:1-1846:36:1 name="@4::read_u16_le" doc="Reads a little-endian unsigned 16-bit integer at `offset` as a `UInt16`. Returns an error when the bytes are outside\n`data`."
-      param: param #52 1729:32:17-1740:32:28 name="data"
-        type: type-ref #51 1735:32:23-1740:32:28 name="Bytes"
-      param: param #54 1742:32:30-1753:32:41 name="offset"
-        type: type-ref #53 1750:32:38-1753:32:41 name="Int"
-      result: type-ref #56 1758:32:46-1772:32:60 name="Result"
-        arg: type-ref #55 1765:32:53-1771:32:59 name="UInt16"
-      body: binding #62 1775:33:3-1818:34:1 name="value"
-        value: try-expr #61 1783:33:11-1817:33:45
-          operand: call #60 1787:33:15-1817:33:45 name="@4::load16_le" piped=false
-            arg: name-ref #57 1797:33:25-1801:33:29 name="data"
-            arg: name-ref #58 1803:33:31-1809:33:37 name="offset"
-            arg: literal #59 1811:33:39-1816:33:44 value=string:"u16"
-      body: return-stmt #66 1820:34:3-1841:34:24 implicit
-        value: call #65 1820:34:3-1841:34:24 name="ok" piped=false
-          arg: field-access #64 1823:34:6-1840:34:23 name="wrap_uint16"
-            target: name-ref #63 1823:34:6-1828:34:11 name="value"
-    declaration: function-decl #84 1973:39:1-2104:43:1 name="@4::read_i16_be" doc="Reads a big-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside\n`data`."
-      param: param #69 1989:39:17-2000:39:28 name="data"
-        type: type-ref #68 1995:39:23-2000:39:28 name="Bytes"
-      param: param #71 2002:39:30-2013:39:41 name="offset"
-        type: type-ref #70 2010:39:38-2013:39:41 name="Int"
-      result: type-ref #73 2018:39:46-2031:39:59 name="Result"
-        arg: type-ref #72 2025:39:53-2030:39:58 name="Int16"
-      body: binding #79 2034:40:3-2077:41:1 name="value"
-        value: try-expr #78 2042:40:11-2076:40:45
-          operand: call #77 2046:40:15-2076:40:45 name="@4::load16_be" piped=false
-            arg: name-ref #74 2056:40:25-2060:40:29 name="data"
-            arg: name-ref #75 2062:40:31-2068:40:37 name="offset"
-            arg: literal #76 2070:40:39-2075:40:44 value=string:"i16"
-      body: return-stmt #83 2079:41:3-2099:41:23 implicit
-        value: call #82 2079:41:3-2099:41:23 name="ok" piped=false
-          arg: field-access #81 2082:41:6-2098:41:22 name="wrap_int16"
-            target: name-ref #80 2082:41:6-2087:41:11 name="value"
-    declaration: function-decl #101 2234:46:1-2365:50:1 name="@4::read_i16_le" doc="Reads a little-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside\n`data`."
-      param: param #86 2250:46:17-2261:46:28 name="data"
-        type: type-ref #85 2256:46:23-2261:46:28 name="Bytes"
-      param: param #88 2263:46:30-2274:46:41 name="offset"
-        type: type-ref #87 2271:46:38-2274:46:41 name="Int"
-      result: type-ref #90 2279:46:46-2292:46:59 name="Result"
-        arg: type-ref #89 2286:46:53-2291:46:58 name="Int16"
-      body: binding #96 2295:47:3-2338:48:1 name="value"
-        value: try-expr #95 2303:47:11-2337:47:45
-          operand: call #94 2307:47:15-2337:47:45 name="@4::load16_le" piped=false
-            arg: name-ref #91 2317:47:25-2321:47:29 name="data"
-            arg: name-ref #92 2323:47:31-2329:47:37 name="offset"
-            arg: literal #93 2331:47:39-2336:47:44 value=string:"i16"
-      body: return-stmt #100 2340:48:3-2360:48:23 implicit
-        value: call #99 2340:48:3-2360:48:23 name="ok" piped=false
-          arg: field-access #98 2343:48:6-2359:48:22 name="wrap_int16"
-            target: name-ref #97 2343:48:6-2348:48:11 name="value"
-    declaration: function-decl #118 2494:53:1-2627:57:1 name="@4::read_u32_be" doc="Reads a big-endian unsigned 32-bit integer at `offset` as a `UInt32`. Returns an error when the bytes are outside\n`data`."
-      param: param #103 2510:53:17-2521:53:28 name="data"
-        type: type-ref #102 2516:53:23-2521:53:28 name="Bytes"
-      param: param #105 2523:53:30-2534:53:41 name="offset"
-        type: type-ref #104 2531:53:38-2534:53:41 name="Int"
-      result: type-ref #107 2539:53:46-2553:53:60 name="Result"
-        arg: type-ref #106 2546:53:53-2552:53:59 name="UInt32"
-      body: binding #113 2556:54:3-2599:55:1 name="value"
-        value: try-expr #112 2564:54:11-2598:54:45
-          operand: call #111 2568:54:15-2598:54:45 name="@4::load32_be" piped=false
-            arg: name-ref #108 2578:54:25-2582:54:29 name="data"
-            arg: name-ref #109 2584:54:31-2590:54:37 name="offset"
-            arg: literal #110 2592:54:39-2597:54:44 value=string:"u32"
-      body: return-stmt #117 2601:55:3-2622:55:24 implicit
-        value: call #116 2601:55:3-2622:55:24 name="ok" piped=false
-          arg: field-access #115 2604:55:6-2621:55:23 name="wrap_uint32"
-            target: name-ref #114 2604:55:6-2609:55:11 name="value"
-    declaration: function-decl #135 2759:60:1-2892:64:1 name="@4::read_u32_le" doc="Reads a little-endian unsigned 32-bit integer at `offset` as a `UInt32`. Returns an error when the bytes are outside\n`data`."
-      param: param #120 2775:60:17-2786:60:28 name="data"
-        type: type-ref #119 2781:60:23-2786:60:28 name="Bytes"
-      param: param #122 2788:60:30-2799:60:41 name="offset"
-        type: type-ref #121 2796:60:38-2799:60:41 name="Int"
-      result: type-ref #124 2804:60:46-2818:60:60 name="Result"
-        arg: type-ref #123 2811:60:53-2817:60:59 name="UInt32"
-      body: binding #130 2821:61:3-2864:62:1 name="value"
-        value: try-expr #129 2829:61:11-2863:61:45
-          operand: call #128 2833:61:15-2863:61:45 name="@4::load32_le" piped=false
-            arg: name-ref #125 2843:61:25-2847:61:29 name="data"
-            arg: name-ref #126 2849:61:31-2855:61:37 name="offset"
-            arg: literal #127 2857:61:39-2862:61:44 value=string:"u32"
-      body: return-stmt #134 2866:62:3-2887:62:24 implicit
-        value: call #133 2866:62:3-2887:62:24 name="ok" piped=false
-          arg: field-access #132 2869:62:6-2886:62:23 name="wrap_uint32"
-            target: name-ref #131 2869:62:6-2874:62:11 name="value"
-    declaration: function-decl #152 3019:67:1-3150:71:1 name="@4::read_i32_be" doc="Reads a big-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside\n`data`."
-      param: param #137 3035:67:17-3046:67:28 name="data"
-        type: type-ref #136 3041:67:23-3046:67:28 name="Bytes"
-      param: param #139 3048:67:30-3059:67:41 name="offset"
-        type: type-ref #138 3056:67:38-3059:67:41 name="Int"
-      result: type-ref #141 3064:67:46-3077:67:59 name="Result"
-        arg: type-ref #140 3071:67:53-3076:67:58 name="Int32"
-      body: binding #147 3080:68:3-3123:69:1 name="value"
-        value: try-expr #146 3088:68:11-3122:68:45
-          operand: call #145 3092:68:15-3122:68:45 name="@4::load32_be" piped=false
-            arg: name-ref #142 3102:68:25-3106:68:29 name="data"
-            arg: name-ref #143 3108:68:31-3114:68:37 name="offset"
-            arg: literal #144 3116:68:39-3121:68:44 value=string:"i32"
-      body: return-stmt #151 3125:69:3-3145:69:23 implicit
-        value: call #150 3125:69:3-3145:69:23 name="ok" piped=false
-          arg: field-access #149 3128:69:6-3144:69:22 name="wrap_int32"
-            target: name-ref #148 3128:69:6-3133:69:11 name="value"
-    declaration: function-decl #169 3280:74:1-3411:78:1 name="@4::read_i32_le" doc="Reads a little-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside\n`data`."
-      param: param #154 3296:74:17-3307:74:28 name="data"
-        type: type-ref #153 3302:74:23-3307:74:28 name="Bytes"
-      param: param #156 3309:74:30-3320:74:41 name="offset"
-        type: type-ref #155 3317:74:38-3320:74:41 name="Int"
-      result: type-ref #158 3325:74:46-3338:74:59 name="Result"
-        arg: type-ref #157 3332:74:53-3337:74:58 name="Int32"
-      body: binding #164 3341:75:3-3384:76:1 name="value"
-        value: try-expr #163 3349:75:11-3383:75:45
-          operand: call #162 3353:75:15-3383:75:45 name="@4::load32_le" piped=false
-            arg: name-ref #159 3363:75:25-3367:75:29 name="data"
-            arg: name-ref #160 3369:75:31-3375:75:37 name="offset"
-            arg: literal #161 3377:75:39-3382:75:44 value=string:"i32"
-      body: return-stmt #168 3386:76:3-3406:76:23 implicit
-        value: call #167 3386:76:3-3406:76:23 name="ok" piped=false
-          arg: field-access #166 3389:76:6-3405:76:22 name="wrap_int32"
-            target: name-ref #165 3389:76:6-3394:76:11 name="value"
-    declaration: function-decl #186 3540:81:1-3673:85:1 name="@4::read_u64_be" doc="Reads a big-endian unsigned 64-bit integer at `offset` as a `UInt64`. Returns an error when the bytes are outside\n`data`."
-      param: param #171 3556:81:17-3567:81:28 name="data"
-        type: type-ref #170 3562:81:23-3567:81:28 name="Bytes"
-      param: param #173 3569:81:30-3580:81:41 name="offset"
-        type: type-ref #172 3577:81:38-3580:81:41 name="Int"
-      result: type-ref #175 3585:81:46-3599:81:60 name="Result"
-        arg: type-ref #174 3592:81:53-3598:81:59 name="UInt64"
-      body: binding #181 3602:82:3-3645:83:1 name="value"
-        value: try-expr #180 3610:82:11-3644:82:45
-          operand: call #179 3614:82:15-3644:82:45 name="@4::load64_be" piped=false
-            arg: name-ref #176 3624:82:25-3628:82:29 name="data"
-            arg: name-ref #177 3630:82:31-3636:82:37 name="offset"
-            arg: literal #178 3638:82:39-3643:82:44 value=string:"u64"
-      body: return-stmt #185 3647:83:3-3668:83:24 implicit
-        value: call #184 3647:83:3-3668:83:24 name="ok" piped=false
-          arg: field-access #183 3650:83:6-3667:83:23 name="wrap_uint64"
-            target: name-ref #182 3650:83:6-3655:83:11 name="value"
-    declaration: function-decl #203 3805:88:1-3938:92:1 name="@4::read_u64_le" doc="Reads a little-endian unsigned 64-bit integer at `offset` as a `UInt64`. Returns an error when the bytes are outside\n`data`."
-      param: param #188 3821:88:17-3832:88:28 name="data"
-        type: type-ref #187 3827:88:23-3832:88:28 name="Bytes"
-      param: param #190 3834:88:30-3845:88:41 name="offset"
-        type: type-ref #189 3842:88:38-3845:88:41 name="Int"
-      result: type-ref #192 3850:88:46-3864:88:60 name="Result"
-        arg: type-ref #191 3857:88:53-3863:88:59 name="UInt64"
-      body: binding #198 3867:89:3-3910:90:1 name="value"
-        value: try-expr #197 3875:89:11-3909:89:45
-          operand: call #196 3879:89:15-3909:89:45 name="@4::load64_le" piped=false
-            arg: name-ref #193 3889:89:25-3893:89:29 name="data"
-            arg: name-ref #194 3895:89:31-3901:89:37 name="offset"
-            arg: literal #195 3903:89:39-3908:89:44 value=string:"u64"
-      body: return-stmt #202 3912:90:3-3933:90:24 implicit
-        value: call #201 3912:90:3-3933:90:24 name="ok" piped=false
-          arg: field-access #200 3915:90:6-3932:90:23 name="wrap_uint64"
-            target: name-ref #199 3915:90:6-3920:90:11 name="value"
-    declaration: function-decl #215 4048:94:1-4138:95:1 name="@4::read_i64_be" doc="Reads a big-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`." expression
-      param: param #205 4064:94:17-4075:94:28 name="data"
-        type: type-ref #204 4070:94:23-4075:94:28 name="Bytes"
-      param: param #207 4077:94:30-4088:94:41 name="offset"
-        type: type-ref #206 4085:94:38-4088:94:41 name="Int"
-      result: type-ref #209 4093:94:46-4104:94:57 name="Result"
-        arg: type-ref #208 4100:94:53-4103:94:56 name="Int"
-      body: return-stmt #214 4107:94:60-4137:94:90 implicit
-        value: call #213 4107:94:60-4137:94:90 name="@4::load64_be" piped=false
-          arg: name-ref #210 4117:94:70-4121:94:74 name="data"
-          arg: name-ref #211 4123:94:76-4129:94:82 name="offset"
-          arg: literal #212 4131:94:84-4136:94:89 value=string:"i64"
-    declaration: function-decl #227 4251:97:1-4341:98:1 name="@4::read_i64_le" doc="Reads a little-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`." expression
-      param: param #217 4267:97:17-4278:97:28 name="data"
-        type: type-ref #216 4273:97:23-4278:97:28 name="Bytes"
-      param: param #219 4280:97:30-4291:97:41 name="offset"
-        type: type-ref #218 4288:97:38-4291:97:41 name="Int"
-      result: type-ref #221 4296:97:46-4307:97:57 name="Result"
-        arg: type-ref #220 4303:97:53-4306:97:56 name="Int"
-      body: return-stmt #226 4310:97:60-4340:97:90 implicit
-        value: call #225 4310:97:60-4340:97:90 name="@4::load64_le" piped=false
-          arg: name-ref #222 4320:97:70-4324:97:74 name="data"
-          arg: name-ref #223 4326:97:76-4332:97:82 name="offset"
-          arg: literal #224 4334:97:84-4339:97:89 value=string:"i64"
-    declaration: function-decl #244 4451:100:1-4588:104:1 name="@4::read_f32_be" doc="Reads a big-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
-      param: param #229 4467:100:17-4478:100:28 name="data"
-        type: type-ref #228 4473:100:23-4478:100:28 name="Bytes"
-      param: param #231 4480:100:30-4491:100:41 name="offset"
-        type: type-ref #230 4488:100:38-4491:100:41 name="Int"
-      result: type-ref #233 4496:100:46-4509:100:59 name="Result"
-        arg: type-ref #232 4503:100:53-4508:100:58 name="Float"
-      body: binding #239 4512:101:3-4554:102:1 name="bits"
-        value: try-expr #238 4519:101:10-4553:101:44
-          operand: call #237 4523:101:14-4553:101:44 name="@4::load32_be" piped=false
-            arg: name-ref #234 4533:101:24-4537:101:28 name="data"
-            arg: name-ref #235 4539:101:30-4545:101:36 name="offset"
-            arg: literal #236 4547:101:38-4552:101:43 value=string:"f32"
-      body: return-stmt #243 4556:102:3-4583:102:30 implicit
-        value: call #242 4556:102:3-4583:102:30 name="ok" piped=false
-          arg: call #241 4559:102:6-4582:102:29 name="Float.from_bits32" piped=false
-            arg: name-ref #240 4577:102:24-4581:102:28 name="bits"
-    declaration: function-decl #261 4701:106:1-4838:110:1 name="@4::read_f32_le" doc="Reads a little-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
-      param: param #246 4717:106:17-4728:106:28 name="data"
-        type: type-ref #245 4723:106:23-4728:106:28 name="Bytes"
-      param: param #248 4730:106:30-4741:106:41 name="offset"
-        type: type-ref #247 4738:106:38-4741:106:41 name="Int"
-      result: type-ref #250 4746:106:46-4759:106:59 name="Result"
-        arg: type-ref #249 4753:106:53-4758:106:58 name="Float"
-      body: binding #256 4762:107:3-4804:108:1 name="bits"
-        value: try-expr #255 4769:107:10-4803:107:44
-          operand: call #254 4773:107:14-4803:107:44 name="@4::load32_le" piped=false
-            arg: name-ref #251 4783:107:24-4787:107:28 name="data"
-            arg: name-ref #252 4789:107:30-4795:107:36 name="offset"
-            arg: literal #253 4797:107:38-4802:107:43 value=string:"f32"
-      body: return-stmt #260 4806:108:3-4833:108:30 implicit
-        value: call #259 4806:108:3-4833:108:30 name="ok" piped=false
-          arg: call #258 4809:108:6-4832:108:29 name="Float.from_bits32" piped=false
-            arg: name-ref #257 4827:108:24-4831:108:28 name="bits"
-    declaration: function-decl #279 4948:112:1-5095:116:1 name="@4::read_f64_be" doc="Reads a big-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
-      param: param #263 4964:112:17-4975:112:28 name="data"
-        type: type-ref #262 4970:112:23-4975:112:28 name="Bytes"
-      param: param #265 4977:112:30-4988:112:41 name="offset"
-        type: type-ref #264 4985:112:38-4988:112:41 name="Int"
-      result: type-ref #267 4993:112:46-5006:112:59 name="Result"
-        arg: type-ref #266 5000:112:53-5005:112:58 name="Float"
-      body: binding #273 5009:113:3-5051:114:1 name="bits"
-        value: try-expr #272 5016:113:10-5050:113:44
-          operand: call #271 5020:113:14-5050:113:44 name="@4::load64_be" piped=false
-            arg: name-ref #268 5030:113:24-5034:113:28 name="data"
-            arg: name-ref #269 5036:113:30-5042:113:36 name="offset"
-            arg: literal #270 5044:113:38-5049:113:43 value=string:"f64"
-      body: return-stmt #278 5053:114:3-5090:114:40 implicit
-        value: call #277 5053:114:3-5090:114:40 name="ok" piped=false
-          arg: call #276 5056:114:6-5089:114:39 name="Float.from_bits" piped=false
-            arg: field-access #275 5072:114:22-5088:114:38 name="wrap_uint64"
-              target: name-ref #274 5072:114:22-5076:114:26 name="bits"
-    declaration: function-decl #297 5208:118:1-5355:122:1 name="@4::read_f64_le" doc="Reads a little-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
-      param: param #281 5224:118:17-5235:118:28 name="data"
-        type: type-ref #280 5230:118:23-5235:118:28 name="Bytes"
-      param: param #283 5237:118:30-5248:118:41 name="offset"
-        type: type-ref #282 5245:118:38-5248:118:41 name="Int"
-      result: type-ref #285 5253:118:46-5266:118:59 name="Result"
-        arg: type-ref #284 5260:118:53-5265:118:58 name="Float"
-      body: binding #291 5269:119:3-5311:120:1 name="bits"
-        value: try-expr #290 5276:119:10-5310:119:44
-          operand: call #289 5280:119:14-5310:119:44 name="@4::load64_le" piped=false
-            arg: name-ref #286 5290:119:24-5294:119:28 name="data"
-            arg: name-ref #287 5296:119:30-5302:119:36 name="offset"
-            arg: literal #288 5304:119:38-5309:119:43 value=string:"f64"
-      body: return-stmt #296 5313:120:3-5350:120:40 implicit
-        value: call #295 5313:120:3-5350:120:40 name="ok" piped=false
-          arg: call #294 5316:120:6-5349:120:39 name="Float.from_bits" piped=false
-            arg: field-access #293 5332:120:22-5348:120:38 name="wrap_uint64"
-              target: name-ref #292 5332:120:22-5336:120:26 name="bits"
-    declaration: function-decl #306 5419:124:1-5476:125:1 name="@4::write_u8" doc="Returns the 1 byte of `value` as an unsigned 8-bit integer." expression
-      param: param #299 5432:124:14-5444:124:26 name="value"
-        type: type-ref #298 5439:124:21-5444:124:26 name="UInt8"
-      result: type-ref #300 5449:124:31-5454:124:36 name="Bytes"
-      body: return-stmt #305 5457:124:39-5475:124:57 implicit
-        value: call #304 5457:124:39-5475:124:57 name="@4::pack" piped=false
-          arg: list-lit #303 5462:124:44-5474:124:56
-            element: field-access #302 5463:124:45-5473:124:55 name="to_i"
-              target: name-ref #301 5463:124:45-5468:124:50 name="value"
-    declaration: function-decl #317 5537:127:1-5606:128:1 name="@4::write_i8" doc="Returns the 1 byte of `value` as a signed 8-bit integer." expression
-      param: param #308 5550:127:14-5561:127:25 name="value"
-        type: type-ref #307 5557:127:21-5561:127:25 name="Int8"
-      result: type-ref #309 5566:127:30-5571:127:35 name="Bytes"
-      body: return-stmt #316 5574:127:38-5605:127:69 implicit
-        value: call #315 5574:127:38-5605:127:69 name="@4::pack" piped=false
-          arg: list-lit #314 5579:127:43-5604:127:68
-            element: method-call #313 5580:127:44-5603:127:67 name="bit_and"
-              target: field-access #311 5580:127:44-5590:127:54 name="to_i"
-                target: name-ref #310 5580:127:44-5585:127:49 name="value"
-              arg: literal #312 5599:127:63-5602:127:66 value=int:255
-    declaration: function-decl #325 5682:130:1-5747:131:1 name="@4::write_u16_be" doc="Returns the 2 bytes of `value` as a big-endian unsigned 16-bit integer." expression
-      param: param #319 5699:130:18-5712:130:31 name="value"
-        type: type-ref #318 5706:130:25-5712:130:31 name="UInt16"
-      result: type-ref #320 5717:130:36-5722:130:41 name="Bytes"
-      body: return-stmt #324 5725:130:44-5746:130:65 implicit
-        value: call #323 5725:130:44-5746:130:65 name="@4::bytes2_be" piped=false
-          arg: field-access #322 5735:130:54-5745:130:64 name="to_i"
-            target: name-ref #321 5735:130:54-5740:130:59 name="value"
-    declaration: function-decl #333 5826:133:1-5891:134:1 name="@4::write_u16_le" doc="Returns the 2 bytes of `value` as a little-endian unsigned 16-bit integer." expression
-      param: param #327 5843:133:18-5856:133:31 name="value"
-        type: type-ref #326 5850:133:25-5856:133:31 name="UInt16"
-      result: type-ref #328 5861:133:36-5866:133:41 name="Bytes"
-      body: return-stmt #332 5869:133:44-5890:133:65 implicit
-        value: call #331 5869:133:44-5890:133:65 name="@4::bytes2_le" piped=false
-          arg: field-access #330 5879:133:54-5889:133:64 name="to_i"
-            target: name-ref #329 5879:133:54-5884:133:59 name="value"
-    declaration: function-decl #341 5965:136:1-6029:137:1 name="@4::write_i16_be" doc="Returns the 2 bytes of `value` as a big-endian signed 16-bit integer." expression
-      param: param #335 5982:136:18-5994:136:30 name="value"
-        type: type-ref #334 5989:136:25-5994:136:30 name="Int16"
-      result: type-ref #336 5999:136:35-6004:136:40 name="Bytes"
-      body: return-stmt #340 6007:136:43-6028:136:64 implicit
-        value: call #339 6007:136:43-6028:136:64 name="@4::bytes2_be" piped=false
-          arg: field-access #338 6017:136:53-6027:136:63 name="to_i"
-            target: name-ref #337 6017:136:53-6022:136:58 name="value"
-    declaration: function-decl #349 6106:139:1-6170:140:1 name="@4::write_i16_le" doc="Returns the 2 bytes of `value` as a little-endian signed 16-bit integer." expression
-      param: param #343 6123:139:18-6135:139:30 name="value"
-        type: type-ref #342 6130:139:25-6135:139:30 name="Int16"
-      result: type-ref #344 6140:139:35-6145:139:40 name="Bytes"
-      body: return-stmt #348 6148:139:43-6169:139:64 implicit
-        value: call #347 6148:139:43-6169:139:64 name="@4::bytes2_le" piped=false
-          arg: field-access #346 6158:139:53-6168:139:63 name="to_i"
-            target: name-ref #345 6158:139:53-6163:139:58 name="value"
-    declaration: function-decl #357 6246:142:1-6311:143:1 name="@4::write_u32_be" doc="Returns the 4 bytes of `value` as a big-endian unsigned 32-bit integer." expression
-      param: param #351 6263:142:18-6276:142:31 name="value"
-        type: type-ref #350 6270:142:25-6276:142:31 name="UInt32"
-      result: type-ref #352 6281:142:36-6286:142:41 name="Bytes"
-      body: return-stmt #356 6289:142:44-6310:142:65 implicit
-        value: call #355 6289:142:44-6310:142:65 name="@4::bytes4_be" piped=false
-          arg: field-access #354 6299:142:54-6309:142:64 name="to_i"
-            target: name-ref #353 6299:142:54-6304:142:59 name="value"
-    declaration: function-decl #365 6390:145:1-6455:146:1 name="@4::write_u32_le" doc="Returns the 4 bytes of `value` as a little-endian unsigned 32-bit integer." expression
-      param: param #359 6407:145:18-6420:145:31 name="value"
-        type: type-ref #358 6414:145:25-6420:145:31 name="UInt32"
-      result: type-ref #360 6425:145:36-6430:145:41 name="Bytes"
-      body: return-stmt #364 6433:145:44-6454:145:65 implicit
-        value: call #363 6433:145:44-6454:145:65 name="@4::bytes4_le" piped=false
-          arg: field-access #362 6443:145:54-6453:145:64 name="to_i"
-            target: name-ref #361 6443:145:54-6448:145:59 name="value"
-    declaration: function-decl #373 6529:148:1-6593:149:1 name="@4::write_i32_be" doc="Returns the 4 bytes of `value` as a big-endian signed 32-bit integer." expression
-      param: param #367 6546:148:18-6558:148:30 name="value"
-        type: type-ref #366 6553:148:25-6558:148:30 name="Int32"
-      result: type-ref #368 6563:148:35-6568:148:40 name="Bytes"
-      body: return-stmt #372 6571:148:43-6592:148:64 implicit
-        value: call #371 6571:148:43-6592:148:64 name="@4::bytes4_be" piped=false
-          arg: field-access #370 6581:148:53-6591:148:63 name="to_i"
-            target: name-ref #369 6581:148:53-6586:148:58 name="value"
-    declaration: function-decl #381 6670:151:1-6734:152:1 name="@4::write_i32_le" doc="Returns the 4 bytes of `value` as a little-endian signed 32-bit integer." expression
-      param: param #375 6687:151:18-6699:151:30 name="value"
-        type: type-ref #374 6694:151:25-6699:151:30 name="Int32"
-      result: type-ref #376 6704:151:35-6709:151:40 name="Bytes"
-      body: return-stmt #380 6712:151:43-6733:151:64 implicit
-        value: call #379 6712:151:43-6733:151:64 name="@4::bytes4_le" piped=false
-          arg: field-access #378 6722:151:53-6732:151:63 name="to_i"
-            target: name-ref #377 6722:151:53-6727:151:58 name="value"
-    declaration: function-decl #388 6810:154:1-6870:155:1 name="@4::write_u64_be" doc="Returns the 8 bytes of `value` as a big-endian unsigned 64-bit integer." expression
-      param: param #383 6827:154:18-6840:154:31 name="value"
-        type: type-ref #382 6834:154:25-6840:154:31 name="UInt64"
-      result: type-ref #384 6845:154:36-6850:154:41 name="Bytes"
-      body: return-stmt #387 6853:154:44-6869:154:60 implicit
-        value: call #386 6853:154:44-6869:154:60 name="@4::bytes8_be" piped=false
-          arg: name-ref #385 6863:154:54-6868:154:59 name="value"
-    declaration: function-decl #395 6949:157:1-7009:158:1 name="@4::write_u64_le" doc="Returns the 8 bytes of `value` as a little-endian unsigned 64-bit integer." expression
-      param: param #390 6966:157:18-6979:157:31 name="value"
-        type: type-ref #389 6973:157:25-6979:157:31 name="UInt64"
-      result: type-ref #391 6984:157:36-6989:157:41 name="Bytes"
-      body: return-stmt #394 6992:157:44-7008:157:60 implicit
-        value: call #393 6992:157:44-7008:157:60 name="@4::bytes8_le" piped=false
-          arg: name-ref #392 7002:157:54-7007:157:59 name="value"
-    declaration: function-decl #403 7083:160:1-7152:161:1 name="@4::write_i64_be" doc="Returns the 8 bytes of `value` as a big-endian signed 64-bit integer." expression
-      param: param #397 7100:160:18-7110:160:28 name="value"
-        type: type-ref #396 7107:160:25-7110:160:28 name="Int"
-      result: type-ref #398 7115:160:33-7120:160:38 name="Bytes"
-      body: return-stmt #402 7123:160:41-7151:160:69 implicit
-        value: call #401 7123:160:41-7151:160:69 name="@4::bytes8_be" piped=false
-          arg: field-access #400 7133:160:51-7150:160:68 name="wrap_uint64"
-            target: name-ref #399 7133:160:51-7138:160:56 name="value"
-    declaration: function-decl #411 7229:163:1-7298:164:1 name="@4::write_i64_le" doc="Returns the 8 bytes of `value` as a little-endian signed 64-bit integer." expression
-      param: param #405 7246:163:18-7256:163:28 name="value"
-        type: type-ref #404 7253:163:25-7256:163:28 name="Int"
-      result: type-ref #406 7261:163:33-7266:163:38 name="Bytes"
-      body: return-stmt #410 7269:163:41-7297:163:69 implicit
-        value: call #409 7269:163:41-7297:163:69 name="@4::bytes8_le" piped=false
-          arg: field-access #408 7279:163:51-7296:163:68 name="wrap_uint64"
-            target: name-ref #407 7279:163:51-7284:163:56 name="value"
-    declaration: function-decl #419 7472:167:1-7548:168:1 name="@4::write_f32_be" doc="Returns the 4 bytes of `value` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It\nnever fails; every NaN gives the canonical NaN bits." expression
-      param: param #413 7489:167:18-7501:167:30 name="value"
-        type: type-ref #412 7496:167:25-7501:167:30 name="Float"
-      result: type-ref #414 7506:167:35-7511:167:40 name="Bytes"
-      body: return-stmt #418 7514:167:43-7547:167:76 implicit
-        value: call #417 7514:167:43-7547:167:76 name="@4::bytes4_be" piped=false
-          arg: call #416 7524:167:53-7546:167:75 name="Float.to_bits32" piped=false
-            arg: name-ref #415 7540:167:69-7545:167:74 name="value"
-    declaration: function-decl #427 7725:171:1-7801:172:1 name="@4::write_f32_le" doc="Returns the 4 bytes of `value` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It\nnever fails; every NaN gives the canonical NaN bits." expression
-      param: param #421 7742:171:18-7754:171:30 name="value"
-        type: type-ref #420 7749:171:25-7754:171:30 name="Float"
-      result: type-ref #422 7759:171:35-7764:171:40 name="Bytes"
-      body: return-stmt #426 7767:171:43-7800:171:76 implicit
-        value: call #425 7767:171:43-7800:171:76 name="@4::bytes4_le" piped=false
-          arg: call #424 7777:171:53-7799:171:75 name="Float.to_bits32" piped=false
-            arg: name-ref #423 7793:171:69-7798:171:74 name="value"
-    declaration: function-decl #435 7934:175:1-8008:176:1 name="@4::write_f64_be" doc="Returns the 8 bytes of `value` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical\nNaN bits." expression
-      param: param #429 7951:175:18-7963:175:30 name="value"
-        type: type-ref #428 7958:175:25-7963:175:30 name="Float"
-      result: type-ref #430 7968:175:35-7973:175:40 name="Bytes"
-      body: return-stmt #434 7976:175:43-8007:175:74 implicit
-        value: call #433 7976:175:43-8007:175:74 name="@4::bytes8_be" piped=false
-          arg: call #432 7986:175:53-8006:175:73 name="Float.to_bits" piped=false
-            arg: name-ref #431 8000:175:67-8005:175:72 name="value"
-    declaration: function-decl #443 8144:179:1-8218:180:1 name="@4::write_f64_le" doc="Returns the 8 bytes of `value` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the\ncanonical NaN bits." expression
-      param: param #437 8161:179:18-8173:179:30 name="value"
-        type: type-ref #436 8168:179:25-8173:179:30 name="Float"
-      result: type-ref #438 8178:179:35-8183:179:40 name="Bytes"
-      body: return-stmt #442 8186:179:43-8217:179:74 implicit
-        value: call #441 8186:179:43-8217:179:74 name="@4::bytes8_le" piped=false
-          arg: call #440 8196:179:53-8216:179:73 name="Float.to_bits" piped=false
-            arg: name-ref #439 8210:179:67-8215:179:72 name="value"
-    declaration: function-decl #468 8362:183:1-8586:189:1 name="@4::frame" doc="Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more\nthan 4294967295 bytes."
-      param: param #445 8372:183:11-8386:183:25 name="payload"
-        type: type-ref #444 8381:183:20-8386:183:25 name="Bytes"
-      result: type-ref #447 8391:183:30-8404:183:43 name="Result"
-        arg: type-ref #446 8398:183:37-8403:183:42 name="Bytes"
-      body: if-stmt #460 8407:184:3-8542:187:1
-        branch: if-branch #459 8407:184:3-8536:186:1
-          condition: binary #451 8410:184:6-8435:184:31 op=greater op-span=8423:184:19-8424:184:20
-            left: field-access #449 8410:184:6-8422:184:18 name="size"
-              target: name-ref #448 8410:184:6-8417:184:13 name="payload"
-            right: literal #450 8425:184:21-8435:184:31 value=int:4294967295
-          body: return-stmt #458 8440:185:5-8536:186:1
-            value: call #457 8447:185:12-8535:185:100 name="error" piped=false
-              arg: interpolation #454 8453:185:18-8516:185:81
+    declaration: function-decl #16 992:13:1-1114:17:1 name="@4::read_u8" doc="Reads an unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`."
+      param: param #1 1004:13:13-1015:13:24 name="data"
+        type: type-ref #0 1010:13:19-1015:13:24 name="Bytes"
+      param: param #3 1017:13:26-1028:13:37 name="offset"
+        type: type-ref #2 1025:13:34-1028:13:37 name="Int"
+      result: type-ref #5 1033:13:42-1046:13:55 name="Result"
+        arg: type-ref #4 1040:13:49-1045:13:54 name="UInt8"
+      body: binding #11 1049:14:3-1087:15:1 name="value"
+        value: try-expr #10 1057:14:11-1086:14:40
+          operand: call #9 1061:14:15-1086:14:40 name="@4::load8" piped=false
+            arg: name-ref #6 1067:14:21-1071:14:25 name="data"
+            arg: name-ref #7 1073:14:27-1079:14:33 name="offset"
+            arg: literal #8 1081:14:35-1085:14:39 value=string:"u8"
+      body: return-stmt #15 1089:15:3-1109:15:23 implicit
+        value: call #14 1089:15:3-1109:15:23 name="ok" piped=false
+          arg: field-access #13 1092:15:6-1108:15:22 name="wrap_uint8"
+            target: name-ref #12 1092:15:6-1097:15:11 name="value"
+    declaration: function-decl #33 1225:19:1-1345:23:1 name="@4::read_i8" doc="Reads a signed 8-bit integer at `offset` as an `Int8`. Returns an error when the bytes are outside `data`."
+      param: param #18 1237:19:13-1248:19:24 name="data"
+        type: type-ref #17 1243:19:19-1248:19:24 name="Bytes"
+      param: param #20 1250:19:26-1261:19:37 name="offset"
+        type: type-ref #19 1258:19:34-1261:19:37 name="Int"
+      result: type-ref #22 1266:19:42-1278:19:54 name="Result"
+        arg: type-ref #21 1273:19:49-1277:19:53 name="Int8"
+      body: binding #28 1281:20:3-1319:21:1 name="value"
+        value: try-expr #27 1289:20:11-1318:20:40
+          operand: call #26 1293:20:15-1318:20:40 name="@4::load8" piped=false
+            arg: name-ref #23 1299:20:21-1303:20:25 name="data"
+            arg: name-ref #24 1305:20:27-1311:20:33 name="offset"
+            arg: literal #25 1313:20:35-1317:20:39 value=string:"i8"
+      body: return-stmt #32 1321:21:3-1340:21:22 implicit
+        value: call #31 1321:21:3-1340:21:22 name="ok" piped=false
+          arg: field-access #30 1324:21:6-1339:21:21 name="wrap_int8"
+            target: name-ref #29 1324:21:6-1329:21:11 name="value"
+    declaration: function-decl #50 1474:26:1-1607:30:1 name="@4::read_u16_be" doc="Reads a big-endian unsigned 16-bit integer at `offset` as a `UInt16`. Returns an error when the bytes are outside\n`data`."
+      param: param #35 1490:26:17-1501:26:28 name="data"
+        type: type-ref #34 1496:26:23-1501:26:28 name="Bytes"
+      param: param #37 1503:26:30-1514:26:41 name="offset"
+        type: type-ref #36 1511:26:38-1514:26:41 name="Int"
+      result: type-ref #39 1519:26:46-1533:26:60 name="Result"
+        arg: type-ref #38 1526:26:53-1532:26:59 name="UInt16"
+      body: binding #45 1536:27:3-1579:28:1 name="value"
+        value: try-expr #44 1544:27:11-1578:27:45
+          operand: call #43 1548:27:15-1578:27:45 name="@4::load16_be" piped=false
+            arg: name-ref #40 1558:27:25-1562:27:29 name="data"
+            arg: name-ref #41 1564:27:31-1570:27:37 name="offset"
+            arg: literal #42 1572:27:39-1577:27:44 value=string:"u16"
+      body: return-stmt #49 1581:28:3-1602:28:24 implicit
+        value: call #48 1581:28:3-1602:28:24 name="ok" piped=false
+          arg: field-access #47 1584:28:6-1601:28:23 name="wrap_uint16"
+            target: name-ref #46 1584:28:6-1589:28:11 name="value"
+    declaration: function-decl #67 1739:33:1-1872:37:1 name="@4::read_u16_le" doc="Reads a little-endian unsigned 16-bit integer at `offset` as a `UInt16`. Returns an error when the bytes are outside\n`data`."
+      param: param #52 1755:33:17-1766:33:28 name="data"
+        type: type-ref #51 1761:33:23-1766:33:28 name="Bytes"
+      param: param #54 1768:33:30-1779:33:41 name="offset"
+        type: type-ref #53 1776:33:38-1779:33:41 name="Int"
+      result: type-ref #56 1784:33:46-1798:33:60 name="Result"
+        arg: type-ref #55 1791:33:53-1797:33:59 name="UInt16"
+      body: binding #62 1801:34:3-1844:35:1 name="value"
+        value: try-expr #61 1809:34:11-1843:34:45
+          operand: call #60 1813:34:15-1843:34:45 name="@4::load16_le" piped=false
+            arg: name-ref #57 1823:34:25-1827:34:29 name="data"
+            arg: name-ref #58 1829:34:31-1835:34:37 name="offset"
+            arg: literal #59 1837:34:39-1842:34:44 value=string:"u16"
+      body: return-stmt #66 1846:35:3-1867:35:24 implicit
+        value: call #65 1846:35:3-1867:35:24 name="ok" piped=false
+          arg: field-access #64 1849:35:6-1866:35:23 name="wrap_uint16"
+            target: name-ref #63 1849:35:6-1854:35:11 name="value"
+    declaration: function-decl #84 1999:40:1-2130:44:1 name="@4::read_i16_be" doc="Reads a big-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside\n`data`."
+      param: param #69 2015:40:17-2026:40:28 name="data"
+        type: type-ref #68 2021:40:23-2026:40:28 name="Bytes"
+      param: param #71 2028:40:30-2039:40:41 name="offset"
+        type: type-ref #70 2036:40:38-2039:40:41 name="Int"
+      result: type-ref #73 2044:40:46-2057:40:59 name="Result"
+        arg: type-ref #72 2051:40:53-2056:40:58 name="Int16"
+      body: binding #79 2060:41:3-2103:42:1 name="value"
+        value: try-expr #78 2068:41:11-2102:41:45
+          operand: call #77 2072:41:15-2102:41:45 name="@4::load16_be" piped=false
+            arg: name-ref #74 2082:41:25-2086:41:29 name="data"
+            arg: name-ref #75 2088:41:31-2094:41:37 name="offset"
+            arg: literal #76 2096:41:39-2101:41:44 value=string:"i16"
+      body: return-stmt #83 2105:42:3-2125:42:23 implicit
+        value: call #82 2105:42:3-2125:42:23 name="ok" piped=false
+          arg: field-access #81 2108:42:6-2124:42:22 name="wrap_int16"
+            target: name-ref #80 2108:42:6-2113:42:11 name="value"
+    declaration: function-decl #101 2260:47:1-2391:51:1 name="@4::read_i16_le" doc="Reads a little-endian signed 16-bit integer at `offset` as an `Int16`. Returns an error when the bytes are outside\n`data`."
+      param: param #86 2276:47:17-2287:47:28 name="data"
+        type: type-ref #85 2282:47:23-2287:47:28 name="Bytes"
+      param: param #88 2289:47:30-2300:47:41 name="offset"
+        type: type-ref #87 2297:47:38-2300:47:41 name="Int"
+      result: type-ref #90 2305:47:46-2318:47:59 name="Result"
+        arg: type-ref #89 2312:47:53-2317:47:58 name="Int16"
+      body: binding #96 2321:48:3-2364:49:1 name="value"
+        value: try-expr #95 2329:48:11-2363:48:45
+          operand: call #94 2333:48:15-2363:48:45 name="@4::load16_le" piped=false
+            arg: name-ref #91 2343:48:25-2347:48:29 name="data"
+            arg: name-ref #92 2349:48:31-2355:48:37 name="offset"
+            arg: literal #93 2357:48:39-2362:48:44 value=string:"i16"
+      body: return-stmt #100 2366:49:3-2386:49:23 implicit
+        value: call #99 2366:49:3-2386:49:23 name="ok" piped=false
+          arg: field-access #98 2369:49:6-2385:49:22 name="wrap_int16"
+            target: name-ref #97 2369:49:6-2374:49:11 name="value"
+    declaration: function-decl #118 2520:54:1-2653:58:1 name="@4::read_u32_be" doc="Reads a big-endian unsigned 32-bit integer at `offset` as a `UInt32`. Returns an error when the bytes are outside\n`data`."
+      param: param #103 2536:54:17-2547:54:28 name="data"
+        type: type-ref #102 2542:54:23-2547:54:28 name="Bytes"
+      param: param #105 2549:54:30-2560:54:41 name="offset"
+        type: type-ref #104 2557:54:38-2560:54:41 name="Int"
+      result: type-ref #107 2565:54:46-2579:54:60 name="Result"
+        arg: type-ref #106 2572:54:53-2578:54:59 name="UInt32"
+      body: binding #113 2582:55:3-2625:56:1 name="value"
+        value: try-expr #112 2590:55:11-2624:55:45
+          operand: call #111 2594:55:15-2624:55:45 name="@4::load32_be" piped=false
+            arg: name-ref #108 2604:55:25-2608:55:29 name="data"
+            arg: name-ref #109 2610:55:31-2616:55:37 name="offset"
+            arg: literal #110 2618:55:39-2623:55:44 value=string:"u32"
+      body: return-stmt #117 2627:56:3-2648:56:24 implicit
+        value: call #116 2627:56:3-2648:56:24 name="ok" piped=false
+          arg: field-access #115 2630:56:6-2647:56:23 name="wrap_uint32"
+            target: name-ref #114 2630:56:6-2635:56:11 name="value"
+    declaration: function-decl #135 2785:61:1-2918:65:1 name="@4::read_u32_le" doc="Reads a little-endian unsigned 32-bit integer at `offset` as a `UInt32`. Returns an error when the bytes are outside\n`data`."
+      param: param #120 2801:61:17-2812:61:28 name="data"
+        type: type-ref #119 2807:61:23-2812:61:28 name="Bytes"
+      param: param #122 2814:61:30-2825:61:41 name="offset"
+        type: type-ref #121 2822:61:38-2825:61:41 name="Int"
+      result: type-ref #124 2830:61:46-2844:61:60 name="Result"
+        arg: type-ref #123 2837:61:53-2843:61:59 name="UInt32"
+      body: binding #130 2847:62:3-2890:63:1 name="value"
+        value: try-expr #129 2855:62:11-2889:62:45
+          operand: call #128 2859:62:15-2889:62:45 name="@4::load32_le" piped=false
+            arg: name-ref #125 2869:62:25-2873:62:29 name="data"
+            arg: name-ref #126 2875:62:31-2881:62:37 name="offset"
+            arg: literal #127 2883:62:39-2888:62:44 value=string:"u32"
+      body: return-stmt #134 2892:63:3-2913:63:24 implicit
+        value: call #133 2892:63:3-2913:63:24 name="ok" piped=false
+          arg: field-access #132 2895:63:6-2912:63:23 name="wrap_uint32"
+            target: name-ref #131 2895:63:6-2900:63:11 name="value"
+    declaration: function-decl #152 3045:68:1-3176:72:1 name="@4::read_i32_be" doc="Reads a big-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside\n`data`."
+      param: param #137 3061:68:17-3072:68:28 name="data"
+        type: type-ref #136 3067:68:23-3072:68:28 name="Bytes"
+      param: param #139 3074:68:30-3085:68:41 name="offset"
+        type: type-ref #138 3082:68:38-3085:68:41 name="Int"
+      result: type-ref #141 3090:68:46-3103:68:59 name="Result"
+        arg: type-ref #140 3097:68:53-3102:68:58 name="Int32"
+      body: binding #147 3106:69:3-3149:70:1 name="value"
+        value: try-expr #146 3114:69:11-3148:69:45
+          operand: call #145 3118:69:15-3148:69:45 name="@4::load32_be" piped=false
+            arg: name-ref #142 3128:69:25-3132:69:29 name="data"
+            arg: name-ref #143 3134:69:31-3140:69:37 name="offset"
+            arg: literal #144 3142:69:39-3147:69:44 value=string:"i32"
+      body: return-stmt #151 3151:70:3-3171:70:23 implicit
+        value: call #150 3151:70:3-3171:70:23 name="ok" piped=false
+          arg: field-access #149 3154:70:6-3170:70:22 name="wrap_int32"
+            target: name-ref #148 3154:70:6-3159:70:11 name="value"
+    declaration: function-decl #169 3306:75:1-3437:79:1 name="@4::read_i32_le" doc="Reads a little-endian signed 32-bit integer at `offset` as an `Int32`. Returns an error when the bytes are outside\n`data`."
+      param: param #154 3322:75:17-3333:75:28 name="data"
+        type: type-ref #153 3328:75:23-3333:75:28 name="Bytes"
+      param: param #156 3335:75:30-3346:75:41 name="offset"
+        type: type-ref #155 3343:75:38-3346:75:41 name="Int"
+      result: type-ref #158 3351:75:46-3364:75:59 name="Result"
+        arg: type-ref #157 3358:75:53-3363:75:58 name="Int32"
+      body: binding #164 3367:76:3-3410:77:1 name="value"
+        value: try-expr #163 3375:76:11-3409:76:45
+          operand: call #162 3379:76:15-3409:76:45 name="@4::load32_le" piped=false
+            arg: name-ref #159 3389:76:25-3393:76:29 name="data"
+            arg: name-ref #160 3395:76:31-3401:76:37 name="offset"
+            arg: literal #161 3403:76:39-3408:76:44 value=string:"i32"
+      body: return-stmt #168 3412:77:3-3432:77:23 implicit
+        value: call #167 3412:77:3-3432:77:23 name="ok" piped=false
+          arg: field-access #166 3415:77:6-3431:77:22 name="wrap_int32"
+            target: name-ref #165 3415:77:6-3420:77:11 name="value"
+    declaration: function-decl #186 3566:82:1-3699:86:1 name="@4::read_u64_be" doc="Reads a big-endian unsigned 64-bit integer at `offset` as a `UInt64`. Returns an error when the bytes are outside\n`data`."
+      param: param #171 3582:82:17-3593:82:28 name="data"
+        type: type-ref #170 3588:82:23-3593:82:28 name="Bytes"
+      param: param #173 3595:82:30-3606:82:41 name="offset"
+        type: type-ref #172 3603:82:38-3606:82:41 name="Int"
+      result: type-ref #175 3611:82:46-3625:82:60 name="Result"
+        arg: type-ref #174 3618:82:53-3624:82:59 name="UInt64"
+      body: binding #181 3628:83:3-3671:84:1 name="value"
+        value: try-expr #180 3636:83:11-3670:83:45
+          operand: call #179 3640:83:15-3670:83:45 name="@4::load64_be" piped=false
+            arg: name-ref #176 3650:83:25-3654:83:29 name="data"
+            arg: name-ref #177 3656:83:31-3662:83:37 name="offset"
+            arg: literal #178 3664:83:39-3669:83:44 value=string:"u64"
+      body: return-stmt #185 3673:84:3-3694:84:24 implicit
+        value: call #184 3673:84:3-3694:84:24 name="ok" piped=false
+          arg: field-access #183 3676:84:6-3693:84:23 name="wrap_uint64"
+            target: name-ref #182 3676:84:6-3681:84:11 name="value"
+    declaration: function-decl #203 3831:89:1-3964:93:1 name="@4::read_u64_le" doc="Reads a little-endian unsigned 64-bit integer at `offset` as a `UInt64`. Returns an error when the bytes are outside\n`data`."
+      param: param #188 3847:89:17-3858:89:28 name="data"
+        type: type-ref #187 3853:89:23-3858:89:28 name="Bytes"
+      param: param #190 3860:89:30-3871:89:41 name="offset"
+        type: type-ref #189 3868:89:38-3871:89:41 name="Int"
+      result: type-ref #192 3876:89:46-3890:89:60 name="Result"
+        arg: type-ref #191 3883:89:53-3889:89:59 name="UInt64"
+      body: binding #198 3893:90:3-3936:91:1 name="value"
+        value: try-expr #197 3901:90:11-3935:90:45
+          operand: call #196 3905:90:15-3935:90:45 name="@4::load64_le" piped=false
+            arg: name-ref #193 3915:90:25-3919:90:29 name="data"
+            arg: name-ref #194 3921:90:31-3927:90:37 name="offset"
+            arg: literal #195 3929:90:39-3934:90:44 value=string:"u64"
+      body: return-stmt #202 3938:91:3-3959:91:24 implicit
+        value: call #201 3938:91:3-3959:91:24 name="ok" piped=false
+          arg: field-access #200 3941:91:6-3958:91:23 name="wrap_uint64"
+            target: name-ref #199 3941:91:6-3946:91:11 name="value"
+    declaration: function-decl #215 4074:95:1-4164:96:1 name="@4::read_i64_be" doc="Reads a big-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`." expression
+      param: param #205 4090:95:17-4101:95:28 name="data"
+        type: type-ref #204 4096:95:23-4101:95:28 name="Bytes"
+      param: param #207 4103:95:30-4114:95:41 name="offset"
+        type: type-ref #206 4111:95:38-4114:95:41 name="Int"
+      result: type-ref #209 4119:95:46-4130:95:57 name="Result"
+        arg: type-ref #208 4126:95:53-4129:95:56 name="Int"
+      body: return-stmt #214 4133:95:60-4163:95:90 implicit
+        value: call #213 4133:95:60-4163:95:90 name="@4::load64_be" piped=false
+          arg: name-ref #210 4143:95:70-4147:95:74 name="data"
+          arg: name-ref #211 4149:95:76-4155:95:82 name="offset"
+          arg: literal #212 4157:95:84-4162:95:89 value=string:"i64"
+    declaration: function-decl #227 4277:98:1-4367:99:1 name="@4::read_i64_le" doc="Reads a little-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`." expression
+      param: param #217 4293:98:17-4304:98:28 name="data"
+        type: type-ref #216 4299:98:23-4304:98:28 name="Bytes"
+      param: param #219 4306:98:30-4317:98:41 name="offset"
+        type: type-ref #218 4314:98:38-4317:98:41 name="Int"
+      result: type-ref #221 4322:98:46-4333:98:57 name="Result"
+        arg: type-ref #220 4329:98:53-4332:98:56 name="Int"
+      body: return-stmt #226 4336:98:60-4366:98:90 implicit
+        value: call #225 4336:98:60-4366:98:90 name="@4::load64_le" piped=false
+          arg: name-ref #222 4346:98:70-4350:98:74 name="data"
+          arg: name-ref #223 4352:98:76-4358:98:82 name="offset"
+          arg: literal #224 4360:98:84-4365:98:89 value=string:"i64"
+    declaration: function-decl #245 4495:102:1-4646:106:1 name="@4::read_f32_be" doc="Reads a big-endian 32-bit IEEE 754 float at `offset` as a `Float32`. Returns an error when the bytes are outside\n`data`."
+      param: param #229 4511:102:17-4522:102:28 name="data"
+        type: type-ref #228 4517:102:23-4522:102:28 name="Bytes"
+      param: param #231 4524:102:30-4535:102:41 name="offset"
+        type: type-ref #230 4532:102:38-4535:102:41 name="Int"
+      result: type-ref #233 4540:102:46-4555:102:61 name="Result"
+        arg: type-ref #232 4547:102:53-4554:102:60 name="Float32"
+      body: binding #239 4558:103:3-4600:104:1 name="bits"
+        value: try-expr #238 4565:103:10-4599:103:44
+          operand: call #237 4569:103:14-4599:103:44 name="@4::load32_be" piped=false
+            arg: name-ref #234 4579:103:24-4583:103:28 name="data"
+            arg: name-ref #235 4585:103:30-4591:103:36 name="offset"
+            arg: literal #236 4593:103:38-4598:103:43 value=string:"f32"
+      body: return-stmt #244 4602:104:3-4641:104:42 implicit
+        value: call #243 4602:104:3-4641:104:42 name="ok" piped=false
+          arg: call #242 4605:104:6-4640:104:41 name="Float32.from_bits" piped=false
+            arg: field-access #241 4623:104:24-4639:104:40 name="wrap_uint32"
+              target: name-ref #240 4623:104:24-4627:104:28 name="bits"
+    declaration: function-decl #263 4777:109:1-4928:113:1 name="@4::read_f32_le" doc="Reads a little-endian 32-bit IEEE 754 float at `offset` as a `Float32`. Returns an error when the bytes are outside\n`data`."
+      param: param #247 4793:109:17-4804:109:28 name="data"
+        type: type-ref #246 4799:109:23-4804:109:28 name="Bytes"
+      param: param #249 4806:109:30-4817:109:41 name="offset"
+        type: type-ref #248 4814:109:38-4817:109:41 name="Int"
+      result: type-ref #251 4822:109:46-4837:109:61 name="Result"
+        arg: type-ref #250 4829:109:53-4836:109:60 name="Float32"
+      body: binding #257 4840:110:3-4882:111:1 name="bits"
+        value: try-expr #256 4847:110:10-4881:110:44
+          operand: call #255 4851:110:14-4881:110:44 name="@4::load32_le" piped=false
+            arg: name-ref #252 4861:110:24-4865:110:28 name="data"
+            arg: name-ref #253 4867:110:30-4873:110:36 name="offset"
+            arg: literal #254 4875:110:38-4880:110:43 value=string:"f32"
+      body: return-stmt #262 4884:111:3-4923:111:42 implicit
+        value: call #261 4884:111:3-4923:111:42 name="ok" piped=false
+          arg: call #260 4887:111:6-4922:111:41 name="Float32.from_bits" piped=false
+            arg: field-access #259 4905:111:24-4921:111:40 name="wrap_uint32"
+              target: name-ref #258 4905:111:24-4909:111:28 name="bits"
+    declaration: function-decl #281 5038:115:1-5185:119:1 name="@4::read_f64_be" doc="Reads a big-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
+      param: param #265 5054:115:17-5065:115:28 name="data"
+        type: type-ref #264 5060:115:23-5065:115:28 name="Bytes"
+      param: param #267 5067:115:30-5078:115:41 name="offset"
+        type: type-ref #266 5075:115:38-5078:115:41 name="Int"
+      result: type-ref #269 5083:115:46-5096:115:59 name="Result"
+        arg: type-ref #268 5090:115:53-5095:115:58 name="Float"
+      body: binding #275 5099:116:3-5141:117:1 name="bits"
+        value: try-expr #274 5106:116:10-5140:116:44
+          operand: call #273 5110:116:14-5140:116:44 name="@4::load64_be" piped=false
+            arg: name-ref #270 5120:116:24-5124:116:28 name="data"
+            arg: name-ref #271 5126:116:30-5132:116:36 name="offset"
+            arg: literal #272 5134:116:38-5139:116:43 value=string:"f64"
+      body: return-stmt #280 5143:117:3-5180:117:40 implicit
+        value: call #279 5143:117:3-5180:117:40 name="ok" piped=false
+          arg: call #278 5146:117:6-5179:117:39 name="Float.from_bits" piped=false
+            arg: field-access #277 5162:117:22-5178:117:38 name="wrap_uint64"
+              target: name-ref #276 5162:117:22-5166:117:26 name="bits"
+    declaration: function-decl #299 5298:121:1-5445:125:1 name="@4::read_f64_le" doc="Reads a little-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`."
+      param: param #283 5314:121:17-5325:121:28 name="data"
+        type: type-ref #282 5320:121:23-5325:121:28 name="Bytes"
+      param: param #285 5327:121:30-5338:121:41 name="offset"
+        type: type-ref #284 5335:121:38-5338:121:41 name="Int"
+      result: type-ref #287 5343:121:46-5356:121:59 name="Result"
+        arg: type-ref #286 5350:121:53-5355:121:58 name="Float"
+      body: binding #293 5359:122:3-5401:123:1 name="bits"
+        value: try-expr #292 5366:122:10-5400:122:44
+          operand: call #291 5370:122:14-5400:122:44 name="@4::load64_le" piped=false
+            arg: name-ref #288 5380:122:24-5384:122:28 name="data"
+            arg: name-ref #289 5386:122:30-5392:122:36 name="offset"
+            arg: literal #290 5394:122:38-5399:122:43 value=string:"f64"
+      body: return-stmt #298 5403:123:3-5440:123:40 implicit
+        value: call #297 5403:123:3-5440:123:40 name="ok" piped=false
+          arg: call #296 5406:123:6-5439:123:39 name="Float.from_bits" piped=false
+            arg: field-access #295 5422:123:22-5438:123:38 name="wrap_uint64"
+              target: name-ref #294 5422:123:22-5426:123:26 name="bits"
+    declaration: function-decl #308 5509:127:1-5566:128:1 name="@4::write_u8" doc="Returns the 1 byte of `value` as an unsigned 8-bit integer." expression
+      param: param #301 5522:127:14-5534:127:26 name="value"
+        type: type-ref #300 5529:127:21-5534:127:26 name="UInt8"
+      result: type-ref #302 5539:127:31-5544:127:36 name="Bytes"
+      body: return-stmt #307 5547:127:39-5565:127:57 implicit
+        value: call #306 5547:127:39-5565:127:57 name="@4::pack" piped=false
+          arg: list-lit #305 5552:127:44-5564:127:56
+            element: field-access #304 5553:127:45-5563:127:55 name="to_i"
+              target: name-ref #303 5553:127:45-5558:127:50 name="value"
+    declaration: function-decl #319 5627:130:1-5696:131:1 name="@4::write_i8" doc="Returns the 1 byte of `value` as a signed 8-bit integer." expression
+      param: param #310 5640:130:14-5651:130:25 name="value"
+        type: type-ref #309 5647:130:21-5651:130:25 name="Int8"
+      result: type-ref #311 5656:130:30-5661:130:35 name="Bytes"
+      body: return-stmt #318 5664:130:38-5695:130:69 implicit
+        value: call #317 5664:130:38-5695:130:69 name="@4::pack" piped=false
+          arg: list-lit #316 5669:130:43-5694:130:68
+            element: method-call #315 5670:130:44-5693:130:67 name="bit_and"
+              target: field-access #313 5670:130:44-5680:130:54 name="to_i"
+                target: name-ref #312 5670:130:44-5675:130:49 name="value"
+              arg: literal #314 5689:130:63-5692:130:66 value=int:255
+    declaration: function-decl #327 5772:133:1-5837:134:1 name="@4::write_u16_be" doc="Returns the 2 bytes of `value` as a big-endian unsigned 16-bit integer." expression
+      param: param #321 5789:133:18-5802:133:31 name="value"
+        type: type-ref #320 5796:133:25-5802:133:31 name="UInt16"
+      result: type-ref #322 5807:133:36-5812:133:41 name="Bytes"
+      body: return-stmt #326 5815:133:44-5836:133:65 implicit
+        value: call #325 5815:133:44-5836:133:65 name="@4::bytes2_be" piped=false
+          arg: field-access #324 5825:133:54-5835:133:64 name="to_i"
+            target: name-ref #323 5825:133:54-5830:133:59 name="value"
+    declaration: function-decl #335 5916:136:1-5981:137:1 name="@4::write_u16_le" doc="Returns the 2 bytes of `value` as a little-endian unsigned 16-bit integer." expression
+      param: param #329 5933:136:18-5946:136:31 name="value"
+        type: type-ref #328 5940:136:25-5946:136:31 name="UInt16"
+      result: type-ref #330 5951:136:36-5956:136:41 name="Bytes"
+      body: return-stmt #334 5959:136:44-5980:136:65 implicit
+        value: call #333 5959:136:44-5980:136:65 name="@4::bytes2_le" piped=false
+          arg: field-access #332 5969:136:54-5979:136:64 name="to_i"
+            target: name-ref #331 5969:136:54-5974:136:59 name="value"
+    declaration: function-decl #343 6055:139:1-6119:140:1 name="@4::write_i16_be" doc="Returns the 2 bytes of `value` as a big-endian signed 16-bit integer." expression
+      param: param #337 6072:139:18-6084:139:30 name="value"
+        type: type-ref #336 6079:139:25-6084:139:30 name="Int16"
+      result: type-ref #338 6089:139:35-6094:139:40 name="Bytes"
+      body: return-stmt #342 6097:139:43-6118:139:64 implicit
+        value: call #341 6097:139:43-6118:139:64 name="@4::bytes2_be" piped=false
+          arg: field-access #340 6107:139:53-6117:139:63 name="to_i"
+            target: name-ref #339 6107:139:53-6112:139:58 name="value"
+    declaration: function-decl #351 6196:142:1-6260:143:1 name="@4::write_i16_le" doc="Returns the 2 bytes of `value` as a little-endian signed 16-bit integer." expression
+      param: param #345 6213:142:18-6225:142:30 name="value"
+        type: type-ref #344 6220:142:25-6225:142:30 name="Int16"
+      result: type-ref #346 6230:142:35-6235:142:40 name="Bytes"
+      body: return-stmt #350 6238:142:43-6259:142:64 implicit
+        value: call #349 6238:142:43-6259:142:64 name="@4::bytes2_le" piped=false
+          arg: field-access #348 6248:142:53-6258:142:63 name="to_i"
+            target: name-ref #347 6248:142:53-6253:142:58 name="value"
+    declaration: function-decl #359 6336:145:1-6401:146:1 name="@4::write_u32_be" doc="Returns the 4 bytes of `value` as a big-endian unsigned 32-bit integer." expression
+      param: param #353 6353:145:18-6366:145:31 name="value"
+        type: type-ref #352 6360:145:25-6366:145:31 name="UInt32"
+      result: type-ref #354 6371:145:36-6376:145:41 name="Bytes"
+      body: return-stmt #358 6379:145:44-6400:145:65 implicit
+        value: call #357 6379:145:44-6400:145:65 name="@4::bytes4_be" piped=false
+          arg: field-access #356 6389:145:54-6399:145:64 name="to_i"
+            target: name-ref #355 6389:145:54-6394:145:59 name="value"
+    declaration: function-decl #367 6480:148:1-6545:149:1 name="@4::write_u32_le" doc="Returns the 4 bytes of `value` as a little-endian unsigned 32-bit integer." expression
+      param: param #361 6497:148:18-6510:148:31 name="value"
+        type: type-ref #360 6504:148:25-6510:148:31 name="UInt32"
+      result: type-ref #362 6515:148:36-6520:148:41 name="Bytes"
+      body: return-stmt #366 6523:148:44-6544:148:65 implicit
+        value: call #365 6523:148:44-6544:148:65 name="@4::bytes4_le" piped=false
+          arg: field-access #364 6533:148:54-6543:148:64 name="to_i"
+            target: name-ref #363 6533:148:54-6538:148:59 name="value"
+    declaration: function-decl #375 6619:151:1-6683:152:1 name="@4::write_i32_be" doc="Returns the 4 bytes of `value` as a big-endian signed 32-bit integer." expression
+      param: param #369 6636:151:18-6648:151:30 name="value"
+        type: type-ref #368 6643:151:25-6648:151:30 name="Int32"
+      result: type-ref #370 6653:151:35-6658:151:40 name="Bytes"
+      body: return-stmt #374 6661:151:43-6682:151:64 implicit
+        value: call #373 6661:151:43-6682:151:64 name="@4::bytes4_be" piped=false
+          arg: field-access #372 6671:151:53-6681:151:63 name="to_i"
+            target: name-ref #371 6671:151:53-6676:151:58 name="value"
+    declaration: function-decl #383 6760:154:1-6824:155:1 name="@4::write_i32_le" doc="Returns the 4 bytes of `value` as a little-endian signed 32-bit integer." expression
+      param: param #377 6777:154:18-6789:154:30 name="value"
+        type: type-ref #376 6784:154:25-6789:154:30 name="Int32"
+      result: type-ref #378 6794:154:35-6799:154:40 name="Bytes"
+      body: return-stmt #382 6802:154:43-6823:154:64 implicit
+        value: call #381 6802:154:43-6823:154:64 name="@4::bytes4_le" piped=false
+          arg: field-access #380 6812:154:53-6822:154:63 name="to_i"
+            target: name-ref #379 6812:154:53-6817:154:58 name="value"
+    declaration: function-decl #390 6900:157:1-6960:158:1 name="@4::write_u64_be" doc="Returns the 8 bytes of `value` as a big-endian unsigned 64-bit integer." expression
+      param: param #385 6917:157:18-6930:157:31 name="value"
+        type: type-ref #384 6924:157:25-6930:157:31 name="UInt64"
+      result: type-ref #386 6935:157:36-6940:157:41 name="Bytes"
+      body: return-stmt #389 6943:157:44-6959:157:60 implicit
+        value: call #388 6943:157:44-6959:157:60 name="@4::bytes8_be" piped=false
+          arg: name-ref #387 6953:157:54-6958:157:59 name="value"
+    declaration: function-decl #397 7039:160:1-7099:161:1 name="@4::write_u64_le" doc="Returns the 8 bytes of `value` as a little-endian unsigned 64-bit integer." expression
+      param: param #392 7056:160:18-7069:160:31 name="value"
+        type: type-ref #391 7063:160:25-7069:160:31 name="UInt64"
+      result: type-ref #393 7074:160:36-7079:160:41 name="Bytes"
+      body: return-stmt #396 7082:160:44-7098:160:60 implicit
+        value: call #395 7082:160:44-7098:160:60 name="@4::bytes8_le" piped=false
+          arg: name-ref #394 7092:160:54-7097:160:59 name="value"
+    declaration: function-decl #405 7173:163:1-7242:164:1 name="@4::write_i64_be" doc="Returns the 8 bytes of `value` as a big-endian signed 64-bit integer." expression
+      param: param #399 7190:163:18-7200:163:28 name="value"
+        type: type-ref #398 7197:163:25-7200:163:28 name="Int"
+      result: type-ref #400 7205:163:33-7210:163:38 name="Bytes"
+      body: return-stmt #404 7213:163:41-7241:163:69 implicit
+        value: call #403 7213:163:41-7241:163:69 name="@4::bytes8_be" piped=false
+          arg: field-access #402 7223:163:51-7240:163:68 name="wrap_uint64"
+            target: name-ref #401 7223:163:51-7228:163:56 name="value"
+    declaration: function-decl #413 7319:166:1-7388:167:1 name="@4::write_i64_le" doc="Returns the 8 bytes of `value` as a little-endian signed 64-bit integer." expression
+      param: param #407 7336:166:18-7346:166:28 name="value"
+        type: type-ref #406 7343:166:25-7346:166:28 name="Int"
+      result: type-ref #408 7351:166:33-7356:166:38 name="Bytes"
+      body: return-stmt #412 7359:166:41-7387:166:69 implicit
+        value: call #411 7359:166:41-7387:166:69 name="@4::bytes8_le" piped=false
+          arg: field-access #410 7369:166:51-7386:166:68 name="wrap_uint64"
+            target: name-ref #409 7369:166:51-7374:166:56 name="value"
+    declaration: function-decl #422 7521:170:1-7595:171:1 name="@4::write_f32_be" doc="Returns the 4 bytes of `value` as a big-endian 32-bit IEEE 754 float. It never fails; every NaN gives the canonical\nNaN bits." expression
+      param: param #415 7538:170:18-7552:170:32 name="value"
+        type: type-ref #414 7545:170:25-7552:170:32 name="Float32"
+      result: type-ref #416 7557:170:37-7562:170:42 name="Bytes"
+      body: return-stmt #421 7565:170:45-7594:170:74 implicit
+        value: call #420 7565:170:45-7594:170:74 name="@4::bytes4_be" piped=false
+          arg: field-access #419 7575:170:55-7593:170:73 name="to_i"
+            target: field-access #418 7575:170:55-7588:170:68 name="to_bits"
+              target: name-ref #417 7575:170:55-7580:170:60 name="value"
+    declaration: function-decl #431 7731:174:1-7805:175:1 name="@4::write_f32_le" doc="Returns the 4 bytes of `value` as a little-endian 32-bit IEEE 754 float. It never fails; every NaN gives the\ncanonical NaN bits." expression
+      param: param #424 7748:174:18-7762:174:32 name="value"
+        type: type-ref #423 7755:174:25-7762:174:32 name="Float32"
+      result: type-ref #425 7767:174:37-7772:174:42 name="Bytes"
+      body: return-stmt #430 7775:174:45-7804:174:74 implicit
+        value: call #429 7775:174:45-7804:174:74 name="@4::bytes4_le" piped=false
+          arg: field-access #428 7785:174:55-7803:174:73 name="to_i"
+            target: field-access #427 7785:174:55-7798:174:68 name="to_bits"
+              target: name-ref #426 7785:174:55-7790:174:60 name="value"
+    declaration: function-decl #439 7938:178:1-8012:179:1 name="@4::write_f64_be" doc="Returns the 8 bytes of `value` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical\nNaN bits." expression
+      param: param #433 7955:178:18-7967:178:30 name="value"
+        type: type-ref #432 7962:178:25-7967:178:30 name="Float"
+      result: type-ref #434 7972:178:35-7977:178:40 name="Bytes"
+      body: return-stmt #438 7980:178:43-8011:178:74 implicit
+        value: call #437 7980:178:43-8011:178:74 name="@4::bytes8_be" piped=false
+          arg: call #436 7990:178:53-8010:178:73 name="Float.to_bits" piped=false
+            arg: name-ref #435 8004:178:67-8009:178:72 name="value"
+    declaration: function-decl #447 8148:182:1-8222:183:1 name="@4::write_f64_le" doc="Returns the 8 bytes of `value` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the\ncanonical NaN bits." expression
+      param: param #441 8165:182:18-8177:182:30 name="value"
+        type: type-ref #440 8172:182:25-8177:182:30 name="Float"
+      result: type-ref #442 8182:182:35-8187:182:40 name="Bytes"
+      body: return-stmt #446 8190:182:43-8221:182:74 implicit
+        value: call #445 8190:182:43-8221:182:74 name="@4::bytes8_le" piped=false
+          arg: call #444 8200:182:53-8220:182:73 name="Float.to_bits" piped=false
+            arg: name-ref #443 8214:182:67-8219:182:72 name="value"
+    declaration: function-decl #472 8366:186:1-8590:192:1 name="@4::frame" doc="Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more\nthan 4294967295 bytes."
+      param: param #449 8376:186:11-8390:186:25 name="payload"
+        type: type-ref #448 8385:186:20-8390:186:25 name="Bytes"
+      result: type-ref #451 8395:186:30-8408:186:43 name="Result"
+        arg: type-ref #450 8402:186:37-8407:186:42 name="Bytes"
+      body: if-stmt #464 8411:187:3-8546:190:1
+        branch: if-branch #463 8411:187:3-8540:189:1
+          condition: binary #455 8414:187:6-8439:187:31 op=greater op-span=8427:187:19-8428:187:20
+            left: field-access #453 8414:187:6-8426:187:18 name="size"
+              target: name-ref #452 8414:187:6-8421:187:13 name="payload"
+            right: literal #454 8429:187:21-8439:187:31 value=int:4294967295
+          body: return-stmt #462 8444:188:5-8540:189:1
+            value: call #461 8451:188:12-8539:188:100 name="error" piped=false
+              arg: interpolation #458 8457:188:18-8520:188:81
                 part: text "payload of "
-                part: field-access #453 8467:185:32-8479:185:44 name="size"
-                  target: name-ref #452 8467:185:32-8474:185:39 name="payload"
+                part: field-access #457 8471:188:32-8483:188:44 name="size"
+                  target: name-ref #456 8471:188:32-8478:188:39 name="payload"
                 part: text " bytes does not fit in a u32 length"
-              arg: named-arg #456 8518:185:83-8534:185:99 name="kind"
-                value: literal #455 8524:185:89-8534:185:99 value=string:"argument"
-      body: return-stmt #467 8544:187:3-8581:187:40 implicit
-        value: call #466 8544:187:3-8581:187:40 name="ok" piped=false
-          arg: binary #465 8547:187:6-8580:187:39 op=plus op-span=8571:187:30-8572:187:31
-            left: call #463 8547:187:6-8570:187:29 name="@4::bytes4_be" piped=false
-              arg: field-access #462 8557:187:16-8569:187:28 name="size"
-                target: name-ref #461 8557:187:16-8564:187:23 name="payload"
-            right: name-ref #464 8573:187:32-8580:187:39 name="payload"
-    declaration: function-decl #509 8786:192:1-9109:198:1 name="@4::read_frame_length" doc="Reads the 4-byte big-endian length of a frame at `offset`. Returns an error when `max` is negative, the bytes are\noutside `data`, or the length is above `max`. Read the body yourself after it."
-      param: param #470 8808:192:23-8819:192:34 name="data"
-        type: type-ref #469 8814:192:29-8819:192:34 name="Bytes"
-      param: param #472 8821:192:36-8832:192:47 name="offset"
-        type: type-ref #471 8829:192:44-8832:192:47 name="Int"
-      param: param #474 8834:192:49-8842:192:57 name="max"
-        type: type-ref #473 8839:192:54-8842:192:57 name="Int"
-      result: type-ref #476 8847:192:62-8858:192:73 name="Result"
-        arg: type-ref #475 8854:192:69-8857:192:72 name="Int"
-      body: if-stmt #487 8861:193:3-8937:194:1 guard
-        branch: if-branch #486 8861:193:3-8936:193:78
-          condition: binary #485 8929:193:71-8936:193:78 op=less op-span=8933:193:75-8934:193:76
-            left: name-ref #483 8929:193:71-8932:193:74 name="max"
-            right: literal #484 8935:193:77-8936:193:78 value=int:0
-          body: return-stmt #482 8861:193:3-8925:193:67
-            value: call #481 8868:193:10-8925:193:67 name="error" piped=false
-              arg: interpolation #478 8874:193:16-8906:193:48
+              arg: named-arg #460 8522:188:83-8538:188:99 name="kind"
+                value: literal #459 8528:188:89-8538:188:99 value=string:"argument"
+      body: return-stmt #471 8548:190:3-8585:190:40 implicit
+        value: call #470 8548:190:3-8585:190:40 name="ok" piped=false
+          arg: binary #469 8551:190:6-8584:190:39 op=plus op-span=8575:190:30-8576:190:31
+            left: call #467 8551:190:6-8574:190:29 name="@4::bytes4_be" piped=false
+              arg: field-access #466 8561:190:16-8573:190:28 name="size"
+                target: name-ref #465 8561:190:16-8568:190:23 name="payload"
+            right: name-ref #468 8577:190:32-8584:190:39 name="payload"
+    declaration: function-decl #513 8790:195:1-9113:201:1 name="@4::read_frame_length" doc="Reads the 4-byte big-endian length of a frame at `offset`. Returns an error when `max` is negative, the bytes are\noutside `data`, or the length is above `max`. Read the body yourself after it."
+      param: param #474 8812:195:23-8823:195:34 name="data"
+        type: type-ref #473 8818:195:29-8823:195:34 name="Bytes"
+      param: param #476 8825:195:36-8836:195:47 name="offset"
+        type: type-ref #475 8833:195:44-8836:195:47 name="Int"
+      param: param #478 8838:195:49-8846:195:57 name="max"
+        type: type-ref #477 8843:195:54-8846:195:57 name="Int"
+      result: type-ref #480 8851:195:62-8862:195:73 name="Result"
+        arg: type-ref #479 8858:195:69-8861:195:72 name="Int"
+      body: if-stmt #491 8865:196:3-8941:197:1 guard
+        branch: if-branch #490 8865:196:3-8940:196:78
+          condition: binary #489 8933:196:71-8940:196:78 op=less op-span=8937:196:75-8938:196:76
+            left: name-ref #487 8933:196:71-8936:196:74 name="max"
+            right: literal #488 8939:196:77-8940:196:78 value=int:0
+          body: return-stmt #486 8865:196:3-8929:196:67
+            value: call #485 8872:196:10-8929:196:67 name="error" piped=false
+              arg: interpolation #482 8878:196:16-8910:196:48
                 part: text "frame limit "
-                part: name-ref #477 8889:193:31-8892:193:34 name="max"
+                part: name-ref #481 8893:196:31-8896:196:34 name="max"
                 part: text " is negative"
-              arg: named-arg #480 8908:193:50-8924:193:66 name="kind"
-                value: literal #479 8914:193:56-8924:193:66 value=string:"argument"
-      body: binding #493 8939:194:3-8983:195:1 name="length"
-        value: try-expr #492 8948:194:12-8982:194:46
-          operand: call #491 8952:194:16-8982:194:46 name="@4::load32_be" piped=false
-            arg: name-ref #488 8962:194:26-8966:194:30 name="data"
-            arg: name-ref #489 8968:194:32-8974:194:38 name="offset"
-            arg: literal #490 8976:194:40-8981:194:45 value=string:"u32"
-      body: if-stmt #505 8985:195:3-9092:196:1 guard
-        branch: if-branch #504 8985:195:3-9091:195:109
-          condition: binary #503 9079:195:97-9091:195:109 op=greater op-span=9086:195:104-9087:195:105
-            left: name-ref #501 9079:195:97-9085:195:103 name="length"
-            right: name-ref #502 9088:195:106-9091:195:109 name="max"
-          body: return-stmt #500 8985:195:3-9075:195:93
-            value: call #499 8992:195:10-9075:195:93 name="error" piped=false
-              arg: interpolation #496 8998:195:16-9048:195:66
+              arg: named-arg #484 8912:196:50-8928:196:66 name="kind"
+                value: literal #483 8918:196:56-8928:196:66 value=string:"argument"
+      body: binding #497 8943:197:3-8987:198:1 name="length"
+        value: try-expr #496 8952:197:12-8986:197:46
+          operand: call #495 8956:197:16-8986:197:46 name="@4::load32_be" piped=false
+            arg: name-ref #492 8966:197:26-8970:197:30 name="data"
+            arg: name-ref #493 8972:197:32-8978:197:38 name="offset"
+            arg: literal #494 8980:197:40-8985:197:45 value=string:"u32"
+      body: if-stmt #509 8989:198:3-9096:199:1 guard
+        branch: if-branch #508 8989:198:3-9095:198:109
+          condition: binary #507 9083:198:97-9095:198:109 op=greater op-span=9090:198:104-9091:198:105
+            left: name-ref #505 9083:198:97-9089:198:103 name="length"
+            right: name-ref #506 9092:198:106-9095:198:109 name="max"
+          body: return-stmt #504 8989:198:3-9079:198:93
+            value: call #503 8996:198:10-9079:198:93 name="error" piped=false
+              arg: interpolation #500 9002:198:16-9052:198:66
                 part: text "frame length "
-                part: name-ref #494 9014:195:32-9020:195:38 name="length"
+                part: name-ref #498 9018:198:32-9024:198:38 name="length"
                 part: text " is above the limit "
-                part: name-ref #495 9043:195:61-9046:195:64 name="max"
-              arg: named-arg #498 9050:195:68-9074:195:92 name="kind"
-                value: literal #497 9056:195:74-9074:195:92 value=string:"binary.too_large"
-      body: return-stmt #508 9094:196:3-9104:196:13 implicit
-        value: call #507 9094:196:3-9104:196:13 name="ok" piped=false
-          arg: name-ref #506 9097:196:6-9103:196:12 name="length"
-    declaration: function-decl #543 9119:201:1-9359:207:1 name="@4::window"
-      param: param #511 9130:201:12-9141:201:23 name="data"
-        type: type-ref #510 9136:201:18-9141:201:23 name="Bytes"
-      param: param #513 9143:201:25-9154:201:36 name="offset"
-        type: type-ref #512 9151:201:33-9154:201:36 name="Int"
-      param: param #515 9156:201:38-9162:201:44 name="n"
-        type: type-ref #514 9159:201:41-9162:201:44 name="Int"
-      param: param #517 9164:201:46-9176:201:58 name="type"
-        type: type-ref #516 9170:201:52-9176:201:58 name="String"
-      result: type-ref #519 9181:201:63-9193:201:75 name="Result"
-        arg: type-ref #518 9188:201:70-9192:201:74 name="Void"
-      body: if-stmt #540 9196:202:3-9348:205:1
-        branch: if-branch #539 9196:202:3-9342:204:1
-          condition: binary #529 9199:202:6-9235:202:42 op=or op-span=9210:202:17-9212:202:19
-            left: binary #522 9199:202:6-9209:202:16 op=less op-span=9206:202:13-9207:202:14
-              left: name-ref #520 9199:202:6-9205:202:12 name="offset"
-              right: literal #521 9208:202:15-9209:202:16 value=int:0
-            right: binary #528 9213:202:20-9235:202:42 op=greater op-span=9220:202:27-9221:202:28
-              left: name-ref #523 9213:202:20-9219:202:26 name="offset"
-              right: binary #527 9222:202:29-9235:202:42 op=minus op-span=9232:202:39-9233:202:40
-                left: field-access #525 9222:202:29-9231:202:38 name="size"
-                  target: name-ref #524 9222:202:29-9226:202:33 name="data"
-                right: name-ref #526 9234:202:41-9235:202:42 name="n"
-          body: return-stmt #538 9240:203:5-9342:204:1
-            value: call #537 9247:203:12-9341:203:106 name="error" piped=false
-              arg: interpolation #534 9253:203:18-9322:203:87
-                part: name-ref #530 9256:203:21-9260:203:25 name="type"
+                part: name-ref #499 9047:198:61-9050:198:64 name="max"
+              arg: named-arg #502 9054:198:68-9078:198:92 name="kind"
+                value: literal #501 9060:198:74-9078:198:92 value=string:"binary.too_large"
+      body: return-stmt #512 9098:199:3-9108:199:13 implicit
+        value: call #511 9098:199:3-9108:199:13 name="ok" piped=false
+          arg: name-ref #510 9101:199:6-9107:199:12 name="length"
+    declaration: function-decl #547 9123:204:1-9363:210:1 name="@4::window"
+      param: param #515 9134:204:12-9145:204:23 name="data"
+        type: type-ref #514 9140:204:18-9145:204:23 name="Bytes"
+      param: param #517 9147:204:25-9158:204:36 name="offset"
+        type: type-ref #516 9155:204:33-9158:204:36 name="Int"
+      param: param #519 9160:204:38-9166:204:44 name="n"
+        type: type-ref #518 9163:204:41-9166:204:44 name="Int"
+      param: param #521 9168:204:46-9180:204:58 name="type"
+        type: type-ref #520 9174:204:52-9180:204:58 name="String"
+      result: type-ref #523 9185:204:63-9197:204:75 name="Result"
+        arg: type-ref #522 9192:204:70-9196:204:74 name="Void"
+      body: if-stmt #544 9200:205:3-9352:208:1
+        branch: if-branch #543 9200:205:3-9346:207:1
+          condition: binary #533 9203:205:6-9239:205:42 op=or op-span=9214:205:17-9216:205:19
+            left: binary #526 9203:205:6-9213:205:16 op=less op-span=9210:205:13-9211:205:14
+              left: name-ref #524 9203:205:6-9209:205:12 name="offset"
+              right: literal #525 9212:205:15-9213:205:16 value=int:0
+            right: binary #532 9217:205:20-9239:205:42 op=greater op-span=9224:205:27-9225:205:28
+              left: name-ref #527 9217:205:20-9223:205:26 name="offset"
+              right: binary #531 9226:205:29-9239:205:42 op=minus op-span=9236:205:39-9237:205:40
+                left: field-access #529 9226:205:29-9235:205:38 name="size"
+                  target: name-ref #528 9226:205:29-9230:205:33 name="data"
+                right: name-ref #530 9238:205:41-9239:205:42 name="n"
+          body: return-stmt #542 9244:206:5-9346:207:1
+            value: call #541 9251:206:12-9345:206:106 name="error" piped=false
+              arg: interpolation #538 9257:206:18-9326:206:87
+                part: name-ref #534 9260:206:21-9264:206:25 name="type"
                 part: text " at offset "
-                part: name-ref #531 9274:203:39-9280:203:45 name="offset"
+                part: name-ref #535 9278:206:39-9284:206:45 name="offset"
                 part: text " is outside bytes of length "
-                part: field-access #533 9311:203:76-9320:203:85 name="size"
-                  target: name-ref #532 9311:203:76-9315:203:80 name="data"
-              arg: named-arg #536 9324:203:89-9340:203:105 name="kind"
-                value: literal #535 9330:203:95-9340:203:105 value=string:"argument"
-      body: return-stmt #542 9350:205:3-9354:205:7 implicit
-        value: call #541 9350:205:3-9354:205:7 name="ok" piped=false
-    declaration: function-decl #566 9360:208:1-9492:213:1 name="@4::load8"
-      param: param #545 9370:208:11-9381:208:22 name="data"
-        type: type-ref #544 9376:208:17-9381:208:22 name="Bytes"
-      param: param #547 9383:208:24-9394:208:35 name="offset"
-        type: type-ref #546 9391:208:32-9394:208:35 name="Int"
-      param: param #549 9396:208:37-9408:208:49 name="type"
-        type: type-ref #548 9402:208:43-9408:208:49 name="String"
-      result: type-ref #551 9413:208:54-9424:208:65 name="Result"
-        arg: type-ref #550 9420:208:61-9423:208:64 name="Int"
-      body: expr-stmt #558 9427:209:3-9461:210:1
-        value: try-expr #557 9427:209:3-9460:209:36
-          operand: call #556 9431:209:7-9460:209:36 name="@4::window" piped=false
-            arg: name-ref #552 9438:209:14-9442:209:18 name="data"
-            arg: name-ref #553 9444:209:20-9450:209:26 name="offset"
-            arg: literal #554 9452:209:28-9453:209:29 value=int:1
-            arg: name-ref #555 9455:209:31-9459:209:35 name="type"
-      body: binding #562 9463:210:3-9480:211:1 name="a"
-        value: index-access #561 9467:210:7-9479:210:19
-          target: name-ref #559 9467:210:7-9471:210:11 name="data"
-          index: name-ref #560 9472:210:12-9478:210:18 name="offset"
-      body: return-stmt #565 9482:211:3-9487:211:8 implicit
-        value: call #564 9482:211:3-9487:211:8 name="ok" piped=false
-          arg: name-ref #563 9485:211:6-9486:211:7 name="a"
-    declaration: function-decl #599 9493:214:1-9676:220:1 name="@4::load16_be"
-      param: param #568 9507:214:15-9518:214:26 name="data"
-        type: type-ref #567 9513:214:21-9518:214:26 name="Bytes"
-      param: param #570 9520:214:28-9531:214:39 name="offset"
-        type: type-ref #569 9528:214:36-9531:214:39 name="Int"
-      param: param #572 9533:214:41-9545:214:53 name="type"
-        type: type-ref #571 9539:214:47-9545:214:53 name="String"
-      result: type-ref #574 9550:214:58-9561:214:69 name="Result"
-        arg: type-ref #573 9557:214:65-9560:214:68 name="Int"
-      body: expr-stmt #581 9564:215:3-9598:216:1
-        value: try-expr #580 9564:215:3-9597:215:36
-          operand: call #579 9568:215:7-9597:215:36 name="@4::window" piped=false
-            arg: name-ref #575 9575:215:14-9579:215:18 name="data"
-            arg: name-ref #576 9581:215:20-9587:215:26 name="offset"
-            arg: literal #577 9589:215:28-9590:215:29 value=int:2
-            arg: name-ref #578 9592:215:31-9596:215:35 name="type"
-      body: binding #585 9600:216:3-9617:217:1 name="a"
-        value: index-access #584 9604:216:7-9616:216:19
-          target: name-ref #582 9604:216:7-9608:216:11 name="data"
-          index: name-ref #583 9609:216:12-9615:216:18 name="offset"
-      body: binding #591 9619:217:3-9640:218:1 name="b"
-        value: index-access #590 9623:217:7-9639:217:23
-          target: name-ref #586 9623:217:7-9627:217:11 name="data"
-          index: binary #589 9628:217:12-9638:217:22 op=plus op-span=9635:217:19-9636:217:20
-            left: name-ref #587 9628:217:12-9634:217:18 name="offset"
-            right: literal #588 9637:217:21-9638:217:22 value=int:1
-      body: return-stmt #598 9642:218:3-9671:218:32 implicit
-        value: call #597 9642:218:3-9671:218:32 name="ok" piped=false
-          arg: method-call #596 9645:218:6-9670:218:31 name="bit_or"
-            target: method-call #594 9645:218:6-9660:218:21 name="shift_left"
-              target: name-ref #592 9645:218:6-9646:218:7 name="a"
-              arg: literal #593 9658:218:19-9659:218:20 value=int:8
-            arg: name-ref #595 9668:218:29-9669:218:30 name="b"
-    declaration: function-decl #632 9677:221:1-9860:227:1 name="@4::load16_le"
-      param: param #601 9691:221:15-9702:221:26 name="data"
-        type: type-ref #600 9697:221:21-9702:221:26 name="Bytes"
-      param: param #603 9704:221:28-9715:221:39 name="offset"
-        type: type-ref #602 9712:221:36-9715:221:39 name="Int"
-      param: param #605 9717:221:41-9729:221:53 name="type"
-        type: type-ref #604 9723:221:47-9729:221:53 name="String"
-      result: type-ref #607 9734:221:58-9745:221:69 name="Result"
-        arg: type-ref #606 9741:221:65-9744:221:68 name="Int"
-      body: expr-stmt #614 9748:222:3-9782:223:1
-        value: try-expr #613 9748:222:3-9781:222:36
-          operand: call #612 9752:222:7-9781:222:36 name="@4::window" piped=false
-            arg: name-ref #608 9759:222:14-9763:222:18 name="data"
-            arg: name-ref #609 9765:222:20-9771:222:26 name="offset"
-            arg: literal #610 9773:222:28-9774:222:29 value=int:2
-            arg: name-ref #611 9776:222:31-9780:222:35 name="type"
-      body: binding #618 9784:223:3-9801:224:1 name="a"
-        value: index-access #617 9788:223:7-9800:223:19
-          target: name-ref #615 9788:223:7-9792:223:11 name="data"
-          index: name-ref #616 9793:223:12-9799:223:18 name="offset"
-      body: binding #624 9803:224:3-9824:225:1 name="b"
-        value: index-access #623 9807:224:7-9823:224:23
-          target: name-ref #619 9807:224:7-9811:224:11 name="data"
-          index: binary #622 9812:224:12-9822:224:22 op=plus op-span=9819:224:19-9820:224:20
-            left: name-ref #620 9812:224:12-9818:224:18 name="offset"
-            right: literal #621 9821:224:21-9822:224:22 value=int:1
-      body: return-stmt #631 9826:225:3-9855:225:32 implicit
-        value: call #630 9826:225:3-9855:225:32 name="ok" piped=false
-          arg: method-call #629 9829:225:6-9854:225:31 name="bit_or"
-            target: method-call #627 9829:225:6-9844:225:21 name="shift_left"
-              target: name-ref #625 9829:225:6-9830:225:7 name="b"
-              arg: literal #626 9842:225:19-9843:225:20 value=int:8
-            arg: name-ref #628 9852:225:29-9853:225:30 name="a"
-    declaration: function-decl #685 9861:228:1-10140:236:1 name="@4::load32_be"
-      param: param #634 9875:228:15-9886:228:26 name="data"
-        type: type-ref #633 9881:228:21-9886:228:26 name="Bytes"
-      param: param #636 9888:228:28-9899:228:39 name="offset"
-        type: type-ref #635 9896:228:36-9899:228:39 name="Int"
-      param: param #638 9901:228:41-9913:228:53 name="type"
-        type: type-ref #637 9907:228:47-9913:228:53 name="String"
-      result: type-ref #640 9918:228:58-9929:228:69 name="Result"
-        arg: type-ref #639 9925:228:65-9928:228:68 name="Int"
-      body: expr-stmt #647 9932:229:3-9966:230:1
-        value: try-expr #646 9932:229:3-9965:229:36
-          operand: call #645 9936:229:7-9965:229:36 name="@4::window" piped=false
-            arg: name-ref #641 9943:229:14-9947:229:18 name="data"
-            arg: name-ref #642 9949:229:20-9955:229:26 name="offset"
-            arg: literal #643 9957:229:28-9958:229:29 value=int:4
-            arg: name-ref #644 9960:229:31-9964:229:35 name="type"
-      body: binding #651 9968:230:3-9985:231:1 name="a"
-        value: index-access #650 9972:230:7-9984:230:19
-          target: name-ref #648 9972:230:7-9976:230:11 name="data"
-          index: name-ref #649 9977:230:12-9983:230:18 name="offset"
-      body: binding #657 9987:231:3-10008:232:1 name="b"
-        value: index-access #656 9991:231:7-10007:231:23
-          target: name-ref #652 9991:231:7-9995:231:11 name="data"
-          index: binary #655 9996:231:12-10006:231:22 op=plus op-span=10003:231:19-10004:231:20
-            left: name-ref #653 9996:231:12-10002:231:18 name="offset"
-            right: literal #654 10005:231:21-10006:231:22 value=int:1
-      body: binding #663 10010:232:3-10031:233:1 name="c"
-        value: index-access #662 10014:232:7-10030:232:23
-          target: name-ref #658 10014:232:7-10018:232:11 name="data"
-          index: binary #661 10019:232:12-10029:232:22 op=plus op-span=10026:232:19-10027:232:20
-            left: name-ref #659 10019:232:12-10025:232:18 name="offset"
-            right: literal #660 10028:232:21-10029:232:22 value=int:2
-      body: binding #669 10033:233:3-10054:234:1 name="d"
-        value: index-access #668 10037:233:7-10053:233:23
-          target: name-ref #664 10037:233:7-10041:233:11 name="data"
-          index: binary #667 10042:233:12-10052:233:22 op=plus op-span=10049:233:19-10050:233:20
-            left: name-ref #665 10042:233:12-10048:233:18 name="offset"
-            right: literal #666 10051:233:21-10052:233:22 value=int:3
-      body: return-stmt #684 10056:234:3-10135:234:82 implicit
-        value: call #683 10056:234:3-10135:234:82 name="ok" piped=false
-          arg: method-call #682 10059:234:6-10134:234:81 name="bit_or"
-            target: method-call #680 10059:234:6-10124:234:71 name="bit_or"
-              target: method-call #676 10059:234:6-10100:234:47 name="bit_or"
-                target: method-call #672 10059:234:6-10075:234:22 name="shift_left"
-                  target: name-ref #670 10059:234:6-10060:234:7 name="a"
-                  arg: literal #671 10072:234:19-10074:234:21 value=int:24
-                arg: method-call #675 10083:234:30-10099:234:46 name="shift_left"
-                  target: name-ref #673 10083:234:30-10084:234:31 name="b"
-                  arg: literal #674 10096:234:43-10098:234:45 value=int:16
-              arg: method-call #679 10108:234:55-10123:234:70 name="shift_left"
-                target: name-ref #677 10108:234:55-10109:234:56 name="c"
-                arg: literal #678 10121:234:68-10122:234:69 value=int:8
-            arg: name-ref #681 10132:234:79-10133:234:80 name="d"
-    declaration: function-decl #738 10141:237:1-10420:245:1 name="@4::load32_le"
-      param: param #687 10155:237:15-10166:237:26 name="data"
-        type: type-ref #686 10161:237:21-10166:237:26 name="Bytes"
-      param: param #689 10168:237:28-10179:237:39 name="offset"
-        type: type-ref #688 10176:237:36-10179:237:39 name="Int"
-      param: param #691 10181:237:41-10193:237:53 name="type"
-        type: type-ref #690 10187:237:47-10193:237:53 name="String"
-      result: type-ref #693 10198:237:58-10209:237:69 name="Result"
-        arg: type-ref #692 10205:237:65-10208:237:68 name="Int"
-      body: expr-stmt #700 10212:238:3-10246:239:1
-        value: try-expr #699 10212:238:3-10245:238:36
-          operand: call #698 10216:238:7-10245:238:36 name="@4::window" piped=false
-            arg: name-ref #694 10223:238:14-10227:238:18 name="data"
-            arg: name-ref #695 10229:238:20-10235:238:26 name="offset"
-            arg: literal #696 10237:238:28-10238:238:29 value=int:4
-            arg: name-ref #697 10240:238:31-10244:238:35 name="type"
-      body: binding #704 10248:239:3-10265:240:1 name="a"
-        value: index-access #703 10252:239:7-10264:239:19
-          target: name-ref #701 10252:239:7-10256:239:11 name="data"
-          index: name-ref #702 10257:239:12-10263:239:18 name="offset"
-      body: binding #710 10267:240:3-10288:241:1 name="b"
-        value: index-access #709 10271:240:7-10287:240:23
-          target: name-ref #705 10271:240:7-10275:240:11 name="data"
-          index: binary #708 10276:240:12-10286:240:22 op=plus op-span=10283:240:19-10284:240:20
-            left: name-ref #706 10276:240:12-10282:240:18 name="offset"
-            right: literal #707 10285:240:21-10286:240:22 value=int:1
-      body: binding #716 10290:241:3-10311:242:1 name="c"
-        value: index-access #715 10294:241:7-10310:241:23
-          target: name-ref #711 10294:241:7-10298:241:11 name="data"
-          index: binary #714 10299:241:12-10309:241:22 op=plus op-span=10306:241:19-10307:241:20
-            left: name-ref #712 10299:241:12-10305:241:18 name="offset"
-            right: literal #713 10308:241:21-10309:241:22 value=int:2
-      body: binding #722 10313:242:3-10334:243:1 name="d"
-        value: index-access #721 10317:242:7-10333:242:23
-          target: name-ref #717 10317:242:7-10321:242:11 name="data"
-          index: binary #720 10322:242:12-10332:242:22 op=plus op-span=10329:242:19-10330:242:20
-            left: name-ref #718 10322:242:12-10328:242:18 name="offset"
-            right: literal #719 10331:242:21-10332:242:22 value=int:3
-      body: return-stmt #737 10336:243:3-10415:243:82 implicit
-        value: call #736 10336:243:3-10415:243:82 name="ok" piped=false
-          arg: method-call #735 10339:243:6-10414:243:81 name="bit_or"
-            target: method-call #733 10339:243:6-10404:243:71 name="bit_or"
-              target: method-call #729 10339:243:6-10380:243:47 name="bit_or"
-                target: method-call #725 10339:243:6-10355:243:22 name="shift_left"
-                  target: name-ref #723 10339:243:6-10340:243:7 name="d"
-                  arg: literal #724 10352:243:19-10354:243:21 value=int:24
-                arg: method-call #728 10363:243:30-10379:243:46 name="shift_left"
-                  target: name-ref #726 10363:243:30-10364:243:31 name="c"
-                  arg: literal #727 10376:243:43-10378:243:45 value=int:16
-              arg: method-call #732 10388:243:55-10403:243:70 name="shift_left"
-                target: name-ref #730 10388:243:55-10389:243:56 name="b"
-                arg: literal #731 10401:243:68-10402:243:69 value=int:8
-            arg: name-ref #734 10412:243:79-10413:243:80 name="a"
-    declaration: function-decl #835 10421:246:1-10917:260:1 name="@4::load64_be"
-      param: param #740 10435:246:15-10446:246:26 name="data"
-        type: type-ref #739 10441:246:21-10446:246:26 name="Bytes"
-      param: param #742 10448:246:28-10459:246:39 name="offset"
-        type: type-ref #741 10456:246:36-10459:246:39 name="Int"
-      param: param #744 10461:246:41-10473:246:53 name="type"
-        type: type-ref #743 10467:246:47-10473:246:53 name="String"
-      result: type-ref #746 10478:246:58-10489:246:69 name="Result"
-        arg: type-ref #745 10485:246:65-10488:246:68 name="Int"
-      body: expr-stmt #753 10492:247:3-10526:248:1
-        value: try-expr #752 10492:247:3-10525:247:36
-          operand: call #751 10496:247:7-10525:247:36 name="@4::window" piped=false
-            arg: name-ref #747 10503:247:14-10507:247:18 name="data"
-            arg: name-ref #748 10509:247:20-10515:247:26 name="offset"
-            arg: literal #749 10517:247:28-10518:247:29 value=int:8
-            arg: name-ref #750 10520:247:31-10524:247:35 name="type"
-      body: binding #757 10528:248:3-10545:249:1 name="a"
-        value: index-access #756 10532:248:7-10544:248:19
-          target: name-ref #754 10532:248:7-10536:248:11 name="data"
-          index: name-ref #755 10537:248:12-10543:248:18 name="offset"
-      body: binding #763 10547:249:3-10568:250:1 name="b"
-        value: index-access #762 10551:249:7-10567:249:23
-          target: name-ref #758 10551:249:7-10555:249:11 name="data"
-          index: binary #761 10556:249:12-10566:249:22 op=plus op-span=10563:249:19-10564:249:20
-            left: name-ref #759 10556:249:12-10562:249:18 name="offset"
-            right: literal #760 10565:249:21-10566:249:22 value=int:1
-      body: binding #769 10570:250:3-10591:251:1 name="c"
-        value: index-access #768 10574:250:7-10590:250:23
-          target: name-ref #764 10574:250:7-10578:250:11 name="data"
-          index: binary #767 10579:250:12-10589:250:22 op=plus op-span=10586:250:19-10587:250:20
-            left: name-ref #765 10579:250:12-10585:250:18 name="offset"
-            right: literal #766 10588:250:21-10589:250:22 value=int:2
-      body: binding #775 10593:251:3-10614:252:1 name="d"
-        value: index-access #774 10597:251:7-10613:251:23
-          target: name-ref #770 10597:251:7-10601:251:11 name="data"
-          index: binary #773 10602:251:12-10612:251:22 op=plus op-span=10609:251:19-10610:251:20
-            left: name-ref #771 10602:251:12-10608:251:18 name="offset"
-            right: literal #772 10611:251:21-10612:251:22 value=int:3
-      body: binding #781 10616:252:3-10637:253:1 name="e"
-        value: index-access #780 10620:252:7-10636:252:23
-          target: name-ref #776 10620:252:7-10624:252:11 name="data"
-          index: binary #779 10625:252:12-10635:252:22 op=plus op-span=10632:252:19-10633:252:20
-            left: name-ref #777 10625:252:12-10631:252:18 name="offset"
-            right: literal #778 10634:252:21-10635:252:22 value=int:4
-      body: binding #787 10639:253:3-10660:254:1 name="f"
-        value: index-access #786 10643:253:7-10659:253:23
-          target: name-ref #782 10643:253:7-10647:253:11 name="data"
-          index: binary #785 10648:253:12-10658:253:22 op=plus op-span=10655:253:19-10656:253:20
-            left: name-ref #783 10648:253:12-10654:253:18 name="offset"
-            right: literal #784 10657:253:21-10658:253:22 value=int:5
-      body: binding #793 10662:254:3-10683:255:1 name="g"
-        value: index-access #792 10666:254:7-10682:254:23
-          target: name-ref #788 10666:254:7-10670:254:11 name="data"
-          index: binary #791 10671:254:12-10681:254:22 op=plus op-span=10678:254:19-10679:254:20
-            left: name-ref #789 10671:254:12-10677:254:18 name="offset"
-            right: literal #790 10680:254:21-10681:254:22 value=int:6
-      body: binding #799 10685:255:3-10706:256:1 name="h"
-        value: index-access #798 10689:255:7-10705:255:23
-          target: name-ref #794 10689:255:7-10693:255:11 name="data"
-          index: binary #797 10694:255:12-10704:255:22 op=plus op-span=10701:255:19-10702:255:20
-            left: name-ref #795 10694:255:12-10700:255:18 name="offset"
-            right: literal #796 10703:255:21-10704:255:22 value=int:7
-      body: binding #813 10708:256:3-10791:257:1 name="high"
-        value: method-call #812 10715:256:10-10790:256:85 name="bit_or"
-          target: method-call #810 10715:256:10-10780:256:75 name="bit_or"
-            target: method-call #806 10715:256:10-10756:256:51 name="bit_or"
-              target: method-call #802 10715:256:10-10731:256:26 name="shift_left"
-                target: name-ref #800 10715:256:10-10716:256:11 name="a"
-                arg: literal #801 10728:256:23-10730:256:25 value=int:24
-              arg: method-call #805 10739:256:34-10755:256:50 name="shift_left"
-                target: name-ref #803 10739:256:34-10740:256:35 name="b"
-                arg: literal #804 10752:256:47-10754:256:49 value=int:16
-            arg: method-call #809 10764:256:59-10779:256:74 name="shift_left"
-              target: name-ref #807 10764:256:59-10765:256:60 name="c"
-              arg: literal #808 10777:256:72-10778:256:73 value=int:8
-          arg: name-ref #811 10788:256:83-10789:256:84 name="d"
-      body: binding #827 10793:257:3-10875:258:1 name="low"
-        value: method-call #826 10799:257:9-10874:257:84 name="bit_or"
-          target: method-call #824 10799:257:9-10864:257:74 name="bit_or"
-            target: method-call #820 10799:257:9-10840:257:50 name="bit_or"
-              target: method-call #816 10799:257:9-10815:257:25 name="shift_left"
-                target: name-ref #814 10799:257:9-10800:257:10 name="e"
-                arg: literal #815 10812:257:22-10814:257:24 value=int:24
-              arg: method-call #819 10823:257:33-10839:257:49 name="shift_left"
-                target: name-ref #817 10823:257:33-10824:257:34 name="f"
-                arg: literal #818 10836:257:46-10838:257:48 value=int:16
-            arg: method-call #823 10848:257:58-10863:257:73 name="shift_left"
-              target: name-ref #821 10848:257:58-10849:257:59 name="g"
-              arg: literal #822 10861:257:71-10862:257:72 value=int:8
-          arg: name-ref #825 10872:257:82-10873:257:83 name="h"
-      body: return-stmt #834 10877:258:3-10912:258:38 implicit
-        value: call #833 10877:258:3-10912:258:38 name="ok" piped=false
-          arg: method-call #832 10880:258:6-10911:258:37 name="bit_or"
-            target: method-call #830 10880:258:6-10899:258:25 name="shift_left"
-              target: name-ref #828 10880:258:6-10884:258:10 name="high"
-              arg: literal #829 10896:258:22-10898:258:24 value=int:32
-            arg: name-ref #831 10907:258:33-10910:258:36 name="low"
-    declaration: function-decl #932 10918:261:1-11414:275:1 name="@4::load64_le"
-      param: param #837 10932:261:15-10943:261:26 name="data"
-        type: type-ref #836 10938:261:21-10943:261:26 name="Bytes"
-      param: param #839 10945:261:28-10956:261:39 name="offset"
-        type: type-ref #838 10953:261:36-10956:261:39 name="Int"
-      param: param #841 10958:261:41-10970:261:53 name="type"
-        type: type-ref #840 10964:261:47-10970:261:53 name="String"
-      result: type-ref #843 10975:261:58-10986:261:69 name="Result"
-        arg: type-ref #842 10982:261:65-10985:261:68 name="Int"
-      body: expr-stmt #850 10989:262:3-11023:263:1
-        value: try-expr #849 10989:262:3-11022:262:36
-          operand: call #848 10993:262:7-11022:262:36 name="@4::window" piped=false
-            arg: name-ref #844 11000:262:14-11004:262:18 name="data"
-            arg: name-ref #845 11006:262:20-11012:262:26 name="offset"
-            arg: literal #846 11014:262:28-11015:262:29 value=int:8
-            arg: name-ref #847 11017:262:31-11021:262:35 name="type"
-      body: binding #854 11025:263:3-11042:264:1 name="a"
-        value: index-access #853 11029:263:7-11041:263:19
-          target: name-ref #851 11029:263:7-11033:263:11 name="data"
-          index: name-ref #852 11034:263:12-11040:263:18 name="offset"
-      body: binding #860 11044:264:3-11065:265:1 name="b"
-        value: index-access #859 11048:264:7-11064:264:23
-          target: name-ref #855 11048:264:7-11052:264:11 name="data"
-          index: binary #858 11053:264:12-11063:264:22 op=plus op-span=11060:264:19-11061:264:20
-            left: name-ref #856 11053:264:12-11059:264:18 name="offset"
-            right: literal #857 11062:264:21-11063:264:22 value=int:1
-      body: binding #866 11067:265:3-11088:266:1 name="c"
-        value: index-access #865 11071:265:7-11087:265:23
-          target: name-ref #861 11071:265:7-11075:265:11 name="data"
-          index: binary #864 11076:265:12-11086:265:22 op=plus op-span=11083:265:19-11084:265:20
-            left: name-ref #862 11076:265:12-11082:265:18 name="offset"
-            right: literal #863 11085:265:21-11086:265:22 value=int:2
-      body: binding #872 11090:266:3-11111:267:1 name="d"
-        value: index-access #871 11094:266:7-11110:266:23
-          target: name-ref #867 11094:266:7-11098:266:11 name="data"
-          index: binary #870 11099:266:12-11109:266:22 op=plus op-span=11106:266:19-11107:266:20
-            left: name-ref #868 11099:266:12-11105:266:18 name="offset"
-            right: literal #869 11108:266:21-11109:266:22 value=int:3
-      body: binding #878 11113:267:3-11134:268:1 name="e"
-        value: index-access #877 11117:267:7-11133:267:23
-          target: name-ref #873 11117:267:7-11121:267:11 name="data"
-          index: binary #876 11122:267:12-11132:267:22 op=plus op-span=11129:267:19-11130:267:20
-            left: name-ref #874 11122:267:12-11128:267:18 name="offset"
-            right: literal #875 11131:267:21-11132:267:22 value=int:4
-      body: binding #884 11136:268:3-11157:269:1 name="f"
-        value: index-access #883 11140:268:7-11156:268:23
-          target: name-ref #879 11140:268:7-11144:268:11 name="data"
-          index: binary #882 11145:268:12-11155:268:22 op=plus op-span=11152:268:19-11153:268:20
-            left: name-ref #880 11145:268:12-11151:268:18 name="offset"
-            right: literal #881 11154:268:21-11155:268:22 value=int:5
-      body: binding #890 11159:269:3-11180:270:1 name="g"
-        value: index-access #889 11163:269:7-11179:269:23
-          target: name-ref #885 11163:269:7-11167:269:11 name="data"
-          index: binary #888 11168:269:12-11178:269:22 op=plus op-span=11175:269:19-11176:269:20
-            left: name-ref #886 11168:269:12-11174:269:18 name="offset"
-            right: literal #887 11177:269:21-11178:269:22 value=int:6
-      body: binding #896 11182:270:3-11203:271:1 name="h"
-        value: index-access #895 11186:270:7-11202:270:23
-          target: name-ref #891 11186:270:7-11190:270:11 name="data"
-          index: binary #894 11191:270:12-11201:270:22 op=plus op-span=11198:270:19-11199:270:20
-            left: name-ref #892 11191:270:12-11197:270:18 name="offset"
-            right: literal #893 11200:270:21-11201:270:22 value=int:7
-      body: binding #910 11205:271:3-11287:272:1 name="low"
-        value: method-call #909 11211:271:9-11286:271:84 name="bit_or"
-          target: method-call #907 11211:271:9-11276:271:74 name="bit_or"
-            target: method-call #903 11211:271:9-11252:271:50 name="bit_or"
-              target: method-call #899 11211:271:9-11227:271:25 name="shift_left"
-                target: name-ref #897 11211:271:9-11212:271:10 name="d"
-                arg: literal #898 11224:271:22-11226:271:24 value=int:24
-              arg: method-call #902 11235:271:33-11251:271:49 name="shift_left"
-                target: name-ref #900 11235:271:33-11236:271:34 name="c"
-                arg: literal #901 11248:271:46-11250:271:48 value=int:16
-            arg: method-call #906 11260:271:58-11275:271:73 name="shift_left"
-              target: name-ref #904 11260:271:58-11261:271:59 name="b"
-              arg: literal #905 11273:271:71-11274:271:72 value=int:8
-          arg: name-ref #908 11284:271:82-11285:271:83 name="a"
-      body: binding #924 11289:272:3-11372:273:1 name="high"
-        value: method-call #923 11296:272:10-11371:272:85 name="bit_or"
-          target: method-call #921 11296:272:10-11361:272:75 name="bit_or"
-            target: method-call #917 11296:272:10-11337:272:51 name="bit_or"
-              target: method-call #913 11296:272:10-11312:272:26 name="shift_left"
-                target: name-ref #911 11296:272:10-11297:272:11 name="h"
-                arg: literal #912 11309:272:23-11311:272:25 value=int:24
-              arg: method-call #916 11320:272:34-11336:272:50 name="shift_left"
-                target: name-ref #914 11320:272:34-11321:272:35 name="g"
-                arg: literal #915 11333:272:47-11335:272:49 value=int:16
-            arg: method-call #920 11345:272:59-11360:272:74 name="shift_left"
-              target: name-ref #918 11345:272:59-11346:272:60 name="f"
-              arg: literal #919 11358:272:72-11359:272:73 value=int:8
-          arg: name-ref #922 11369:272:83-11370:272:84 name="e"
-      body: return-stmt #931 11374:273:3-11409:273:38 implicit
-        value: call #930 11374:273:3-11409:273:38 name="ok" piped=false
-          arg: method-call #929 11377:273:6-11408:273:37 name="bit_or"
-            target: method-call #927 11377:273:6-11396:273:25 name="shift_left"
-              target: name-ref #925 11377:273:6-11381:273:10 name="high"
-              arg: literal #926 11393:273:22-11395:273:24 value=int:32
-            arg: name-ref #928 11404:273:33-11407:273:36 name="low"
-    declaration: function-decl #947 11415:276:1-11514:277:1 name="@4::bytes2_be" expression
-      param: param #934 11429:276:15-11439:276:25 name="value"
-        type: type-ref #933 11436:276:22-11439:276:25 name="Int"
-      result: type-ref #935 11444:276:30-11449:276:35 name="Bytes"
-      body: return-stmt #946 11452:276:38-11513:276:99 implicit
-        value: call #945 11452:276:38-11513:276:99 name="@4::pack" piped=false
-          arg: list-lit #944 11457:276:43-11512:276:98
-            element: method-call #940 11458:276:44-11491:276:77 name="bit_and"
-              target: method-call #938 11458:276:44-11478:276:64 name="shift_right"
-                target: name-ref #936 11458:276:44-11463:276:49 name="value"
-                arg: literal #937 11476:276:62-11477:276:63 value=int:8
-              arg: literal #939 11487:276:73-11490:276:76 value=int:255
-            element: method-call #943 11493:276:79-11511:276:97 name="bit_and"
-              target: name-ref #941 11493:276:79-11498:276:84 name="value"
-              arg: literal #942 11507:276:93-11510:276:96 value=int:255
-    declaration: function-decl #962 11515:278:1-11614:279:1 name="@4::bytes2_le" expression
-      param: param #949 11529:278:15-11539:278:25 name="value"
-        type: type-ref #948 11536:278:22-11539:278:25 name="Int"
-      result: type-ref #950 11544:278:30-11549:278:35 name="Bytes"
-      body: return-stmt #961 11552:278:38-11613:278:99 implicit
-        value: call #960 11552:278:38-11613:278:99 name="@4::pack" piped=false
-          arg: list-lit #959 11557:278:43-11612:278:98
-            element: method-call #953 11558:278:44-11576:278:62 name="bit_and"
-              target: name-ref #951 11558:278:44-11563:278:49 name="value"
-              arg: literal #952 11572:278:58-11575:278:61 value=int:255
-            element: method-call #958 11578:278:64-11611:278:97 name="bit_and"
-              target: method-call #956 11578:278:64-11598:278:84 name="shift_right"
-                target: name-ref #954 11578:278:64-11583:278:69 name="value"
-                arg: literal #955 11596:278:82-11597:278:83 value=int:8
-              arg: literal #957 11607:278:93-11610:278:96 value=int:255
-    declaration: function-decl #987 11615:280:1-11811:288:1 name="@4::bytes4_be"
-      param: param #964 11629:280:15-11639:280:25 name="value"
-        type: type-ref #963 11636:280:22-11639:280:25 name="Int"
-      result: type-ref #965 11644:280:30-11649:280:35 name="Bytes"
-      body: return-stmt #986 11652:281:3-11806:286:5 implicit
-        value: call #985 11652:281:3-11806:286:5 name="@4::pack" piped=false
-          arg: list-lit #984 11657:281:8-11805:286:4
-            element: method-call #970 11663:282:5-11697:282:39 name="bit_and"
-              target: method-call #968 11663:282:5-11684:282:26 name="shift_right"
-                target: name-ref #966 11663:282:5-11668:282:10 name="value"
-                arg: literal #967 11681:282:23-11683:282:25 value=int:24
-              arg: literal #969 11693:282:35-11696:282:38 value=int:255
-            element: method-call #975 11703:283:5-11737:283:39 name="bit_and"
-              target: method-call #973 11703:283:5-11724:283:26 name="shift_right"
-                target: name-ref #971 11703:283:5-11708:283:10 name="value"
-                arg: literal #972 11721:283:23-11723:283:25 value=int:16
-              arg: literal #974 11733:283:35-11736:283:38 value=int:255
-            element: method-call #980 11743:284:5-11776:284:38 name="bit_and"
-              target: method-call #978 11743:284:5-11763:284:25 name="shift_right"
-                target: name-ref #976 11743:284:5-11748:284:10 name="value"
-                arg: literal #977 11761:284:23-11762:284:24 value=int:8
-              arg: literal #979 11772:284:34-11775:284:37 value=int:255
-            element: method-call #983 11782:285:5-11800:285:23 name="bit_and"
-              target: name-ref #981 11782:285:5-11787:285:10 name="value"
-              arg: literal #982 11796:285:19-11799:285:22 value=int:255
-    declaration: function-decl #1012 11812:289:1-12008:297:1 name="@4::bytes4_le"
-      param: param #989 11826:289:15-11836:289:25 name="value"
-        type: type-ref #988 11833:289:22-11836:289:25 name="Int"
-      result: type-ref #990 11841:289:30-11846:289:35 name="Bytes"
-      body: return-stmt #1011 11849:290:3-12003:295:5 implicit
-        value: call #1010 11849:290:3-12003:295:5 name="@4::pack" piped=false
-          arg: list-lit #1009 11854:290:8-12002:295:4
-            element: method-call #993 11860:291:5-11878:291:23 name="bit_and"
-              target: name-ref #991 11860:291:5-11865:291:10 name="value"
-              arg: literal #992 11874:291:19-11877:291:22 value=int:255
-            element: method-call #998 11884:292:5-11917:292:38 name="bit_and"
-              target: method-call #996 11884:292:5-11904:292:25 name="shift_right"
-                target: name-ref #994 11884:292:5-11889:292:10 name="value"
-                arg: literal #995 11902:292:23-11903:292:24 value=int:8
-              arg: literal #997 11913:292:34-11916:292:37 value=int:255
-            element: method-call #1003 11923:293:5-11957:293:39 name="bit_and"
-              target: method-call #1001 11923:293:5-11944:293:26 name="shift_right"
-                target: name-ref #999 11923:293:5-11928:293:10 name="value"
-                arg: literal #1000 11941:293:23-11943:293:25 value=int:16
-              arg: literal #1002 11953:293:35-11956:293:38 value=int:255
-            element: method-call #1008 11963:294:5-11997:294:39 name="bit_and"
-              target: method-call #1006 11963:294:5-11984:294:26 name="shift_right"
-                target: name-ref #1004 11963:294:5-11968:294:10 name="value"
-                arg: literal #1005 11981:294:23-11983:294:25 value=int:24
-              arg: literal #1007 11993:294:35-11996:294:38 value=int:255
-    declaration: function-decl #1063 12009:298:1-12403:310:1 name="@4::bytes8_be"
-      param: param #1014 12023:298:15-12036:298:28 name="value"
-        type: type-ref #1013 12030:298:22-12036:298:28 name="UInt64"
-      result: type-ref #1015 12041:298:33-12046:298:38 name="Bytes"
-      body: return-stmt #1062 12049:299:3-12398:308:5 implicit
-        value: call #1061 12049:299:3-12398:308:5 name="@4::pack" piped=false
-          arg: list-lit #1060 12054:299:8-12397:308:4
-            element: field-access #1019 12060:300:5-12087:300:32 name="to_i!"
-              target: method-call #1018 12060:300:5-12081:300:26 name="shift_right"
-                target: name-ref #1016 12060:300:5-12065:300:10 name="value"
-                arg: literal #1017 12078:300:23-12080:300:25 value=int:56
-            element: field-access #1025 12093:301:5-12133:301:45 name="to_i!"
-              target: method-call #1024 12093:301:5-12127:301:39 name="bit_and"
-                target: method-call #1022 12093:301:5-12114:301:26 name="shift_right"
-                  target: name-ref #1020 12093:301:5-12098:301:10 name="value"
-                  arg: literal #1021 12111:301:23-12113:301:25 value=int:48
-                arg: literal #1023 12123:301:35-12126:301:38 value=int:255
-            element: field-access #1031 12139:302:5-12179:302:45 name="to_i!"
-              target: method-call #1030 12139:302:5-12173:302:39 name="bit_and"
-                target: method-call #1028 12139:302:5-12160:302:26 name="shift_right"
-                  target: name-ref #1026 12139:302:5-12144:302:10 name="value"
-                  arg: literal #1027 12157:302:23-12159:302:25 value=int:40
-                arg: literal #1029 12169:302:35-12172:302:38 value=int:255
-            element: field-access #1037 12185:303:5-12225:303:45 name="to_i!"
-              target: method-call #1036 12185:303:5-12219:303:39 name="bit_and"
-                target: method-call #1034 12185:303:5-12206:303:26 name="shift_right"
-                  target: name-ref #1032 12185:303:5-12190:303:10 name="value"
-                  arg: literal #1033 12203:303:23-12205:303:25 value=int:32
-                arg: literal #1035 12215:303:35-12218:303:38 value=int:255
-            element: field-access #1043 12231:304:5-12271:304:45 name="to_i!"
-              target: method-call #1042 12231:304:5-12265:304:39 name="bit_and"
-                target: method-call #1040 12231:304:5-12252:304:26 name="shift_right"
-                  target: name-ref #1038 12231:304:5-12236:304:10 name="value"
-                  arg: literal #1039 12249:304:23-12251:304:25 value=int:24
-                arg: literal #1041 12261:304:35-12264:304:38 value=int:255
-            element: field-access #1049 12277:305:5-12317:305:45 name="to_i!"
-              target: method-call #1048 12277:305:5-12311:305:39 name="bit_and"
-                target: method-call #1046 12277:305:5-12298:305:26 name="shift_right"
-                  target: name-ref #1044 12277:305:5-12282:305:10 name="value"
-                  arg: literal #1045 12295:305:23-12297:305:25 value=int:16
-                arg: literal #1047 12307:305:35-12310:305:38 value=int:255
-            element: field-access #1055 12323:306:5-12362:306:44 name="to_i!"
-              target: method-call #1054 12323:306:5-12356:306:38 name="bit_and"
-                target: method-call #1052 12323:306:5-12343:306:25 name="shift_right"
-                  target: name-ref #1050 12323:306:5-12328:306:10 name="value"
-                  arg: literal #1051 12341:306:23-12342:306:24 value=int:8
-                arg: literal #1053 12352:306:34-12355:306:37 value=int:255
-            element: field-access #1059 12368:307:5-12392:307:29 name="to_i!"
-              target: method-call #1058 12368:307:5-12386:307:23 name="bit_and"
-                target: name-ref #1056 12368:307:5-12373:307:10 name="value"
-                arg: literal #1057 12382:307:19-12385:307:22 value=int:255
-    declaration: function-decl #1114 12404:311:1-12798:323:1 name="@4::bytes8_le"
-      param: param #1065 12418:311:15-12431:311:28 name="value"
-        type: type-ref #1064 12425:311:22-12431:311:28 name="UInt64"
-      result: type-ref #1066 12436:311:33-12441:311:38 name="Bytes"
-      body: return-stmt #1113 12444:312:3-12793:321:5 implicit
-        value: call #1112 12444:312:3-12793:321:5 name="@4::pack" piped=false
-          arg: list-lit #1111 12449:312:8-12792:321:4
-            element: field-access #1070 12455:313:5-12479:313:29 name="to_i!"
-              target: method-call #1069 12455:313:5-12473:313:23 name="bit_and"
-                target: name-ref #1067 12455:313:5-12460:313:10 name="value"
-                arg: literal #1068 12469:313:19-12472:313:22 value=int:255
-            element: field-access #1076 12485:314:5-12524:314:44 name="to_i!"
-              target: method-call #1075 12485:314:5-12518:314:38 name="bit_and"
-                target: method-call #1073 12485:314:5-12505:314:25 name="shift_right"
-                  target: name-ref #1071 12485:314:5-12490:314:10 name="value"
-                  arg: literal #1072 12503:314:23-12504:314:24 value=int:8
-                arg: literal #1074 12514:314:34-12517:314:37 value=int:255
-            element: field-access #1082 12530:315:5-12570:315:45 name="to_i!"
-              target: method-call #1081 12530:315:5-12564:315:39 name="bit_and"
-                target: method-call #1079 12530:315:5-12551:315:26 name="shift_right"
-                  target: name-ref #1077 12530:315:5-12535:315:10 name="value"
-                  arg: literal #1078 12548:315:23-12550:315:25 value=int:16
-                arg: literal #1080 12560:315:35-12563:315:38 value=int:255
-            element: field-access #1088 12576:316:5-12616:316:45 name="to_i!"
-              target: method-call #1087 12576:316:5-12610:316:39 name="bit_and"
-                target: method-call #1085 12576:316:5-12597:316:26 name="shift_right"
-                  target: name-ref #1083 12576:316:5-12581:316:10 name="value"
-                  arg: literal #1084 12594:316:23-12596:316:25 value=int:24
-                arg: literal #1086 12606:316:35-12609:316:38 value=int:255
-            element: field-access #1094 12622:317:5-12662:317:45 name="to_i!"
-              target: method-call #1093 12622:317:5-12656:317:39 name="bit_and"
-                target: method-call #1091 12622:317:5-12643:317:26 name="shift_right"
-                  target: name-ref #1089 12622:317:5-12627:317:10 name="value"
-                  arg: literal #1090 12640:317:23-12642:317:25 value=int:32
-                arg: literal #1092 12652:317:35-12655:317:38 value=int:255
-            element: field-access #1100 12668:318:5-12708:318:45 name="to_i!"
-              target: method-call #1099 12668:318:5-12702:318:39 name="bit_and"
-                target: method-call #1097 12668:318:5-12689:318:26 name="shift_right"
-                  target: name-ref #1095 12668:318:5-12673:318:10 name="value"
-                  arg: literal #1096 12686:318:23-12688:318:25 value=int:40
-                arg: literal #1098 12698:318:35-12701:318:38 value=int:255
-            element: field-access #1106 12714:319:5-12754:319:45 name="to_i!"
-              target: method-call #1105 12714:319:5-12748:319:39 name="bit_and"
-                target: method-call #1103 12714:319:5-12735:319:26 name="shift_right"
-                  target: name-ref #1101 12714:319:5-12719:319:10 name="value"
-                  arg: literal #1102 12732:319:23-12734:319:25 value=int:48
-                arg: literal #1104 12744:319:35-12747:319:38 value=int:255
-            element: field-access #1110 12760:320:5-12787:320:32 name="to_i!"
-              target: method-call #1109 12760:320:5-12781:320:26 name="shift_right"
-                target: name-ref #1107 12760:320:5-12765:320:10 name="value"
-                arg: literal #1108 12778:320:23-12780:320:25 value=int:56
-    declaration: function-decl #1123 12878:325:1-12947:326:1 name="@4::pack" expression
-      param: param #1117 12887:325:10-12903:325:26 name="items"
-        type: type-ref #1116 12894:325:17-12903:325:26 name="List"
-          arg: type-ref #1115 12899:325:22-12902:325:25 name="Int"
-      result: type-ref #1118 12908:325:31-12913:325:36 name="Bytes"
-      body: return-stmt #1122 12916:325:39-12946:325:69 implicit
-        value: field-access #1121 12916:325:39-12946:325:69 name="unwrap!"
-          target: call #1120 12916:325:39-12938:325:61 name="Bytes.from_list" piped=false
-            arg: name-ref #1119 12932:325:55-12937:325:60 name="items"
+                part: field-access #537 9315:206:76-9324:206:85 name="size"
+                  target: name-ref #536 9315:206:76-9319:206:80 name="data"
+              arg: named-arg #540 9328:206:89-9344:206:105 name="kind"
+                value: literal #539 9334:206:95-9344:206:105 value=string:"argument"
+      body: return-stmt #546 9354:208:3-9358:208:7 implicit
+        value: call #545 9354:208:3-9358:208:7 name="ok" piped=false
+    declaration: function-decl #570 9364:211:1-9496:216:1 name="@4::load8"
+      param: param #549 9374:211:11-9385:211:22 name="data"
+        type: type-ref #548 9380:211:17-9385:211:22 name="Bytes"
+      param: param #551 9387:211:24-9398:211:35 name="offset"
+        type: type-ref #550 9395:211:32-9398:211:35 name="Int"
+      param: param #553 9400:211:37-9412:211:49 name="type"
+        type: type-ref #552 9406:211:43-9412:211:49 name="String"
+      result: type-ref #555 9417:211:54-9428:211:65 name="Result"
+        arg: type-ref #554 9424:211:61-9427:211:64 name="Int"
+      body: expr-stmt #562 9431:212:3-9465:213:1
+        value: try-expr #561 9431:212:3-9464:212:36
+          operand: call #560 9435:212:7-9464:212:36 name="@4::window" piped=false
+            arg: name-ref #556 9442:212:14-9446:212:18 name="data"
+            arg: name-ref #557 9448:212:20-9454:212:26 name="offset"
+            arg: literal #558 9456:212:28-9457:212:29 value=int:1
+            arg: name-ref #559 9459:212:31-9463:212:35 name="type"
+      body: binding #566 9467:213:3-9484:214:1 name="a"
+        value: index-access #565 9471:213:7-9483:213:19
+          target: name-ref #563 9471:213:7-9475:213:11 name="data"
+          index: name-ref #564 9476:213:12-9482:213:18 name="offset"
+      body: return-stmt #569 9486:214:3-9491:214:8 implicit
+        value: call #568 9486:214:3-9491:214:8 name="ok" piped=false
+          arg: name-ref #567 9489:214:6-9490:214:7 name="a"
+    declaration: function-decl #603 9497:217:1-9680:223:1 name="@4::load16_be"
+      param: param #572 9511:217:15-9522:217:26 name="data"
+        type: type-ref #571 9517:217:21-9522:217:26 name="Bytes"
+      param: param #574 9524:217:28-9535:217:39 name="offset"
+        type: type-ref #573 9532:217:36-9535:217:39 name="Int"
+      param: param #576 9537:217:41-9549:217:53 name="type"
+        type: type-ref #575 9543:217:47-9549:217:53 name="String"
+      result: type-ref #578 9554:217:58-9565:217:69 name="Result"
+        arg: type-ref #577 9561:217:65-9564:217:68 name="Int"
+      body: expr-stmt #585 9568:218:3-9602:219:1
+        value: try-expr #584 9568:218:3-9601:218:36
+          operand: call #583 9572:218:7-9601:218:36 name="@4::window" piped=false
+            arg: name-ref #579 9579:218:14-9583:218:18 name="data"
+            arg: name-ref #580 9585:218:20-9591:218:26 name="offset"
+            arg: literal #581 9593:218:28-9594:218:29 value=int:2
+            arg: name-ref #582 9596:218:31-9600:218:35 name="type"
+      body: binding #589 9604:219:3-9621:220:1 name="a"
+        value: index-access #588 9608:219:7-9620:219:19
+          target: name-ref #586 9608:219:7-9612:219:11 name="data"
+          index: name-ref #587 9613:219:12-9619:219:18 name="offset"
+      body: binding #595 9623:220:3-9644:221:1 name="b"
+        value: index-access #594 9627:220:7-9643:220:23
+          target: name-ref #590 9627:220:7-9631:220:11 name="data"
+          index: binary #593 9632:220:12-9642:220:22 op=plus op-span=9639:220:19-9640:220:20
+            left: name-ref #591 9632:220:12-9638:220:18 name="offset"
+            right: literal #592 9641:220:21-9642:220:22 value=int:1
+      body: return-stmt #602 9646:221:3-9675:221:32 implicit
+        value: call #601 9646:221:3-9675:221:32 name="ok" piped=false
+          arg: method-call #600 9649:221:6-9674:221:31 name="bit_or"
+            target: method-call #598 9649:221:6-9664:221:21 name="shift_left"
+              target: name-ref #596 9649:221:6-9650:221:7 name="a"
+              arg: literal #597 9662:221:19-9663:221:20 value=int:8
+            arg: name-ref #599 9672:221:29-9673:221:30 name="b"
+    declaration: function-decl #636 9681:224:1-9864:230:1 name="@4::load16_le"
+      param: param #605 9695:224:15-9706:224:26 name="data"
+        type: type-ref #604 9701:224:21-9706:224:26 name="Bytes"
+      param: param #607 9708:224:28-9719:224:39 name="offset"
+        type: type-ref #606 9716:224:36-9719:224:39 name="Int"
+      param: param #609 9721:224:41-9733:224:53 name="type"
+        type: type-ref #608 9727:224:47-9733:224:53 name="String"
+      result: type-ref #611 9738:224:58-9749:224:69 name="Result"
+        arg: type-ref #610 9745:224:65-9748:224:68 name="Int"
+      body: expr-stmt #618 9752:225:3-9786:226:1
+        value: try-expr #617 9752:225:3-9785:225:36
+          operand: call #616 9756:225:7-9785:225:36 name="@4::window" piped=false
+            arg: name-ref #612 9763:225:14-9767:225:18 name="data"
+            arg: name-ref #613 9769:225:20-9775:225:26 name="offset"
+            arg: literal #614 9777:225:28-9778:225:29 value=int:2
+            arg: name-ref #615 9780:225:31-9784:225:35 name="type"
+      body: binding #622 9788:226:3-9805:227:1 name="a"
+        value: index-access #621 9792:226:7-9804:226:19
+          target: name-ref #619 9792:226:7-9796:226:11 name="data"
+          index: name-ref #620 9797:226:12-9803:226:18 name="offset"
+      body: binding #628 9807:227:3-9828:228:1 name="b"
+        value: index-access #627 9811:227:7-9827:227:23
+          target: name-ref #623 9811:227:7-9815:227:11 name="data"
+          index: binary #626 9816:227:12-9826:227:22 op=plus op-span=9823:227:19-9824:227:20
+            left: name-ref #624 9816:227:12-9822:227:18 name="offset"
+            right: literal #625 9825:227:21-9826:227:22 value=int:1
+      body: return-stmt #635 9830:228:3-9859:228:32 implicit
+        value: call #634 9830:228:3-9859:228:32 name="ok" piped=false
+          arg: method-call #633 9833:228:6-9858:228:31 name="bit_or"
+            target: method-call #631 9833:228:6-9848:228:21 name="shift_left"
+              target: name-ref #629 9833:228:6-9834:228:7 name="b"
+              arg: literal #630 9846:228:19-9847:228:20 value=int:8
+            arg: name-ref #632 9856:228:29-9857:228:30 name="a"
+    declaration: function-decl #689 9865:231:1-10144:239:1 name="@4::load32_be"
+      param: param #638 9879:231:15-9890:231:26 name="data"
+        type: type-ref #637 9885:231:21-9890:231:26 name="Bytes"
+      param: param #640 9892:231:28-9903:231:39 name="offset"
+        type: type-ref #639 9900:231:36-9903:231:39 name="Int"
+      param: param #642 9905:231:41-9917:231:53 name="type"
+        type: type-ref #641 9911:231:47-9917:231:53 name="String"
+      result: type-ref #644 9922:231:58-9933:231:69 name="Result"
+        arg: type-ref #643 9929:231:65-9932:231:68 name="Int"
+      body: expr-stmt #651 9936:232:3-9970:233:1
+        value: try-expr #650 9936:232:3-9969:232:36
+          operand: call #649 9940:232:7-9969:232:36 name="@4::window" piped=false
+            arg: name-ref #645 9947:232:14-9951:232:18 name="data"
+            arg: name-ref #646 9953:232:20-9959:232:26 name="offset"
+            arg: literal #647 9961:232:28-9962:232:29 value=int:4
+            arg: name-ref #648 9964:232:31-9968:232:35 name="type"
+      body: binding #655 9972:233:3-9989:234:1 name="a"
+        value: index-access #654 9976:233:7-9988:233:19
+          target: name-ref #652 9976:233:7-9980:233:11 name="data"
+          index: name-ref #653 9981:233:12-9987:233:18 name="offset"
+      body: binding #661 9991:234:3-10012:235:1 name="b"
+        value: index-access #660 9995:234:7-10011:234:23
+          target: name-ref #656 9995:234:7-9999:234:11 name="data"
+          index: binary #659 10000:234:12-10010:234:22 op=plus op-span=10007:234:19-10008:234:20
+            left: name-ref #657 10000:234:12-10006:234:18 name="offset"
+            right: literal #658 10009:234:21-10010:234:22 value=int:1
+      body: binding #667 10014:235:3-10035:236:1 name="c"
+        value: index-access #666 10018:235:7-10034:235:23
+          target: name-ref #662 10018:235:7-10022:235:11 name="data"
+          index: binary #665 10023:235:12-10033:235:22 op=plus op-span=10030:235:19-10031:235:20
+            left: name-ref #663 10023:235:12-10029:235:18 name="offset"
+            right: literal #664 10032:235:21-10033:235:22 value=int:2
+      body: binding #673 10037:236:3-10058:237:1 name="d"
+        value: index-access #672 10041:236:7-10057:236:23
+          target: name-ref #668 10041:236:7-10045:236:11 name="data"
+          index: binary #671 10046:236:12-10056:236:22 op=plus op-span=10053:236:19-10054:236:20
+            left: name-ref #669 10046:236:12-10052:236:18 name="offset"
+            right: literal #670 10055:236:21-10056:236:22 value=int:3
+      body: return-stmt #688 10060:237:3-10139:237:82 implicit
+        value: call #687 10060:237:3-10139:237:82 name="ok" piped=false
+          arg: method-call #686 10063:237:6-10138:237:81 name="bit_or"
+            target: method-call #684 10063:237:6-10128:237:71 name="bit_or"
+              target: method-call #680 10063:237:6-10104:237:47 name="bit_or"
+                target: method-call #676 10063:237:6-10079:237:22 name="shift_left"
+                  target: name-ref #674 10063:237:6-10064:237:7 name="a"
+                  arg: literal #675 10076:237:19-10078:237:21 value=int:24
+                arg: method-call #679 10087:237:30-10103:237:46 name="shift_left"
+                  target: name-ref #677 10087:237:30-10088:237:31 name="b"
+                  arg: literal #678 10100:237:43-10102:237:45 value=int:16
+              arg: method-call #683 10112:237:55-10127:237:70 name="shift_left"
+                target: name-ref #681 10112:237:55-10113:237:56 name="c"
+                arg: literal #682 10125:237:68-10126:237:69 value=int:8
+            arg: name-ref #685 10136:237:79-10137:237:80 name="d"
+    declaration: function-decl #742 10145:240:1-10424:248:1 name="@4::load32_le"
+      param: param #691 10159:240:15-10170:240:26 name="data"
+        type: type-ref #690 10165:240:21-10170:240:26 name="Bytes"
+      param: param #693 10172:240:28-10183:240:39 name="offset"
+        type: type-ref #692 10180:240:36-10183:240:39 name="Int"
+      param: param #695 10185:240:41-10197:240:53 name="type"
+        type: type-ref #694 10191:240:47-10197:240:53 name="String"
+      result: type-ref #697 10202:240:58-10213:240:69 name="Result"
+        arg: type-ref #696 10209:240:65-10212:240:68 name="Int"
+      body: expr-stmt #704 10216:241:3-10250:242:1
+        value: try-expr #703 10216:241:3-10249:241:36
+          operand: call #702 10220:241:7-10249:241:36 name="@4::window" piped=false
+            arg: name-ref #698 10227:241:14-10231:241:18 name="data"
+            arg: name-ref #699 10233:241:20-10239:241:26 name="offset"
+            arg: literal #700 10241:241:28-10242:241:29 value=int:4
+            arg: name-ref #701 10244:241:31-10248:241:35 name="type"
+      body: binding #708 10252:242:3-10269:243:1 name="a"
+        value: index-access #707 10256:242:7-10268:242:19
+          target: name-ref #705 10256:242:7-10260:242:11 name="data"
+          index: name-ref #706 10261:242:12-10267:242:18 name="offset"
+      body: binding #714 10271:243:3-10292:244:1 name="b"
+        value: index-access #713 10275:243:7-10291:243:23
+          target: name-ref #709 10275:243:7-10279:243:11 name="data"
+          index: binary #712 10280:243:12-10290:243:22 op=plus op-span=10287:243:19-10288:243:20
+            left: name-ref #710 10280:243:12-10286:243:18 name="offset"
+            right: literal #711 10289:243:21-10290:243:22 value=int:1
+      body: binding #720 10294:244:3-10315:245:1 name="c"
+        value: index-access #719 10298:244:7-10314:244:23
+          target: name-ref #715 10298:244:7-10302:244:11 name="data"
+          index: binary #718 10303:244:12-10313:244:22 op=plus op-span=10310:244:19-10311:244:20
+            left: name-ref #716 10303:244:12-10309:244:18 name="offset"
+            right: literal #717 10312:244:21-10313:244:22 value=int:2
+      body: binding #726 10317:245:3-10338:246:1 name="d"
+        value: index-access #725 10321:245:7-10337:245:23
+          target: name-ref #721 10321:245:7-10325:245:11 name="data"
+          index: binary #724 10326:245:12-10336:245:22 op=plus op-span=10333:245:19-10334:245:20
+            left: name-ref #722 10326:245:12-10332:245:18 name="offset"
+            right: literal #723 10335:245:21-10336:245:22 value=int:3
+      body: return-stmt #741 10340:246:3-10419:246:82 implicit
+        value: call #740 10340:246:3-10419:246:82 name="ok" piped=false
+          arg: method-call #739 10343:246:6-10418:246:81 name="bit_or"
+            target: method-call #737 10343:246:6-10408:246:71 name="bit_or"
+              target: method-call #733 10343:246:6-10384:246:47 name="bit_or"
+                target: method-call #729 10343:246:6-10359:246:22 name="shift_left"
+                  target: name-ref #727 10343:246:6-10344:246:7 name="d"
+                  arg: literal #728 10356:246:19-10358:246:21 value=int:24
+                arg: method-call #732 10367:246:30-10383:246:46 name="shift_left"
+                  target: name-ref #730 10367:246:30-10368:246:31 name="c"
+                  arg: literal #731 10380:246:43-10382:246:45 value=int:16
+              arg: method-call #736 10392:246:55-10407:246:70 name="shift_left"
+                target: name-ref #734 10392:246:55-10393:246:56 name="b"
+                arg: literal #735 10405:246:68-10406:246:69 value=int:8
+            arg: name-ref #738 10416:246:79-10417:246:80 name="a"
+    declaration: function-decl #839 10425:249:1-10921:263:1 name="@4::load64_be"
+      param: param #744 10439:249:15-10450:249:26 name="data"
+        type: type-ref #743 10445:249:21-10450:249:26 name="Bytes"
+      param: param #746 10452:249:28-10463:249:39 name="offset"
+        type: type-ref #745 10460:249:36-10463:249:39 name="Int"
+      param: param #748 10465:249:41-10477:249:53 name="type"
+        type: type-ref #747 10471:249:47-10477:249:53 name="String"
+      result: type-ref #750 10482:249:58-10493:249:69 name="Result"
+        arg: type-ref #749 10489:249:65-10492:249:68 name="Int"
+      body: expr-stmt #757 10496:250:3-10530:251:1
+        value: try-expr #756 10496:250:3-10529:250:36
+          operand: call #755 10500:250:7-10529:250:36 name="@4::window" piped=false
+            arg: name-ref #751 10507:250:14-10511:250:18 name="data"
+            arg: name-ref #752 10513:250:20-10519:250:26 name="offset"
+            arg: literal #753 10521:250:28-10522:250:29 value=int:8
+            arg: name-ref #754 10524:250:31-10528:250:35 name="type"
+      body: binding #761 10532:251:3-10549:252:1 name="a"
+        value: index-access #760 10536:251:7-10548:251:19
+          target: name-ref #758 10536:251:7-10540:251:11 name="data"
+          index: name-ref #759 10541:251:12-10547:251:18 name="offset"
+      body: binding #767 10551:252:3-10572:253:1 name="b"
+        value: index-access #766 10555:252:7-10571:252:23
+          target: name-ref #762 10555:252:7-10559:252:11 name="data"
+          index: binary #765 10560:252:12-10570:252:22 op=plus op-span=10567:252:19-10568:252:20
+            left: name-ref #763 10560:252:12-10566:252:18 name="offset"
+            right: literal #764 10569:252:21-10570:252:22 value=int:1
+      body: binding #773 10574:253:3-10595:254:1 name="c"
+        value: index-access #772 10578:253:7-10594:253:23
+          target: name-ref #768 10578:253:7-10582:253:11 name="data"
+          index: binary #771 10583:253:12-10593:253:22 op=plus op-span=10590:253:19-10591:253:20
+            left: name-ref #769 10583:253:12-10589:253:18 name="offset"
+            right: literal #770 10592:253:21-10593:253:22 value=int:2
+      body: binding #779 10597:254:3-10618:255:1 name="d"
+        value: index-access #778 10601:254:7-10617:254:23
+          target: name-ref #774 10601:254:7-10605:254:11 name="data"
+          index: binary #777 10606:254:12-10616:254:22 op=plus op-span=10613:254:19-10614:254:20
+            left: name-ref #775 10606:254:12-10612:254:18 name="offset"
+            right: literal #776 10615:254:21-10616:254:22 value=int:3
+      body: binding #785 10620:255:3-10641:256:1 name="e"
+        value: index-access #784 10624:255:7-10640:255:23
+          target: name-ref #780 10624:255:7-10628:255:11 name="data"
+          index: binary #783 10629:255:12-10639:255:22 op=plus op-span=10636:255:19-10637:255:20
+            left: name-ref #781 10629:255:12-10635:255:18 name="offset"
+            right: literal #782 10638:255:21-10639:255:22 value=int:4
+      body: binding #791 10643:256:3-10664:257:1 name="f"
+        value: index-access #790 10647:256:7-10663:256:23
+          target: name-ref #786 10647:256:7-10651:256:11 name="data"
+          index: binary #789 10652:256:12-10662:256:22 op=plus op-span=10659:256:19-10660:256:20
+            left: name-ref #787 10652:256:12-10658:256:18 name="offset"
+            right: literal #788 10661:256:21-10662:256:22 value=int:5
+      body: binding #797 10666:257:3-10687:258:1 name="g"
+        value: index-access #796 10670:257:7-10686:257:23
+          target: name-ref #792 10670:257:7-10674:257:11 name="data"
+          index: binary #795 10675:257:12-10685:257:22 op=plus op-span=10682:257:19-10683:257:20
+            left: name-ref #793 10675:257:12-10681:257:18 name="offset"
+            right: literal #794 10684:257:21-10685:257:22 value=int:6
+      body: binding #803 10689:258:3-10710:259:1 name="h"
+        value: index-access #802 10693:258:7-10709:258:23
+          target: name-ref #798 10693:258:7-10697:258:11 name="data"
+          index: binary #801 10698:258:12-10708:258:22 op=plus op-span=10705:258:19-10706:258:20
+            left: name-ref #799 10698:258:12-10704:258:18 name="offset"
+            right: literal #800 10707:258:21-10708:258:22 value=int:7
+      body: binding #817 10712:259:3-10795:260:1 name="high"
+        value: method-call #816 10719:259:10-10794:259:85 name="bit_or"
+          target: method-call #814 10719:259:10-10784:259:75 name="bit_or"
+            target: method-call #810 10719:259:10-10760:259:51 name="bit_or"
+              target: method-call #806 10719:259:10-10735:259:26 name="shift_left"
+                target: name-ref #804 10719:259:10-10720:259:11 name="a"
+                arg: literal #805 10732:259:23-10734:259:25 value=int:24
+              arg: method-call #809 10743:259:34-10759:259:50 name="shift_left"
+                target: name-ref #807 10743:259:34-10744:259:35 name="b"
+                arg: literal #808 10756:259:47-10758:259:49 value=int:16
+            arg: method-call #813 10768:259:59-10783:259:74 name="shift_left"
+              target: name-ref #811 10768:259:59-10769:259:60 name="c"
+              arg: literal #812 10781:259:72-10782:259:73 value=int:8
+          arg: name-ref #815 10792:259:83-10793:259:84 name="d"
+      body: binding #831 10797:260:3-10879:261:1 name="low"
+        value: method-call #830 10803:260:9-10878:260:84 name="bit_or"
+          target: method-call #828 10803:260:9-10868:260:74 name="bit_or"
+            target: method-call #824 10803:260:9-10844:260:50 name="bit_or"
+              target: method-call #820 10803:260:9-10819:260:25 name="shift_left"
+                target: name-ref #818 10803:260:9-10804:260:10 name="e"
+                arg: literal #819 10816:260:22-10818:260:24 value=int:24
+              arg: method-call #823 10827:260:33-10843:260:49 name="shift_left"
+                target: name-ref #821 10827:260:33-10828:260:34 name="f"
+                arg: literal #822 10840:260:46-10842:260:48 value=int:16
+            arg: method-call #827 10852:260:58-10867:260:73 name="shift_left"
+              target: name-ref #825 10852:260:58-10853:260:59 name="g"
+              arg: literal #826 10865:260:71-10866:260:72 value=int:8
+          arg: name-ref #829 10876:260:82-10877:260:83 name="h"
+      body: return-stmt #838 10881:261:3-10916:261:38 implicit
+        value: call #837 10881:261:3-10916:261:38 name="ok" piped=false
+          arg: method-call #836 10884:261:6-10915:261:37 name="bit_or"
+            target: method-call #834 10884:261:6-10903:261:25 name="shift_left"
+              target: name-ref #832 10884:261:6-10888:261:10 name="high"
+              arg: literal #833 10900:261:22-10902:261:24 value=int:32
+            arg: name-ref #835 10911:261:33-10914:261:36 name="low"
+    declaration: function-decl #936 10922:264:1-11418:278:1 name="@4::load64_le"
+      param: param #841 10936:264:15-10947:264:26 name="data"
+        type: type-ref #840 10942:264:21-10947:264:26 name="Bytes"
+      param: param #843 10949:264:28-10960:264:39 name="offset"
+        type: type-ref #842 10957:264:36-10960:264:39 name="Int"
+      param: param #845 10962:264:41-10974:264:53 name="type"
+        type: type-ref #844 10968:264:47-10974:264:53 name="String"
+      result: type-ref #847 10979:264:58-10990:264:69 name="Result"
+        arg: type-ref #846 10986:264:65-10989:264:68 name="Int"
+      body: expr-stmt #854 10993:265:3-11027:266:1
+        value: try-expr #853 10993:265:3-11026:265:36
+          operand: call #852 10997:265:7-11026:265:36 name="@4::window" piped=false
+            arg: name-ref #848 11004:265:14-11008:265:18 name="data"
+            arg: name-ref #849 11010:265:20-11016:265:26 name="offset"
+            arg: literal #850 11018:265:28-11019:265:29 value=int:8
+            arg: name-ref #851 11021:265:31-11025:265:35 name="type"
+      body: binding #858 11029:266:3-11046:267:1 name="a"
+        value: index-access #857 11033:266:7-11045:266:19
+          target: name-ref #855 11033:266:7-11037:266:11 name="data"
+          index: name-ref #856 11038:266:12-11044:266:18 name="offset"
+      body: binding #864 11048:267:3-11069:268:1 name="b"
+        value: index-access #863 11052:267:7-11068:267:23
+          target: name-ref #859 11052:267:7-11056:267:11 name="data"
+          index: binary #862 11057:267:12-11067:267:22 op=plus op-span=11064:267:19-11065:267:20
+            left: name-ref #860 11057:267:12-11063:267:18 name="offset"
+            right: literal #861 11066:267:21-11067:267:22 value=int:1
+      body: binding #870 11071:268:3-11092:269:1 name="c"
+        value: index-access #869 11075:268:7-11091:268:23
+          target: name-ref #865 11075:268:7-11079:268:11 name="data"
+          index: binary #868 11080:268:12-11090:268:22 op=plus op-span=11087:268:19-11088:268:20
+            left: name-ref #866 11080:268:12-11086:268:18 name="offset"
+            right: literal #867 11089:268:21-11090:268:22 value=int:2
+      body: binding #876 11094:269:3-11115:270:1 name="d"
+        value: index-access #875 11098:269:7-11114:269:23
+          target: name-ref #871 11098:269:7-11102:269:11 name="data"
+          index: binary #874 11103:269:12-11113:269:22 op=plus op-span=11110:269:19-11111:269:20
+            left: name-ref #872 11103:269:12-11109:269:18 name="offset"
+            right: literal #873 11112:269:21-11113:269:22 value=int:3
+      body: binding #882 11117:270:3-11138:271:1 name="e"
+        value: index-access #881 11121:270:7-11137:270:23
+          target: name-ref #877 11121:270:7-11125:270:11 name="data"
+          index: binary #880 11126:270:12-11136:270:22 op=plus op-span=11133:270:19-11134:270:20
+            left: name-ref #878 11126:270:12-11132:270:18 name="offset"
+            right: literal #879 11135:270:21-11136:270:22 value=int:4
+      body: binding #888 11140:271:3-11161:272:1 name="f"
+        value: index-access #887 11144:271:7-11160:271:23
+          target: name-ref #883 11144:271:7-11148:271:11 name="data"
+          index: binary #886 11149:271:12-11159:271:22 op=plus op-span=11156:271:19-11157:271:20
+            left: name-ref #884 11149:271:12-11155:271:18 name="offset"
+            right: literal #885 11158:271:21-11159:271:22 value=int:5
+      body: binding #894 11163:272:3-11184:273:1 name="g"
+        value: index-access #893 11167:272:7-11183:272:23
+          target: name-ref #889 11167:272:7-11171:272:11 name="data"
+          index: binary #892 11172:272:12-11182:272:22 op=plus op-span=11179:272:19-11180:272:20
+            left: name-ref #890 11172:272:12-11178:272:18 name="offset"
+            right: literal #891 11181:272:21-11182:272:22 value=int:6
+      body: binding #900 11186:273:3-11207:274:1 name="h"
+        value: index-access #899 11190:273:7-11206:273:23
+          target: name-ref #895 11190:273:7-11194:273:11 name="data"
+          index: binary #898 11195:273:12-11205:273:22 op=plus op-span=11202:273:19-11203:273:20
+            left: name-ref #896 11195:273:12-11201:273:18 name="offset"
+            right: literal #897 11204:273:21-11205:273:22 value=int:7
+      body: binding #914 11209:274:3-11291:275:1 name="low"
+        value: method-call #913 11215:274:9-11290:274:84 name="bit_or"
+          target: method-call #911 11215:274:9-11280:274:74 name="bit_or"
+            target: method-call #907 11215:274:9-11256:274:50 name="bit_or"
+              target: method-call #903 11215:274:9-11231:274:25 name="shift_left"
+                target: name-ref #901 11215:274:9-11216:274:10 name="d"
+                arg: literal #902 11228:274:22-11230:274:24 value=int:24
+              arg: method-call #906 11239:274:33-11255:274:49 name="shift_left"
+                target: name-ref #904 11239:274:33-11240:274:34 name="c"
+                arg: literal #905 11252:274:46-11254:274:48 value=int:16
+            arg: method-call #910 11264:274:58-11279:274:73 name="shift_left"
+              target: name-ref #908 11264:274:58-11265:274:59 name="b"
+              arg: literal #909 11277:274:71-11278:274:72 value=int:8
+          arg: name-ref #912 11288:274:82-11289:274:83 name="a"
+      body: binding #928 11293:275:3-11376:276:1 name="high"
+        value: method-call #927 11300:275:10-11375:275:85 name="bit_or"
+          target: method-call #925 11300:275:10-11365:275:75 name="bit_or"
+            target: method-call #921 11300:275:10-11341:275:51 name="bit_or"
+              target: method-call #917 11300:275:10-11316:275:26 name="shift_left"
+                target: name-ref #915 11300:275:10-11301:275:11 name="h"
+                arg: literal #916 11313:275:23-11315:275:25 value=int:24
+              arg: method-call #920 11324:275:34-11340:275:50 name="shift_left"
+                target: name-ref #918 11324:275:34-11325:275:35 name="g"
+                arg: literal #919 11337:275:47-11339:275:49 value=int:16
+            arg: method-call #924 11349:275:59-11364:275:74 name="shift_left"
+              target: name-ref #922 11349:275:59-11350:275:60 name="f"
+              arg: literal #923 11362:275:72-11363:275:73 value=int:8
+          arg: name-ref #926 11373:275:83-11374:275:84 name="e"
+      body: return-stmt #935 11378:276:3-11413:276:38 implicit
+        value: call #934 11378:276:3-11413:276:38 name="ok" piped=false
+          arg: method-call #933 11381:276:6-11412:276:37 name="bit_or"
+            target: method-call #931 11381:276:6-11400:276:25 name="shift_left"
+              target: name-ref #929 11381:276:6-11385:276:10 name="high"
+              arg: literal #930 11397:276:22-11399:276:24 value=int:32
+            arg: name-ref #932 11408:276:33-11411:276:36 name="low"
+    declaration: function-decl #951 11419:279:1-11518:280:1 name="@4::bytes2_be" expression
+      param: param #938 11433:279:15-11443:279:25 name="value"
+        type: type-ref #937 11440:279:22-11443:279:25 name="Int"
+      result: type-ref #939 11448:279:30-11453:279:35 name="Bytes"
+      body: return-stmt #950 11456:279:38-11517:279:99 implicit
+        value: call #949 11456:279:38-11517:279:99 name="@4::pack" piped=false
+          arg: list-lit #948 11461:279:43-11516:279:98
+            element: method-call #944 11462:279:44-11495:279:77 name="bit_and"
+              target: method-call #942 11462:279:44-11482:279:64 name="shift_right"
+                target: name-ref #940 11462:279:44-11467:279:49 name="value"
+                arg: literal #941 11480:279:62-11481:279:63 value=int:8
+              arg: literal #943 11491:279:73-11494:279:76 value=int:255
+            element: method-call #947 11497:279:79-11515:279:97 name="bit_and"
+              target: name-ref #945 11497:279:79-11502:279:84 name="value"
+              arg: literal #946 11511:279:93-11514:279:96 value=int:255
+    declaration: function-decl #966 11519:281:1-11618:282:1 name="@4::bytes2_le" expression
+      param: param #953 11533:281:15-11543:281:25 name="value"
+        type: type-ref #952 11540:281:22-11543:281:25 name="Int"
+      result: type-ref #954 11548:281:30-11553:281:35 name="Bytes"
+      body: return-stmt #965 11556:281:38-11617:281:99 implicit
+        value: call #964 11556:281:38-11617:281:99 name="@4::pack" piped=false
+          arg: list-lit #963 11561:281:43-11616:281:98
+            element: method-call #957 11562:281:44-11580:281:62 name="bit_and"
+              target: name-ref #955 11562:281:44-11567:281:49 name="value"
+              arg: literal #956 11576:281:58-11579:281:61 value=int:255
+            element: method-call #962 11582:281:64-11615:281:97 name="bit_and"
+              target: method-call #960 11582:281:64-11602:281:84 name="shift_right"
+                target: name-ref #958 11582:281:64-11587:281:69 name="value"
+                arg: literal #959 11600:281:82-11601:281:83 value=int:8
+              arg: literal #961 11611:281:93-11614:281:96 value=int:255
+    declaration: function-decl #991 11619:283:1-11815:291:1 name="@4::bytes4_be"
+      param: param #968 11633:283:15-11643:283:25 name="value"
+        type: type-ref #967 11640:283:22-11643:283:25 name="Int"
+      result: type-ref #969 11648:283:30-11653:283:35 name="Bytes"
+      body: return-stmt #990 11656:284:3-11810:289:5 implicit
+        value: call #989 11656:284:3-11810:289:5 name="@4::pack" piped=false
+          arg: list-lit #988 11661:284:8-11809:289:4
+            element: method-call #974 11667:285:5-11701:285:39 name="bit_and"
+              target: method-call #972 11667:285:5-11688:285:26 name="shift_right"
+                target: name-ref #970 11667:285:5-11672:285:10 name="value"
+                arg: literal #971 11685:285:23-11687:285:25 value=int:24
+              arg: literal #973 11697:285:35-11700:285:38 value=int:255
+            element: method-call #979 11707:286:5-11741:286:39 name="bit_and"
+              target: method-call #977 11707:286:5-11728:286:26 name="shift_right"
+                target: name-ref #975 11707:286:5-11712:286:10 name="value"
+                arg: literal #976 11725:286:23-11727:286:25 value=int:16
+              arg: literal #978 11737:286:35-11740:286:38 value=int:255
+            element: method-call #984 11747:287:5-11780:287:38 name="bit_and"
+              target: method-call #982 11747:287:5-11767:287:25 name="shift_right"
+                target: name-ref #980 11747:287:5-11752:287:10 name="value"
+                arg: literal #981 11765:287:23-11766:287:24 value=int:8
+              arg: literal #983 11776:287:34-11779:287:37 value=int:255
+            element: method-call #987 11786:288:5-11804:288:23 name="bit_and"
+              target: name-ref #985 11786:288:5-11791:288:10 name="value"
+              arg: literal #986 11800:288:19-11803:288:22 value=int:255
+    declaration: function-decl #1016 11816:292:1-12012:300:1 name="@4::bytes4_le"
+      param: param #993 11830:292:15-11840:292:25 name="value"
+        type: type-ref #992 11837:292:22-11840:292:25 name="Int"
+      result: type-ref #994 11845:292:30-11850:292:35 name="Bytes"
+      body: return-stmt #1015 11853:293:3-12007:298:5 implicit
+        value: call #1014 11853:293:3-12007:298:5 name="@4::pack" piped=false
+          arg: list-lit #1013 11858:293:8-12006:298:4
+            element: method-call #997 11864:294:5-11882:294:23 name="bit_and"
+              target: name-ref #995 11864:294:5-11869:294:10 name="value"
+              arg: literal #996 11878:294:19-11881:294:22 value=int:255
+            element: method-call #1002 11888:295:5-11921:295:38 name="bit_and"
+              target: method-call #1000 11888:295:5-11908:295:25 name="shift_right"
+                target: name-ref #998 11888:295:5-11893:295:10 name="value"
+                arg: literal #999 11906:295:23-11907:295:24 value=int:8
+              arg: literal #1001 11917:295:34-11920:295:37 value=int:255
+            element: method-call #1007 11927:296:5-11961:296:39 name="bit_and"
+              target: method-call #1005 11927:296:5-11948:296:26 name="shift_right"
+                target: name-ref #1003 11927:296:5-11932:296:10 name="value"
+                arg: literal #1004 11945:296:23-11947:296:25 value=int:16
+              arg: literal #1006 11957:296:35-11960:296:38 value=int:255
+            element: method-call #1012 11967:297:5-12001:297:39 name="bit_and"
+              target: method-call #1010 11967:297:5-11988:297:26 name="shift_right"
+                target: name-ref #1008 11967:297:5-11972:297:10 name="value"
+                arg: literal #1009 11985:297:23-11987:297:25 value=int:24
+              arg: literal #1011 11997:297:35-12000:297:38 value=int:255
+    declaration: function-decl #1067 12013:301:1-12407:313:1 name="@4::bytes8_be"
+      param: param #1018 12027:301:15-12040:301:28 name="value"
+        type: type-ref #1017 12034:301:22-12040:301:28 name="UInt64"
+      result: type-ref #1019 12045:301:33-12050:301:38 name="Bytes"
+      body: return-stmt #1066 12053:302:3-12402:311:5 implicit
+        value: call #1065 12053:302:3-12402:311:5 name="@4::pack" piped=false
+          arg: list-lit #1064 12058:302:8-12401:311:4
+            element: field-access #1023 12064:303:5-12091:303:32 name="to_i!"
+              target: method-call #1022 12064:303:5-12085:303:26 name="shift_right"
+                target: name-ref #1020 12064:303:5-12069:303:10 name="value"
+                arg: literal #1021 12082:303:23-12084:303:25 value=int:56
+            element: field-access #1029 12097:304:5-12137:304:45 name="to_i!"
+              target: method-call #1028 12097:304:5-12131:304:39 name="bit_and"
+                target: method-call #1026 12097:304:5-12118:304:26 name="shift_right"
+                  target: name-ref #1024 12097:304:5-12102:304:10 name="value"
+                  arg: literal #1025 12115:304:23-12117:304:25 value=int:48
+                arg: literal #1027 12127:304:35-12130:304:38 value=int:255
+            element: field-access #1035 12143:305:5-12183:305:45 name="to_i!"
+              target: method-call #1034 12143:305:5-12177:305:39 name="bit_and"
+                target: method-call #1032 12143:305:5-12164:305:26 name="shift_right"
+                  target: name-ref #1030 12143:305:5-12148:305:10 name="value"
+                  arg: literal #1031 12161:305:23-12163:305:25 value=int:40
+                arg: literal #1033 12173:305:35-12176:305:38 value=int:255
+            element: field-access #1041 12189:306:5-12229:306:45 name="to_i!"
+              target: method-call #1040 12189:306:5-12223:306:39 name="bit_and"
+                target: method-call #1038 12189:306:5-12210:306:26 name="shift_right"
+                  target: name-ref #1036 12189:306:5-12194:306:10 name="value"
+                  arg: literal #1037 12207:306:23-12209:306:25 value=int:32
+                arg: literal #1039 12219:306:35-12222:306:38 value=int:255
+            element: field-access #1047 12235:307:5-12275:307:45 name="to_i!"
+              target: method-call #1046 12235:307:5-12269:307:39 name="bit_and"
+                target: method-call #1044 12235:307:5-12256:307:26 name="shift_right"
+                  target: name-ref #1042 12235:307:5-12240:307:10 name="value"
+                  arg: literal #1043 12253:307:23-12255:307:25 value=int:24
+                arg: literal #1045 12265:307:35-12268:307:38 value=int:255
+            element: field-access #1053 12281:308:5-12321:308:45 name="to_i!"
+              target: method-call #1052 12281:308:5-12315:308:39 name="bit_and"
+                target: method-call #1050 12281:308:5-12302:308:26 name="shift_right"
+                  target: name-ref #1048 12281:308:5-12286:308:10 name="value"
+                  arg: literal #1049 12299:308:23-12301:308:25 value=int:16
+                arg: literal #1051 12311:308:35-12314:308:38 value=int:255
+            element: field-access #1059 12327:309:5-12366:309:44 name="to_i!"
+              target: method-call #1058 12327:309:5-12360:309:38 name="bit_and"
+                target: method-call #1056 12327:309:5-12347:309:25 name="shift_right"
+                  target: name-ref #1054 12327:309:5-12332:309:10 name="value"
+                  arg: literal #1055 12345:309:23-12346:309:24 value=int:8
+                arg: literal #1057 12356:309:34-12359:309:37 value=int:255
+            element: field-access #1063 12372:310:5-12396:310:29 name="to_i!"
+              target: method-call #1062 12372:310:5-12390:310:23 name="bit_and"
+                target: name-ref #1060 12372:310:5-12377:310:10 name="value"
+                arg: literal #1061 12386:310:19-12389:310:22 value=int:255
+    declaration: function-decl #1118 12408:314:1-12802:326:1 name="@4::bytes8_le"
+      param: param #1069 12422:314:15-12435:314:28 name="value"
+        type: type-ref #1068 12429:314:22-12435:314:28 name="UInt64"
+      result: type-ref #1070 12440:314:33-12445:314:38 name="Bytes"
+      body: return-stmt #1117 12448:315:3-12797:324:5 implicit
+        value: call #1116 12448:315:3-12797:324:5 name="@4::pack" piped=false
+          arg: list-lit #1115 12453:315:8-12796:324:4
+            element: field-access #1074 12459:316:5-12483:316:29 name="to_i!"
+              target: method-call #1073 12459:316:5-12477:316:23 name="bit_and"
+                target: name-ref #1071 12459:316:5-12464:316:10 name="value"
+                arg: literal #1072 12473:316:19-12476:316:22 value=int:255
+            element: field-access #1080 12489:317:5-12528:317:44 name="to_i!"
+              target: method-call #1079 12489:317:5-12522:317:38 name="bit_and"
+                target: method-call #1077 12489:317:5-12509:317:25 name="shift_right"
+                  target: name-ref #1075 12489:317:5-12494:317:10 name="value"
+                  arg: literal #1076 12507:317:23-12508:317:24 value=int:8
+                arg: literal #1078 12518:317:34-12521:317:37 value=int:255
+            element: field-access #1086 12534:318:5-12574:318:45 name="to_i!"
+              target: method-call #1085 12534:318:5-12568:318:39 name="bit_and"
+                target: method-call #1083 12534:318:5-12555:318:26 name="shift_right"
+                  target: name-ref #1081 12534:318:5-12539:318:10 name="value"
+                  arg: literal #1082 12552:318:23-12554:318:25 value=int:16
+                arg: literal #1084 12564:318:35-12567:318:38 value=int:255
+            element: field-access #1092 12580:319:5-12620:319:45 name="to_i!"
+              target: method-call #1091 12580:319:5-12614:319:39 name="bit_and"
+                target: method-call #1089 12580:319:5-12601:319:26 name="shift_right"
+                  target: name-ref #1087 12580:319:5-12585:319:10 name="value"
+                  arg: literal #1088 12598:319:23-12600:319:25 value=int:24
+                arg: literal #1090 12610:319:35-12613:319:38 value=int:255
+            element: field-access #1098 12626:320:5-12666:320:45 name="to_i!"
+              target: method-call #1097 12626:320:5-12660:320:39 name="bit_and"
+                target: method-call #1095 12626:320:5-12647:320:26 name="shift_right"
+                  target: name-ref #1093 12626:320:5-12631:320:10 name="value"
+                  arg: literal #1094 12644:320:23-12646:320:25 value=int:32
+                arg: literal #1096 12656:320:35-12659:320:38 value=int:255
+            element: field-access #1104 12672:321:5-12712:321:45 name="to_i!"
+              target: method-call #1103 12672:321:5-12706:321:39 name="bit_and"
+                target: method-call #1101 12672:321:5-12693:321:26 name="shift_right"
+                  target: name-ref #1099 12672:321:5-12677:321:10 name="value"
+                  arg: literal #1100 12690:321:23-12692:321:25 value=int:40
+                arg: literal #1102 12702:321:35-12705:321:38 value=int:255
+            element: field-access #1110 12718:322:5-12758:322:45 name="to_i!"
+              target: method-call #1109 12718:322:5-12752:322:39 name="bit_and"
+                target: method-call #1107 12718:322:5-12739:322:26 name="shift_right"
+                  target: name-ref #1105 12718:322:5-12723:322:10 name="value"
+                  arg: literal #1106 12736:322:23-12738:322:25 value=int:48
+                arg: literal #1108 12748:322:35-12751:322:38 value=int:255
+            element: field-access #1114 12764:323:5-12791:323:32 name="to_i!"
+              target: method-call #1113 12764:323:5-12785:323:26 name="shift_right"
+                target: name-ref #1111 12764:323:5-12769:323:10 name="value"
+                arg: literal #1112 12782:323:23-12784:323:25 value=int:56
+    declaration: function-decl #1127 12882:328:1-12951:329:1 name="@4::pack" expression
+      param: param #1121 12891:328:10-12907:328:26 name="items"
+        type: type-ref #1120 12898:328:17-12907:328:26 name="List"
+          arg: type-ref #1119 12903:328:22-12906:328:25 name="Int"
+      result: type-ref #1122 12912:328:31-12917:328:36 name="Bytes"
+      body: return-stmt #1126 12920:328:39-12950:328:69 implicit
+        value: field-access #1125 12920:328:39-12950:328:69 name="unwrap!"
+          target: call #1124 12920:328:39-12942:328:61 name="Bytes.from_list" piped=false
+            arg: name-ref #1123 12936:328:55-12941:328:60 name="items"
   module "std/uri.agc"
     declaration: struct-decl #4 1364:18:1-1411:22:1 name="@5::Pair" doc="One `name=value` piece of a query string."
       field: field-decl #1 1378:19:3-1391:20:1 name="name"
@@ -15797,7 +15801,7 @@ program #8 0:1:1-103:6:1
                   arg: name-ref #158 4022:77:24-4023:77:25 name="s"
           branch: if-branch #169 4039:79:5-4093:81:1
             condition: method-call #164 4045:79:11-4065:79:31 name="include?"
-              target: const-ref #16292 4045:79:11-4050:79:16 name="@5::PLAIN"
+              target: const-ref #16296 4045:79:11-4050:79:16 name="@5::PLAIN"
               arg: name-ref #163 4060:79:26-4064:79:30 name="byte"
             body: binding #168 4072:80:7-4093:81:1 name="out"
               value: method-call #167 4078:80:13-4092:80:27 name="push"

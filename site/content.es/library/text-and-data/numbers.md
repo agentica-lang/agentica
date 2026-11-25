@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, Float32, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "a651ca665089"
+source_hash: "cfcb2e4d9b31"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -531,41 +531,6 @@ true
 1.0
 true
 true
-```
-
-## Float.to_bits32 y Float.from_bits32 {#floatto_bits32-and-floatfrom_bits32}
-
-```signature
-Float.to_bits32(float: Float) -> Int
-Float.from_bits32(bits: Int) -> Float
-```
-
-`to_bits32` redondea `float` a binary32, al más cercano con empates hacia el número par, y da sus 32 bits como un `Int` de 0 a 4294967295. Una magnitud de `2^128 - 2^103` o más se vuelve infinito con el mismo signo. Una muy pequeña se redondea a un subnormal o a cero y conserva su signo. Todo NaN da `2143289344`.
-
-`from_bits32` lee 32 bits como binary32 y los amplía a un `Float`, lo que siempre es exacto. Un `Int` fuera de `0 .. 4294967295` es `RUNTIME-INVALID-NUMBER` en el argumento. Así que `Float.to_bits32(Float.from_bits32(n)) == n` para todo `n`, salvo los patrones NaN distintos de `2143289344`.
-
-```agentica
-def main() -> Void
-  puts(Float.to_bits32(1.0))
-  puts(Float.to_bits32(0.1))
-  puts(Float.from_bits32(1036831949))
-  puts(Float.from_bits32(1065353216))
-  puts(Float.to_bits32(Float.from_bits32(2143289345)))
-end
-```
-
-```output
-1065353216
-1036831949
-0.10000000149011612
-1.0
-2143289344
-```
-
-```agentica {expect="RUNTIME-INVALID-NUMBER"}
-def main() -> Void
-  puts(Float.from_bits32(4294967296))
-end
 ```
 
 ## Float32 {#float32}

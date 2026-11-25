@@ -2,11 +2,12 @@
 ##
 ## Import it with `import Binary from "std/binary"`. Binary data is a `Bytes`, such as the one that `IO.read_bytes` and
 ## `File.read_bytes` give. Each function has the type of its width: `read_u16_be` gives a `UInt16`, `write_i32_le`
-## takes an `Int32`, `read_u64_be` gives a `UInt64`, and the 64-bit signed and float functions use `Int` and `Float`. A
-## reader takes a zero-based `offset` and returns a `Result`; it never halts, and its only error is an offset outside
-## the data. A writer returns a new `Bytes` with exactly the bytes of its type and never fails; convert a value that
-## may be too big first (`try n.to_uint16`) and join many with `Bytes.concat`. `_be` is big-endian (most significant
-## byte first, network order) and `_le` is little-endian. Signed types use two's complement.
+## takes an `Int32`, `read_u64_be` gives a `UInt64`, and the 64-bit signed and float functions use `Int` and `Float`
+## (`f32` is a `Float32`). A reader takes a zero-based `offset` and returns a `Result`; it never halts, and its only
+## error is an offset outside the data. A writer returns a new `Bytes` with exactly the bytes of its type and never
+## fails; convert a value that may be too big first (`try n.to_uint16`) and join many with `Bytes.concat`. `_be` is
+## big-endian (most significant byte first, network order) and `_le` is little-endian. Signed types use two's
+## complement.
 
 ## Reads an unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`.
 def read_u8(data: Bytes, offset: Int) -> Result[UInt8]
@@ -96,16 +97,18 @@ def read_i64_be(data: Bytes, offset: Int) -> Result[Int] = load64_be(data, offse
 ## Reads a little-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 def read_i64_le(data: Bytes, offset: Int) -> Result[Int] = load64_le(data, offset, "i64")
 
-## Reads a big-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
-def read_f32_be(data: Bytes, offset: Int) -> Result[Float]
+## Reads a big-endian 32-bit IEEE 754 float at `offset` as a `Float32`. Returns an error when the bytes are outside
+## `data`.
+def read_f32_be(data: Bytes, offset: Int) -> Result[Float32]
   bits = try load32_be(data, offset, "f32")
-  ok(Float.from_bits32(bits))
+  ok(Float32.from_bits(bits.wrap_uint32))
 end
 
-## Reads a little-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
-def read_f32_le(data: Bytes, offset: Int) -> Result[Float]
+## Reads a little-endian 32-bit IEEE 754 float at `offset` as a `Float32`. Returns an error when the bytes are outside
+## `data`.
+def read_f32_le(data: Bytes, offset: Int) -> Result[Float32]
   bits = try load32_le(data, offset, "f32")
-  ok(Float.from_bits32(bits))
+  ok(Float32.from_bits(bits.wrap_uint32))
 end
 
 ## Reads a big-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
@@ -162,13 +165,13 @@ def write_i64_be(value: Int) -> Bytes = bytes8_be(value.wrap_uint64)
 ## Returns the 8 bytes of `value` as a little-endian signed 64-bit integer.
 def write_i64_le(value: Int) -> Bytes = bytes8_le(value.wrap_uint64)
 
-## Returns the 4 bytes of `value` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
-## never fails; every NaN gives the canonical NaN bits.
-def write_f32_be(value: Float) -> Bytes = bytes4_be(Float.to_bits32(value))
+## Returns the 4 bytes of `value` as a big-endian 32-bit IEEE 754 float. It never fails; every NaN gives the canonical
+## NaN bits.
+def write_f32_be(value: Float32) -> Bytes = bytes4_be(value.to_bits.to_i)
 
-## Returns the 4 bytes of `value` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
-## never fails; every NaN gives the canonical NaN bits.
-def write_f32_le(value: Float) -> Bytes = bytes4_le(Float.to_bits32(value))
+## Returns the 4 bytes of `value` as a little-endian 32-bit IEEE 754 float. It never fails; every NaN gives the
+## canonical NaN bits.
+def write_f32_le(value: Float32) -> Bytes = bytes4_le(value.to_bits.to_i)
 
 ## Returns the 8 bytes of `value` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical
 ## NaN bits.

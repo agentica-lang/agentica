@@ -2,7 +2,7 @@
 title: Datos binarios (std)
 weight: 4
 description: El módulo std/binary, que lee y escribe números en formato binario en un Bytes.
-source_hash: "24583a87a17a"
+source_hash: "dd44769f55ae"
 ---
 
 `std/binary` está escrito en Agentica, sobre las funciones de bits de [Int y Float](/library/text-and-data/numbers/). Impórtalo: `import Binary from "std/binary"`.
@@ -97,7 +97,7 @@ end
 
 ## Flotantes {#floats}
 
-`f64` usa `Float.to_bits` y `Float.from_bits`, que leen los 64 bits como un `UInt64`. `write_f32_*` redondea al binary32 más cercano (`Float.to_bits32`); `read_f32_*` lo amplía de vuelta exactamente. `-0.0`, los infinitos y los subnormales se conservan, y cada NaN se escribe como el NaN canónico.
+`f64` usa `Float.to_bits` y `Float.from_bits`, que leen los 64 bits como un `UInt64`. `f32` es un [`Float32`](/library/text-and-data/numbers/#float32): `read_f32_*` da uno y `write_f32_*` recibe uno (`x.to_float32` redondea un `Float` al más cercano). `-0.0`, los infinitos y los subnormales se conservan, y cada NaN se escribe como el NaN canónico.
 
 ```agentica
 import Binary from "std/binary"
@@ -116,7 +116,7 @@ end
 [63, 128, 0, 0]
 [63, 240, 0, 0, 0, 0, 0, 0]
 [205, 204, 204, 61]
-ok(0.10000000149011612)
+ok(0.1)
 ok(3.141592653589793)
 true
 ```

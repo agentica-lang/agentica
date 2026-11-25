@@ -57,16 +57,6 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Float.from_bits32",
-    parameters: [Model.Named(name: "bits", type: Types.Type.Int)],
-    result: Types.Type.Float,
-    rule: Model.Rule.Plain,
-    implementation: "Float.from_bits32",
-    effects: [],
-    description: "Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt.",
-    alternatives: [],
-  ),
-  Model.Builtin(
     name: "Float.round",
     parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
@@ -84,19 +74,6 @@ ROWS: List[Model.Builtin] = [
     implementation: "Float.to_bits64",
     effects: [],
     description: "The 64 IEEE 754 binary64 bits as a UInt64; every NaN gives the canonical 9221120237041090560.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Float.to_bits32",
-    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
-    result: Types.Type.Int,
-    rule: Model.Rule.Plain,
-    implementation: "Float.to_bits32",
-    effects: [],
-    description: (
-      "Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives " +
-      "2143289344."
-    ),
     alternatives: [],
   ),
   Model.Builtin(

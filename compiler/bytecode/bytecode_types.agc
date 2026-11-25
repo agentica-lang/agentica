@@ -125,9 +125,9 @@ private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
 # 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum, 10 struct instance, 11 to 16 Int8,
-# Int16, Int32, UInt8, UInt16 and UInt32, 17 UInt64) and, for tags 4 to 10, the number of the item type, the struct,
-# the type
-# inside the JSON.Field or the Optional, the enum, or the instance.
+# Int16, Int32, UInt8, UInt16 and UInt32, 17 UInt64, 18 Float32) and, for tags 4 to 10, the number of the item
+# type, the
+# struct, the type inside the JSON.Field or the Optional, the enum, or the instance.
 def type_id(
   program: Ir.Program,
   struct_index: Map[String, Int],

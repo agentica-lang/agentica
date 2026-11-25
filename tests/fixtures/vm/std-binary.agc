@@ -23,13 +23,6 @@ def int_result_text(result: Result[Int]) -> String
   end
 end
 
-def float_result_text(result: Result[Float]) -> String
-  case result
-    ok(value) -> "ok(#{value})"
-    error(message) -> "error(#{message})"
-  end
-end
-
 def bytes_result_text(result: Result[Bytes]) -> String
   case result
     ok(bytes) -> "ok(#{bytes_text(bytes)})"
@@ -130,7 +123,7 @@ def float_edges() -> Int
     "[0, 0, 192, 127]",
   )
 
-  failed += expect("f32 exact", float_result_text(Binary.read_f32_be(Binary.write_f32_be(1.5), 0)), "ok(1.5)")
+  failed += expect("f32 exact", Binary.read_f32_be(Binary.write_f32_be(1.5), 0).unwrap!.to_s, "1.5")
   puts("float edges: #{failed} mismatches")
   failed
 end

@@ -532,41 +532,6 @@ true
 true
 ```
 
-## Float.to_bits32 and Float.from_bits32
-
-```signature
-Float.to_bits32(float: Float) -> Int
-Float.from_bits32(bits: Int) -> Float
-```
-
-`to_bits32` rounds `float` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295. A magnitude of `2^128 - 2^103` or more becomes infinity with the same sign. A very small one rounds to a subnormal or to zero and keeps its sign. Every NaN gives `2143289344`.
-
-`from_bits32` reads 32 bits as a binary32 and widens it to a `Float`, which is always exact. An `Int` outside `0 .. 4294967295` is `RUNTIME-INVALID-NUMBER` at the argument. So `Float.to_bits32(Float.from_bits32(n)) == n` for every `n` except NaN patterns other than `2143289344`.
-
-```agentica
-def main() -> Void
-  puts(Float.to_bits32(1.0))
-  puts(Float.to_bits32(0.1))
-  puts(Float.from_bits32(1036831949))
-  puts(Float.from_bits32(1065353216))
-  puts(Float.to_bits32(Float.from_bits32(2143289345)))
-end
-```
-
-```output
-1065353216
-1036831949
-0.10000000149011612
-1.0
-2143289344
-```
-
-```agentica {expect="RUNTIME-INVALID-NUMBER"}
-def main() -> Void
-  puts(Float.from_bits32(4294967296))
-end
-```
-
 ## Float32
 
 ```signature

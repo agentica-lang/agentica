@@ -96,7 +96,7 @@ end
 
 ## Floats
 
-`f64` uses `Float.to_bits` and `Float.from_bits`, which read the 64 bits as a `UInt64`. `write_f32_*` rounds to the nearest binary32 (`Float.to_bits32`); `read_f32_*` widens back exactly. `-0.0`, infinities and subnormals are kept, and every NaN is written as the canonical NaN.
+`f64` uses `Float.to_bits` and `Float.from_bits`, which read the 64 bits as a `UInt64`. `f32` is a [`Float32`](/library/text-and-data/numbers/#float32): `read_f32_*` gives one and `write_f32_*` takes one (`x.to_float32` rounds a `Float` to the nearest). `-0.0`, infinities and subnormals are kept, and every NaN is written as the canonical NaN.
 
 ```agentica
 import Binary from "std/binary"
@@ -115,7 +115,7 @@ end
 [63, 128, 0, 0]
 [63, 240, 0, 0, 0, 0, 0, 0]
 [205, 204, 204, 61]
-ok(0.10000000149011612)
+ok(0.1)
 ok(3.141592653589793)
 true
 ```

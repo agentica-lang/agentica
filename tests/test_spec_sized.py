@@ -49,6 +49,8 @@ RULES = {
         None, None),
     "an integer literal default must fit the Result's type": (
         main("n: Result[UInt8] = 3.to_uint8", "puts(n.unwrap_or(256))"), "CHECK-INT-RANGE", "256"),
+    "a Float32 and a sized integer do not mix": (
+        main("u: UInt64 = 1", "f: Float32 = 1.5", "puts(u + f)"), "CHECK-TYPE-MISMATCH", "f"),
     "a literal above the type": (main("x: UInt8 = 256"), "CHECK-INT-RANGE", "256"),
     "a negative literal for an unsigned type": (main("x: UInt8 = -1"), "CHECK-INT-RANGE", "-1"),
     "a literal below a signed type": (main("x: Int8 = -129"), "CHECK-INT-RANGE", "-129"),

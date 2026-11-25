@@ -15,8 +15,6 @@ SPANS = [
     ("int-shift-negative", "RUNTIME-INVALID-COUNT", (4, 21), (4, 26)),
     ("int-shift-right-negative", "RUNTIME-INVALID-COUNT", (3, 27), (3, 29)),
     ("int-shift-right-unsigned-negative", "RUNTIME-INVALID-COUNT", (3, 36), (3, 60)),
-    ("float-from-bits32-negative", "RUNTIME-INVALID-NUMBER", (3, 26), (3, 28)),
-    ("float-from-bits32-range", "RUNTIME-INVALID-NUMBER", (3, 26), (3, 36)),
     ("int-pow-negative", "RUNTIME-INVALID-COUNT", (3, 14), (3, 19)),
     ("math-sqrt-negative", "RUNTIME-INVALID-NUMBER", (3, 18), (3, 28)),
     ("int-clamp-range", "RUNTIME-INVALID-RANGE", (3, 8), (3, 21)),

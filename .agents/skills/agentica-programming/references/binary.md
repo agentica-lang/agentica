@@ -9,12 +9,12 @@ Binary.read_u8(data: Bytes, offset: Int) -> Result[UInt8]
 Binary.read_i8(data: Bytes, offset: Int) -> Result[Int8]
 Binary.read_u16_be(data, offset) -> Result[UInt16]  # also _le, i16 (Int16), u32, i32, u64 (UInt64)
 Binary.read_i64_be(data, offset) -> Result[Int]     # also _le
-Binary.read_f32_be(data, offset) -> Result[Float]   # also _le, f64
+Binary.read_f32_be(data, offset) -> Result[Float32] # also _le; f64 gives a Float
 Binary.write_u8(value: UInt8) -> Bytes
 Binary.write_i8(value: Int8) -> Bytes
 Binary.write_u16_be(value: UInt16) -> Bytes       # also _le, i16, u32, i32, u64 (UInt64)
 Binary.write_i64_be(value: Int) -> Bytes          # also _le
-Binary.write_f32_be(value: Float) -> Bytes        # also _le, f64
+Binary.write_f32_be(value: Float32) -> Bytes      # also _le; f64 takes a Float
 Binary.frame(payload: Bytes) -> Result[Bytes]
 Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```
@@ -33,7 +33,7 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
   `try n.to_uint16`. `x.to_i` gives the `Int` of a narrow reader result.
 - `read_u64_*` gives a `UInt64` (`0 .. 18446744073709551615`, hashes, IDs);
   `read_i64_*` reads the same bytes as an `Int`, negative on a top bit set.
-- Floats: `write_f32_*` rounds; every NaN is written as the canonical NaN.
+- Floats: `f32` is a `Float32` (`x.to_float32` rounds a `Float`); every NaN is written as the canonical NaN.
   `-0.0`, infinities and subnormals are exact.
 - Join writer results with `Bytes.concat(parts)`, not `+` in a loop
   (`bytes.md`). Build `parts` with `map`:
@@ -57,8 +57,6 @@ Int.shift_right(int: Int, count: Int) -> Int             # arithmetic, rounds do
 Int.shift_right_unsigned(int: Int, count: Int) -> Int    # logical; 64 or more gives 0
 Float.to_bits(float: Float) -> UInt64                    # binary64 bits; every NaN gives 9221120237041090560
 Float.from_bits(bits: UInt64) -> Float                   # any UInt64; any NaN pattern gives NaN
-Float.to_bits32(float: Float) -> Int                     # rounds to binary32; 0..4294967295; every NaN gives 2143289344
-Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0..4294967295 halt (RUNTIME-INVALID-NUMBER)
 ```
 
 - A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count.

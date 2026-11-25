@@ -470,8 +470,9 @@ static agc_value builtin_float_from_bits(agc_vm *vm, agc_value *args, uint32_t s
   return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
 }
 
-/* The catalog uses these two keys. The Int forms above are kept for the stage0 before #1977 (to reproduce its refresh);
-   remove them in the next PR. */
+/* The catalog uses these two keys. The Int forms above, and `Float.to_bits32` and `Float.from_bits32` below (no catalog
+   row has them), are kept for the stage0 before #1977 and the front end that built the stage0 of #1977 (to reproduce its
+   refresh); remove them in the next PR. */
 static agc_value builtin_float_to_bits64(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   double x = agc_as_float(vm, args[0]);
