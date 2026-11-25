@@ -97,6 +97,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-LAMBDA-CHAIN` | a pipe into methods, `xs \|> map(->(x) { ... }) \|> sum()`, for a method chain of three or more steps from the first one that passes a lambda; a name without arguments counts only as the last step |
 | `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
+| `LINT-NESTED-WRAPPER` | one layer, not a `Result[Result[T]]` or an `Optional[Optional[T]]` that a function signature (parameters and result, also inside a `List` or another type), a struct field or a type alias writes; `try` on the inner value, or a distinct error, flattens it, and a nesting that comes from a generic (`task.await`, `list.first`) or from the type of a local is not marked; it does not follow an alias |
 
 It also marks a likely typo that `check` cannot call an error: `LINT-ERROR-KIND` is an `is_a?` or `kind_of?` text literal whose first part is a family of the builtins and `std/` (`io`, `net`, `http`, `archive`, ...) but that is neither that family nor one of its [kinds](/library/errors/error/), as `e.is_a?("io.notfound")`; the help names the nearest kind. A kind in a builtin family that the file does not create with `kind:` is marked, so a new kind such as `error("x", kind: "number.negative")` is known in its file. A family of your own (`db.constraint`) and a kind computed at run time are not marked.
 

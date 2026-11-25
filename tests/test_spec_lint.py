@@ -587,3 +587,63 @@ def test_a_kind_that_the_file_creates_in_a_builtin_family_is_known(tmp_path):
         "end\n"
     )
     assert suggested(tmp_path / "made.agc", source) == {"LINT-ERROR-KIND": [where(source, '"number.positive"')]}
+
+
+NESTED = """struct Reply
+  inner: Result[Result[Int]]
+  maybe: Optional[Optional[String]]
+end
+
+type Pending = Result[Result[Int]]
+
+def parse(text: String, hint: Optional[Optional[Int]]) -> Result[Result[Int]]
+  return ok(ok(1))
+end
+
+def run(jobs: List[Result[Result[Int]]]) -> Optional[Optional[Int]]
+  return none
+end
+
+private
+
+def deep() -> Result[Result[Result[Int]]]
+  return ok(ok(ok(1)))
+end
+"""
+
+NOT_NESTED = """struct Box[T]
+  value: T
+end
+
+def await_all(jobs: List[Task[Result[Int]]], box: Box[Result[Int]]) -> Result[Int]
+  first = jobs.first
+  nested = jobs[0].await
+  inbox: Channel[Result[Int]] = Channel.new(1)
+  local: Result[Result[Int]] = ok(ok(1))
+  return nested
+end
+
+def mixed(a: Result[Optional[Int]], b: Optional[Result[Int]], c: Result[List[Result[Int]]]) -> Optional[Result[Int]]
+  return none
+end
+"""
+
+
+def test_a_written_result_in_a_result_or_optional_in_an_optional_is_a_suggestion(tmp_path):
+    found = suggested(tmp_path / "nested.agc", NESTED)
+    assert found == {
+        "LINT-NESTED-WRAPPER": [
+            where(NESTED, "Result[Result[Int]]", nth=1),
+            where(NESTED, "Optional[Optional[String]]"),
+            where(NESTED, "Result[Result[Int]]", nth=2),
+            where(NESTED, "Optional[Optional[Int]]", nth=1),
+            where(NESTED, "Result[Result[Int]]", nth=3),
+            where(NESTED, "Result[Result[Int]]", nth=4),
+            where(NESTED, "Optional[Optional[Int]]", nth=2),
+            where(NESTED, "Result[Result[Result[Int]]]"),
+        ]
+    }
+
+
+def test_a_nesting_that_comes_from_a_generic_or_a_local_is_quiet(tmp_path):
+    assert suggested(tmp_path / "not_nested.agc", NOT_NESTED) == {}

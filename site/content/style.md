@@ -566,6 +566,8 @@ def main() -> Void
 end
 ```
 
+A signature, a struct field or a type alias that declares `Result[Result[T]]` or `Optional[Optional[T]]` is usually one layer too many: use `try` on the inner value so one `Result` is left, or give the inner failure an error of its own. Keep both layers only when they mean different things. A nesting that a generic makes, such as `task.await` of a task that returns a `Result`, is fine.
+
 ## Text and collections
 
 Build text with interpolation, not by joining pieces with `+` and `.to_s`. To wrap a long text, a few sentence-sized `+` pieces in parentheses are fine. Use a heredoc for text of several lines:
@@ -638,3 +640,4 @@ end
 - `LINT-NEGATED-ELSE` and `LINT-BOOL-COMPARE`: [Naming](#naming) and [Functions](#functions).
 - `LINT-SINGLE-PIPE`, `LINT-NESTED-CALL` and `LINT-LAMBDA-CHAIN`: [Pipes](#pipes).
 - `LINT-TO-S-CONCAT` and `LINT-STRING-APPEND-IN-LOOP`: [Text and collections](#text-and-collections).
+- `LINT-NESTED-WRAPPER`: [Errors](#errors).

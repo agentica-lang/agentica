@@ -98,6 +98,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-LAMBDA-CHAIN` | un pipe hacia métodos, `xs \|> map(->(x) { ... }) \|> sum()`, para un encadenamiento de métodos de tres o más pasos desde el primero que pasa una lambda; un nombre sin argumentos cuenta solo como último paso |
 | `LINT-TO-S-CONCAT` | interpolación, no `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` y un solo `join`, no `s = s + piece` en un bucle `for` o `while`, que copia el texto en cada iteración |
+| `LINT-NESTED-WRAPPER` | una sola capa, no un `Result[Result[T]]` ni un `Optional[Optional[T]]` que escribe la firma de una función (parámetros y resultado, también dentro de un `List` u otro tipo), un campo de estructura o un alias de tipo; `try` sobre el valor interno, o un error propio, lo aplana, y no se marca un anidamiento que viene de un genérico (`task.await`, `list.first`) ni el tipo de una variable local; no sigue un alias |
 
 También marca una posible errata que `check` no puede marcar como error: `LINT-ERROR-KIND` es un texto literal de `is_a?` o `kind_of?` cuya primera parte es una familia de los integrados y de `std/` (`io`, `net`, `http`, `archive`, ...) pero que no es esa familia ni una de sus [clases](/library/errors/error/), como `e.is_a?("io.notfound")`; la ayuda nombra la clase más cercana. Se marca una clase de una familia integrada que el archivo no crea con `kind:`, así que una clase nueva como `error("x", kind: "number.negative")` se conoce en su archivo. No se marcan una familia propia (`db.constraint`) ni una clase calculada en runtime.
 

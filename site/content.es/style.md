@@ -567,6 +567,8 @@ def main() -> Void
 end
 ```
 
+Una firma, un campo de estructura o un alias de tipo que declara `Result[Result[T]]` u `Optional[Optional[T]]` suele tener una capa de más: usa `try` sobre el valor interno para que quede un solo `Result`, o dale al fallo interno un error propio. Deja las dos capas solo cuando significan cosas distintas. Un anidamiento que hace un genérico, como `task.await` de una tarea que devuelve un `Result`, está bien.
+
 ## Texto y colecciones {#text-and-collections}
 
 Construye el texto con interpolación, no uniendo piezas con `+` y `.to_s`. Para partir un texto largo, están bien unas pocas piezas `+` del tamaño de una frase entre paréntesis. Usa un heredoc para un texto de varias líneas:
@@ -639,3 +641,4 @@ end
 - `LINT-NEGATED-ELSE` y `LINT-BOOL-COMPARE`: [Nombres](#naming) y [Funciones](#functions).
 - `LINT-SINGLE-PIPE`, `LINT-NESTED-CALL` y `LINT-LAMBDA-CHAIN`: [Pipes](#pipes).
 - `LINT-TO-S-CONCAT` y `LINT-STRING-APPEND-IN-LOOP`: [Texto y colecciones](#text-and-collections).
+- `LINT-NESTED-WRAPPER`: [Errores](#errors).
