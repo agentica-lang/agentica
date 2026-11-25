@@ -377,6 +377,7 @@ end
 #   4. the lambdas among the other arguments, from left to right, then the block: each may bind the variables its
 #      annotated parameters and its result show.
 # A step 3 argument whose parameter type is still open waits for the block, and is checked after it.
+# A deferred literal that is out of its type is reported after the errors of the other arguments.
 def check_generic_call(
   cx: State.Cx,
   st: State.St,

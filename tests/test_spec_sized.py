@@ -54,13 +54,20 @@ RULES = {
     "a Float32 and a sized integer do not mix": (
         main("u: UInt64 = 1", "f: Float32 = 1.5", "puts(u + f)"), "CHECK-TYPE-MISMATCH", None),
     "a literal argument takes the type that another argument gives the variable": (
-        "def pick[T](x: T, xs: List[T]) -> T = x\n\ndef same[T](a: T, b: T) -> T = a\n\n"
-        + main("bytes: List[UInt8] = [1, 2]", "u: UInt8 = 5", "f: List[Float32] = [1.5]", "puts(pick(3, bytes))",
-               "puts(same(1, u))", "puts(same(u, 1))", "puts(same(1, 2))", "puts(pick(2.5, f))",
-               "puts(List.append(bytes, 1))"), None, None),
+        "def pick[T](x: T, xs: List[T]) -> T = x\n\ndef same[T](a: T, b: T) -> T = a\n\ndef id[T](x: T) -> T = x\n\n"
+        + main("bytes: List[UInt8] = [1, 2]", "u: UInt8 = 5", "i: Int8 = 1", "f: List[Float32] = [1.5]",
+               "puts(pick(3, bytes))", "puts(same(1, u))", "puts(same(u, 1))", "puts(same(b: u, a: 1))",
+               "puts(same(-1, i))", "puts(pick(2.5, f))", "n: Int = same(1, 2)", "x: UInt8 = id(1)", "puts(n + x.to_i)"),
+        None, None),
+    "the expected type of the call gives literal arguments their type": (
+        "def same[T](a: T, b: T) -> T = a\n\n" + main("x: UInt8 = same(1, 2)", "puts(x)"), None, None),
     "a literal argument out of the type that another argument gives": (
         "def pick[T](x: T, xs: List[T]) -> T = x\n\n" + main("bytes: List[UInt8] = [1]", "puts(pick(300, bytes))"),
         "CHECK-INT-RANGE", "300"),
+    "a literal argument before a UInt8 argument must fit it": (
+        "def same[T](a: T, b: T) -> T = a\n\n" + main("u: UInt8 = 5", "puts(same(300, u))"), "CHECK-INT-RANGE", "300"),
+    "a Float literal does not take the Int that another literal gave": (
+        "def same[T](a: T, b: T) -> T = a\n\n" + main("puts(same(1, 2.0))"), "CHECK-TYPE-MISMATCH", "2.0"),
     "a literal above the type": (main("x: UInt8 = 256"), "CHECK-INT-RANGE", "256"),
     "a negative literal for an unsigned type": (main("x: UInt8 = -1"), "CHECK-INT-RANGE", "-1"),
     "a literal below a signed type": (main("x: Int8 = -129"), "CHECK-INT-RANGE", "-129"),
