@@ -542,7 +542,7 @@ Float32.to_bits(float32: Float32) -> UInt32
 Float32.from_bits(bits: UInt32) -> Float32
 ```
 
-`Float32` is an IEEE 754 binary32 number. A float literal takes it where its place expects it, as an integer literal takes a narrow type: an annotation, a parameter, a struct field, a return type, a list or map item, a `case` pattern, or the other side of an operator. The literal is rounded once to the nearest `Float32`, ties to even. An integer literal never becomes a `Float32`, and a literal that would round to an infinity is `CHECK-FLOAT-RANGE` at the literal, from `2^128 - 2^103` (about `3.4028235677973366e38`) up; a `Float` literal from `2^1024 - 2^970` (about `1.7976931348623158e308`) up is `CHECK-FLOAT-RANGE` too.
+`Float32` is an IEEE 754 binary32 number. A float literal takes it where its place expects it, in the same places as an integer literal takes a narrow type. The literal is rounded once to the nearest `Float32`, ties to even. An integer literal never becomes a `Float32`, and a literal that would round to an infinity is `CHECK-FLOAT-RANGE` at the literal, from `2^128 - 2^103` (about `3.4028235677973366e38`) up; a `Float` literal from `2^1024 - 2^970` (about `1.7976931348623158e308`) up is `CHECK-FLOAT-RANGE` too.
 
 The operators `+`, `-`, `*`, `/`, `<`, `<=`, `>`, `>=`, `==` and `!=` take two `Float32` values; a `Float32` and a `Float` are `CHECK-TYPE-MISMATCH`, and there is no `%`. Each result is the `Float32` nearest the exact one. A result past the largest `Float32` is an infinity, a zero divisor is `RUNTIME-DIVISION-BY-ZERO`, and NaN and `-0.0` behave as for `Float`. `to_s` gives the fewest digits that read back as the same value, so the `Float32` nearest `0.1` prints `0.1`.
 

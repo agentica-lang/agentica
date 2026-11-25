@@ -526,12 +526,9 @@ header and the entry.
   the layout or to an opcode's meaning bumps the format version. A new opcode,
   type kind or constant kind does not: an older VM rejects the file as unknown.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
-  such a file and the call fails at run time with a wrong value type. The
-  sized integer kinds of the sized numeric types (11 to 17, issue #984), the
-  constant kind 8 and the opcodes 55 to 61 of UInt64, and Float32's type kind
-  18 and constant kind 9, needed no bump for that reason. Versions 7 and 8 are
-  reserved by the rest of the sized numeric types and the builtin `Time` types
-  (issue #985).
+  such a file and the call fails at run time with a wrong value type. Versions
+  7 and 8 are reserved by the rest of the sized numeric types (issue #984) and
+  the builtin `Time` types (issue #985).
 - The C loader is the only reader of this format and has no compatibility
   shims.
 
