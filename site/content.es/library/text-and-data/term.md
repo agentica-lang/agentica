@@ -75,7 +75,7 @@ $: larger than 67108864 bytes
 
 La clase del error es `term.encode` (consulta los [errores](/library/errors/error/)). Para más datos, codifícalos en trozos, cada uno como su propio valor.
 
-## Term.decode {#term-decode}
+## Term.decode {#termdecode}
 
 `Term.decode(data, Name)` lee los bytes en la estructura o el enum `Name` y devuelve `ok(value)`, o un `error` con la ruta del primer valor malo. El segundo argumento es un nombre de tipo, como en `JSON.decode(text, User)`: una estructura o un enum con nombre, así que una `List`, un `Map` o una instancia de una estructura genérica como `Box[Int]` no es un destino (`CHECK-TYPE-MISMATCH`); ponlo en un campo de una estructura. Todo lo de dentro del destino sigue la tabla de arriba, y una instancia de estructura genérica sirve como campo.
 

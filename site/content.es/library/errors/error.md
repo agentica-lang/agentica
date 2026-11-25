@@ -2,7 +2,7 @@
 title: Error
 weight: 2
 description: El registro que guarda un Result fallido.
-source_hash: "e721e355a76b"
+source_hash: "903c6d5c4009"
 ---
 
 Un `Result` fallido guarda un `Error`, un registro integrado. `error("text")` crea uno, `error("text", kind: "db.constraint", code: 19)` fija más de sus campos, y el patrón `error(e)` lo vincula.
