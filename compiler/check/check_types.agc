@@ -1333,12 +1333,12 @@ def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: I
     seen = found.seen
   end
 
-  key = "Enum:#{walk_key(type)}"
+  key = "Enum:#{test_key(type, test)}"
   return passed(seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
   definition = cx.enums[Types.name(type)]
-  stand = stand_ins(definition.parameters, Types.args(type))
+  stand = test_stand_ins(definition.parameters, Types.args(type), test)
   for variant in definition.variants
     for payload in variant.payload
       found = test_walk(cx, substitute(payload, stand), seen, test)
@@ -1433,11 +1433,11 @@ def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test:
     end
   end
 
-  key = walk_key(type)
+  key = test_key(type, test)
   return passed(seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
-  for field in stand_in_fields(cx, type)
+  for field in test_fields(cx, type, test)
     found = test_walk(cx, field.type, seen, test)
     return found if !found.passes
 
@@ -1453,6 +1453,73 @@ def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: I
   return term_walk(cx, type, seen) if test == 2
 
   decode_walk(cx, type, seen)
+end
+
+# The key of a struct or enum type in the walk of the test: walk_key, and for Term (test 2) term_key.
+def test_key(type: ResolvedType, test: Int) -> String
+  return term_key(type) if test == 2
+
+  walk_key(type)
+end
+
+# The stand-ins of the arguments of the type for the test: stand_ins, and for Term (test 2) term_stand_ins.
+def test_stand_ins(parameters: List[String], args: List[ResolvedType], test: Int) -> Map[String, ResolvedType]
+  return term_stand_ins(parameters, args) if test == 2
+
+  stand_ins(parameters, args)
+end
+
+# stand_in_fields with the stand-ins of the test.
+def test_fields(cx: State.Cx, type: ResolvedType, test: Int) -> List[Model.Named]
+  return stand_in_fields(cx, type) if test != 2
+
+  name = Types.name(type)
+  parameters = cx.struct_params.get(name, [])
+  return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
+
+  stand = term_stand_ins(parameters, Types.args(type))
+  cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
+end
+
+# A type for each parameter of the Term walk that keeps what Term tells apart in a field of the parameter: Nil for a
+# Nil argument and Optional[Int] for an Optional one (so Optional[T] is refused for both), and Int for any other. (A
+# Map key cannot be a type parameter, so the parameters need no stand-in for a key.)
+def term_stand_ins(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
+  found: Map[String, ResolvedType] = {}
+  index = 0
+  while index < parameters.size and index < args.size
+    found = found.put(parameters[index], term_stand_in(args[index]))
+    index += 1
+  end
+
+  found
+end
+
+def term_stand_in(argument: ResolvedType) -> ResolvedType
+  return Types.Type.Nil if Types.is?(argument, "Nil")
+  return Types.Type.Optional(Types.Type.Int) if Types.is?(argument, "Optional")
+
+  Types.Type.Int
+end
+
+# walk_key for the Term walk: a mark for each argument, N (Nil), O (Optional) or I (any other).
+def term_key(type: ResolvedType) -> String
+  name = Types.name(type)
+  return name if Types.args(type).size == 0
+
+  marks = ""
+  for argument in Types.args(type)
+    stand = term_stand_in(argument)
+    if Types.is?(stand, "Nil")
+      marks += "N"
+    elsif Types.is?(stand, "Optional")
+      marks += "O"
+    else
+      marks += "I"
+    end
+  end
+
+  "#{name}[#{marks}]"
 end
 
 # The name of a struct type and an N for each Nil argument and an I for each other one ("W[IN]"): what the stand-ins

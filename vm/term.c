@@ -97,10 +97,19 @@ static void put_text(term_buffer *b, const char *text, size_t n) {
   b->len += n;
 }
 
-/* A String key between double quotes, with the escapes of JSON. */
+/* The path keeps at most this many bytes of a String key, so a huge key does not become a huge message. */
+#define PATH_KEY_BYTES 64
+
+/* A String key between double quotes, with the escapes of JSON, cut at PATH_KEY_BYTES bytes (on a character) with
+   "..." after the cut. */
 static void put_quoted(term_buffer *b, const agc_string *key) {
+  size_t n = key->bytes;
+  if (n > PATH_KEY_BYTES) {
+    n = PATH_KEY_BYTES;
+    while (n > 0 && ((unsigned char)key->data[n] & 0xC0) == 0x80) n--;
+  }
   put_text(b, "\"", 1);
-  for (size_t k = 0; k < key->bytes; k++) {
+  for (size_t k = 0; k < n; k++) {
     unsigned char c = (unsigned char)key->data[k];
     char escape[8];
     if (c == '"' || c == '\\') {
@@ -113,6 +122,7 @@ static void put_quoted(term_buffer *b, const agc_string *key) {
       put_text(b, (const char *)&c, 1);
     }
   }
+  if (n < key->bytes) put_text(b, "...", 3);
   put_text(b, "\"", 1);
 }
 
@@ -121,8 +131,11 @@ static agc_string *text_string(const term_buffer *b) {
 }
 
 /* The error "path: reason" for the value being written, which is the last child that each open frame took: the keys,
-   indexes and field names of the frames (a payload of an enum is `values[i]`, as in the JSON form). The root is $. */
-static agc_value limit_error(agc_vm *vm, const term_frame *stack, size_t depth, const char *reason) {
+   indexes and field names of the frames (a payload of an enum is `values[i]`, as in the JSON form). The root is $. The
+   bytes written so far are charged, as for a value that is written whole. */
+static agc_value limit_error(agc_vm *vm, const term_buffer *written, const term_frame *stack, size_t depth,
+                             const char *reason) {
+  agc_charge_bytes(vm, written->len);
   term_buffer b = {0};
   for (size_t i = 0; i < depth; i++) {
     const term_frame *f = &stack[i];
@@ -135,10 +148,12 @@ static agc_value limit_error(agc_vm *vm, const term_frame *stack, size_t depth, 
       agc_value key = f->keys[entry];
       if (agc_is(key, AGC_T_INT)) {
         put_text(&b, text, (size_t)snprintf(text, sizeof text, "[%" PRId64 "]", key.as.i));
-      } else {
+      } else if (agc_is(key, AGC_T_STRING)) {
         put_text(&b, "[", 1);
         put_quoted(&b, agc_as_string(vm, key));
         put_text(&b, "]", 1);
+      } else {
+        put_text(&b, "[?]", 3);
       }
     } else if (f->kind == FRAME_STRUCT) {
       const agc_string *name = agc_struct_def_of(vm, agc_as_struct(vm, f->value))->fields[entry];
@@ -180,8 +195,8 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
   term_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(term_frame)));
   agc_value item = args[0];
   for (;;) {
-    bool fits = true;
-    if (++items > TERM_MAX_ITEMS) return limit_error(vm, stack, depth, "more than 4000000 values");
+    bool fits = true, opened = false;
+    if (++items > TERM_MAX_ITEMS) return limit_error(vm, &b, stack, depth, "more than 4000000 values");
     agc_unwrap_optional(vm, &item);
     if (agc_is(item, AGC_T_NIL)) {
       fits = put_head(&b, 7, 22);
@@ -205,7 +220,7 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
       fits = put_head(&b, 2, n) && put(&b, data, n);
     } else if (agc_is(item, AGC_T_LIST) || agc_is(item, AGC_T_MAP) || agc_is(item, AGC_T_STRUCT) ||
                agc_is(item, AGC_T_ENUM)) {
-      if (depth + 1 > TERM_MAX_DEPTH) return limit_error(vm, stack, depth, "nested deeper than 10000 levels");
+      if (depth + 1 > TERM_MAX_DEPTH) return limit_error(vm, &b, stack, depth, "nested deeper than 10000 levels");
       stack = agc_json_grow(stack, &capacity, depth, sizeof(term_frame));
       term_frame *f = &stack[depth];
       f->value = item;
@@ -234,11 +249,13 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
         fits = put_head(&b, 4, 2) && put_head(&b, 3, tag->bytes) && put(&b, tag->data, tag->bytes) &&
                put_head(&b, 4, e->n);
       }
-      depth++;
+      opened = true;
     } else {
       agc_fail(vm, "RUNTIME-INTERNAL", "a value that Term.encode cannot write", span);
     }
-    if (!fits) return limit_error(vm, stack, depth, "larger than 67108864 bytes");
+    /* The path of a value that does not fit is the frames that hold it, not its own, which is not open yet. */
+    if (!fits) return limit_error(vm, &b, stack, depth, "larger than 67108864 bytes");
+    if (opened) depth++;
     for (;;) {
       if (depth == 0) {
         agc_charge_bytes(vm, b.len);
@@ -250,7 +267,7 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
           const agc_string *name = agc_struct_def_of(vm, agc_as_struct(vm, top->value))->fields[top->next / 2];
           top->next++;
           if (!(put_head(&b, 3, name->bytes) && put(&b, name->data, name->bytes)))
-            return limit_error(vm, stack, depth, "larger than 67108864 bytes");
+            return limit_error(vm, &b, stack, depth, "larger than 67108864 bytes");
         }
         item = child_of(vm, top);
         top->next++;

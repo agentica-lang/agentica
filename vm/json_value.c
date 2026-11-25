@@ -357,8 +357,7 @@ static bool field_value(agc_vm *vm, agc_value *item) {
   return true;
 }
 
-/* A value as JSON writes it when it is an Optional, which may be anywhere a type is: none is nil (null) and some(x)
-   is x, so some(none) is null too. Any other value is unchanged. */
+/* Declared in value.h. Nested Optionals unwrap together, so some(none) is nil too. */
 void agc_unwrap_optional(agc_vm *vm, agc_value *item) {
   /* Only an enum value reads the program: the C tests encode plain values with no program loaded. */
   if (!agc_is(*item, AGC_T_ENUM)) return;

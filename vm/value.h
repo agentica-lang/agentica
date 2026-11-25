@@ -1151,8 +1151,8 @@ extern const size_t agc_case_ignorable_count;
 
 agc_string *agc_json_ascii(const char *text, size_t n);
 void *agc_json_grow(void *stack, size_t *capacity, size_t depth, size_t size);
-/* *item as the encoders of JSON and Term read an Optional, which may be anywhere a type is: none is nil and some(x) is x.
-   Any other value is unchanged. */
+/* The value that the encoders of JSON and Term write for *item when it is an Optional: nil for none, x for some(x), at
+   any depth. Any other value is unchanged. */
 void agc_unwrap_optional(agc_vm *vm, agc_value *item);
 agc_json *agc_json_container(bool object, size_t n, agc_list_builder *items);
 void agc_json_store(agc_json *node, agc_list_builder *items, size_t k, agc_value v);

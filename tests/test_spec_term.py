@@ -38,6 +38,21 @@ end
 
 """
 
+GENERIC = """struct Box[T]
+  value: Optional[T]
+end
+
+enum Maybe[T]
+  Just(Optional[T])
+  Nothing
+end
+
+"""
+
+# A struct of another module with a private field: a Term writes every field, so only its module may encode it.
+LIB = "struct Conn\n  id: Int\n\n  private\n\n  secret: String\nend\n\ndef open(id: Int) -> Conn = Conn(id: id, secret: \"s\")\n"
+MODULE = 'import L from "lib"\n\n' + main("c = L.open(1)", "puts(Term.encode(c))")
+
 RULES = {
     "a struct of every kind of field": (
         SHAPES + main('e = Entry(id: 1, hits: {1: 2}, names: {}, raw: "a".bytes, score: 1.5, ratio: 0.5, big: 7, '
@@ -70,6 +85,25 @@ RULES = {
     "a JSON.Field is refused for now": (
         "struct P\n  age: JSON.Field[Int]\nend\n\n" + main("puts(Term.encode(P(age: JSON.Field.Absent)))"),
         "CHECK-NOT-ENCODABLE", "P(age: JSON.Field.Absent)"),
+    "a recursive type is written": (
+        "struct Tree\n  children: List[Tree]\nend\n\n" + main("puts(Term.encode(Tree(children: [])).unwrap!.size)"),
+        None, None),
+    "a generic struct and enum with an argument that is not an Optional": (
+        GENERIC + main("c: Box[Int] = Box(value: none)", "d: Maybe[String] = Maybe.Nothing",
+                       "puts(Term.encode(c).unwrap!.size + Term.encode(d).unwrap!.size)"), None, None),
+    "a Map key that is Bytes is refused": (
+        main("m: Map[Bytes, Int] = {}", "puts(Term.encode(m))"), "CHECK-NOT-ENCODABLE", "m"),
+    "a Map key that is a sized integer is refused in a struct": (
+        "struct H\n  m: Map[UInt8, Int]\nend\n\n" + main("puts(Term.encode(H(m: {})))"), "CHECK-NOT-ENCODABLE",
+        "H(m: {})"),
+    "an Optional of an Optional through a type argument": (
+        GENERIC + main("x: Box[Optional[Int]] = Box(value: none)", "puts(Term.encode(x))"), "CHECK-NOT-ENCODABLE", "x"),
+    "an Optional of Nil through a type argument": (
+        GENERIC + main("x: Box[Nil] = Box(value: none)", "puts(Term.encode(x))"), "CHECK-NOT-ENCODABLE", "x"),
+    "an Optional of an Optional through the type argument of an enum": (
+        GENERIC + main("x: Maybe[Optional[Int]] = Maybe.Nothing", "puts(Term.encode(x))"), "CHECK-NOT-ENCODABLE", "x"),
+    "a generic struct that a Nil argument makes refuse an Optional nested in a list": (
+        GENERIC + main("x: Box[Nil] = Box(value: none)", "puts(Term.encode([x]))"), "CHECK-NOT-ENCODABLE", "[x]"),
     "Term.encode takes one argument": (main("puts(Term.encode(1, 2))"), "CHECK-ARITY", "Term.encode(1, 2)"),
     "Term cannot name a struct": ("struct Term\n  n: Int\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME",
                                   "struct Term\n  n: Int\nend\n"),
@@ -80,11 +114,16 @@ RULES = {
 
 @pytest.fixture(scope="module")
 def batch(tmp_path_factory):
-    """The programs of the table, checked by one `check` call."""
-    return check_many([rule[0] for rule in RULES.values()], tmp_path_factory.mktemp("term"))
+    """The programs of the table, and the module case, checked by one `check` call."""
+    programs = [rule[0] for rule in RULES.values()] + [{"lib.agc": LIB, "main.agc": MODULE}]
+    return check_many(programs, tmp_path_factory.mktemp("term"))
 
 
 @pytest.mark.parametrize("name", list(RULES))
 def test_term_encode_rules(batch, name):
     program, code, text = RULES[name]
     assert_rule(batch(program), program, code, text)
+
+
+def test_term_encode_refuses_the_private_field_of_another_module(batch):
+    assert_rule(batch({"lib.agc": LIB, "main.agc": MODULE}), MODULE, "CHECK-PRIVATE-FIELD", "c")

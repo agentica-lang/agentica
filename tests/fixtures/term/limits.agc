@@ -1,7 +1,8 @@
 # The limits of Term.encode, which return an error with the path of the first value past them: 10,000 levels of
 # nesting (an enum is one level, an Optional none), 4,000,000 values (a Map key is one, a field name is none) and the
 # path of that value through a struct, a Map with a String key, a List and an enum payload. The expected lines are
-# written by tests/test_term_encode.py, which also checks the size limit of 64 MiB (a slow case).
+# written by tests/test_term_encode.py, which also checks the size limit of 64 MiB (a slow case). It runs 88 million
+# steps, so it is not in tests/fixtures/vm/, whose files every sweep runs many times.
 struct Node
   next: Optional[Node]
 end

@@ -5,7 +5,7 @@ tests/fixtures/vm/term-encode.agc prints the hex of each value; the CBOR that th
 same order, must be those bytes, and the peer's strict decoder must read them back as that value. Edge values only:
 the heads at each size boundary, the largest and smallest Int and UInt64, Float and Float32 bits (-0.0, the infinities,
 a NaN with a payload, subnormals), strings and Bytes at the sizes of each head, Maps in insertion order. The limits of
-tests/fixtures/vm/term-limits.agc are computed here from the rules of the format.
+tests/fixtures/term/limits.agc are computed here from the rules of the format.
 """
 import pytest
 
@@ -16,6 +16,17 @@ CANONICAL_NAN64 = 0x7FF8000000000000
 CANONICAL_NAN32 = 0x7FC00000
 INT_MAX = 2**63 - 1
 SIZES = [0, 1, 23, 24, 255, 256, 65535, 65536]
+
+
+def typed(item):
+    """ITEM with the type of each part, so that True is not 1 and an empty CborMap is not an empty list."""
+    if isinstance(item, CborMap):
+        return ("map", [(typed(k), typed(v)) for k, v in item])
+    if isinstance(item, list):
+        return ("list", [typed(x) for x in item])
+    if isinstance(item, (F64, F32)):
+        return (type(item).__name__, item.bits)
+    return (type(item).__name__, item)
 
 
 def entry(id_, hits, names, raw, tag, nothing=None):
@@ -79,7 +90,7 @@ def test_the_program_prints_the_cases_in_order(printed):
 @pytest.mark.parametrize("name,item", cases(), ids=[name for name, _ in cases()])
 def test_term_encode_is_the_cbor_that_the_peer_writes(printed, name, item):
     assert printed[0][name] == encode(item).hex()
-    assert decode(bytes.fromhex(printed[0][name])) == item
+    assert typed(decode(bytes.fromhex(printed[0][name]))) == typed(item)
 
 
 def shorten(text):
@@ -87,7 +98,7 @@ def shorten(text):
 
 
 def test_the_limits_of_depth_and_of_values_name_the_path_of_the_value_past_them(tmp_path):
-    bytecode = compile_agc(FIXTURES / "vm" / "term-limits.agc", tmp_path / "limits.agcb")
+    bytecode = compile_agc(FIXTURES / "term" / "limits.agc", tmp_path / "limits.agcb")
     result = run_vm(bytecode)
     assert result.code == 0, result.stderr
     deep = ".".join(["next"] * 10000) + ": nested deeper than 10000 levels"
@@ -107,16 +118,35 @@ def test_the_limits_of_depth_and_of_values_name_the_path_of_the_value_past_them(
     assert result.stdout.splitlines() == expected
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("size,ok", [(67108859, True), (67108860, False)])
-def test_the_size_limit_of_64_mib_is_the_last_byte_of_the_output(tmp_path, size, ok):
-    program = f"""def main() -> Void
-  case Term.encode("a" * {size})
-    ok(data) -> puts("ok #{{data.size}}")
+SIZE_PROGRAM = """struct S
+  a: Bytes
+  b: Map[String, Int]
+end
+
+def report(encoded: Result[Bytes]) -> Void
+  case encoded
+    ok(data) -> puts("ok #{data.size}")
     error(e) -> puts(e.message)
   end
 end
+
+def main() -> Void
+  report(Term.encode("a" * SIZE))
+  report(Term.encode(S(a: ("a" * HOLD).bytes, b: {})))
+end
 """
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("size,hold,want", [
+    # 5 bytes of head and the string fill the limit exactly; one more does not fit.
+    (67108859, 67108854, ["ok 67108864", "b: larger than 67108864 bytes"]),
+    (67108860, 67108853, ["$: larger than 67108864 bytes", "ok 67108864"]),
+])
+def test_the_size_limit_of_64_mib_is_the_last_byte_of_the_output(tmp_path, size, hold, want):
+    """The struct is a map head, "a", the head of the Bytes and its data, then "b": the empty map that follows is the
+    value that does not fit, and its path is the one of its struct, not an index of a frame that is not open."""
+    program = SIZE_PROGRAM.replace("SIZE", str(size)).replace("HOLD", str(hold))
     result = run_vm(compile_text(program, "size", tmp_path))
     assert result.code == 0, result.stderr
-    assert result.stdout == ("ok 67108864\n" if ok else "$: larger than 67108864 bytes\n")
+    assert result.stdout.splitlines() == want
