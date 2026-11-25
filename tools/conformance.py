@@ -167,7 +167,8 @@ AREAS = {
         [
             "tests/test_vm_diff_1.py", "tests/test_vm_diff_2.py", "tests/test_vm_diff_3.py",
             "tests/test_vm_diff_4.py", "tests/test_vm_diff_5.py", "tests/test_vm_diff_6.py",
-            "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_term_encode.py", "tests/test_term_peer.py",
+            "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_term_encode.py", "tests/test_term_decode.py",
+            "tests/test_term_peer.py",
             "tests/test_vm_stack.py", "tests/test_vm_heap_limit.py",
             "tests/test_vm_jit.py",
             "tests/test_vm_equality.py", "tests/test_error_kinds.py", "tests/test_time.py",

@@ -95,9 +95,13 @@ def main() -> Void
 end
 ```
 
+```output
+Shape.Circle(1.5)
+```
+
 There is never a decode without a type: the bytes cannot name a type to build, and a function, a handle or an unbounded structure cannot be asked for.
 
-- **Same value back:** `Term.decode(Term.encode(v), T)` gives `v` for every type that `Term.encode` writes. `Term.encode(Term.decode(bytes, T))` gives `bytes` back only when `bytes` is what `Term.encode` writes.
+- **Same value back:** `Term.decode(Term.encode(v), T)` gives `v` for every type that `Term.decode` can target. `Term.encode(Term.decode(bytes, T))` gives `bytes` back only when `bytes` is what `Term.encode` writes.
 - **Only what `Term.encode` writes:** a head longer than needed, an indefinite length, a tag, a half float, a float with the width of another type (`Float` reads 8 bytes, `Float32` 4), a NaN with a payload, text that is not UTF-8, a `Map` key twice, and bytes after the value are errors. An `Int` outside 64 bits is an error, and so is a value outside the range of an `Int8` to `UInt32`.
 - **Structs:** the keys may come in any order and a key that names no field is read and ignored (with the same checks, and the same limits). A field named twice, and a field that is missing, are errors: a default value of a field only fills a constructor, so **adding a field breaks old data**. Removing or reordering fields is safe.
 - **Enums:** an unknown tag, a payload list of another length, and an outer array that is not of two items are errors.

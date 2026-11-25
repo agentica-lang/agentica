@@ -47,7 +47,7 @@ def entry() -> Entry
     raw: Bytes.from_list([1, 2]).unwrap!,
     score: 1.5,
     ratio: 0.25,
-    big: 9223372036854775808.to_uint64!,
+    big: Int.wrap_uint64(-1),
     tag: some("t"),
     nothing: nil,
     field: JSON.Field.Value(3),
@@ -90,7 +90,7 @@ def main() -> Void
   report("ignored", Term.decode(hex("a361780161796173617a8401a1616bf6f5f4"), Pair))
   report("shape", Term.decode(hex("8266436972636c6581fb3ff8000000000000"), Shape))
   report("cut", Term.decode(bytes.take(bytes.size - 1), Entry))
-  report("trailing", Term.decode(Bytes.concat(bytes, hex("00")), Entry))
+  report("trailing", Term.decode(bytes + hex("00"), Entry))
   report("empty", Term.decode(hex(""), Pair))
   report("not a map", Term.decode(hex("80"), Pair))
   report("long head", Term.decode(hex("a26178180161796173"), Pair))

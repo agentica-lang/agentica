@@ -18,20 +18,20 @@ def repeat(unit: Bytes, times: Int) -> Bytes
   left = times
   while left > 0
     if left % 2 == 1
-      out = Bytes.concat(out, piece)
+      out = out + piece
     end
 
-    piece = Bytes.concat(piece, piece)
+    piece = piece + piece
     left = left / 2
   end
 
   out
 end
 
-def chain(levels: Int) -> Bytes = Bytes.concat(repeat(hex("a1646e657874"), levels), hex("f6"))
+def chain(levels: Int) -> Bytes = repeat(hex("a1646e657874"), levels) + hex("f6")
 
 def numbers(count_hex: String, count: Int) -> Bytes
-  Bytes.concat(hex("a166" + "76616c756573" + "9a" + count_hex), repeat(hex("00"), count))
+  hex("a166" + "76616c756573" + "9a" + count_hex) + repeat(hex("00"), count)
 end
 
 def shorten(text: String) -> String

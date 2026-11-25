@@ -76,6 +76,7 @@ TaskMonitor
 TaskSpawn
 TaskSpawnOwning
 TaskTarget
+TermDecode
 TermEncode
 TestEq
 TestResult

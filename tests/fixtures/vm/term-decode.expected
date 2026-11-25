@@ -1,0 +1,28 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2112,
+  "stdout": [
+    "entry true true {2: 1, 1: 5} Shape.Rect(2, -3)",
+    "tree true 2412",
+    "reordered ok",
+    "ignored ok",
+    "shape ok",
+    "cut term.decode boxed.value: unexpected end of data",
+    "trailing term.decode $: trailing bytes after the value",
+    "empty term.decode $: unexpected end of data",
+    "not a map term.decode $: expected struct Pair",
+    "long head term.decode x: head is not the shortest form",
+    "tag term.decode x: tags are not allowed",
+    "indefinite term.decode x: indefinite lengths are not allowed",
+    "missing term.decode $: missing field \"y\"",
+    "duplicate term.decode $: duplicate field \"x\"",
+    "utf8 term.decode y: invalid UTF-8",
+    "huge length term.decode y: unexpected end of data",
+    "unknown tag term.decode $: unknown tag \"Triangle\"",
+    "values term.decode $: expected 2 values",
+    "path term.decode children[1].label: expected String or nil",
+    ""
+  ],
+  "stderr": []
+}

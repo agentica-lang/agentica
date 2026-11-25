@@ -215,10 +215,10 @@ def repeat(unit: Bytes, times: Int) -> Bytes
   left = times
   while left > 0
     if left % 2 == 1
-      out = Bytes.concat(out, piece)
+      out = out + piece
     end
 
-    piece = Bytes.concat(piece, piece)
+    piece = piece + piece
     left = left / 2
   end
 
@@ -287,7 +287,7 @@ def test_a_mutation_of_valid_bytes_never_crashes_and_never_passes_what_the_peer_
     inputs = [encode(seed) for seed in FUZZ_SEEDS]
     inputs += [mutate(rng.choice(inputs[:2]), rng) for _ in range(400)]
     program = FUZZ_PROGRAM_TYPES + HELPERS + """def try_line(line: String) -> Void
-  case Term.decode(hex(line.trim), Entry)
+  case Term.decode(hex(line.strip), Entry)
     ok(value) -> puts("ok #{OpenSSL.Digest.hexencode(Term.encode(value).unwrap!)}")
     error(_) -> puts("error")
   end

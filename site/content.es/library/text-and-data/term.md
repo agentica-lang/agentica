@@ -2,7 +2,7 @@
 title: Term (CBOR)
 weight: 15
 description: Escribe un valor de Agentica como CBOR y lo lee de vuelta en una estructura o un enum, una forma binaria compacta que conserva claves Int, los bits exactos de un Float, nil, Bytes y enums.
-source_hash: "73a2f8f4eb3f"
+source_hash: "fdc31328f994"
 ---
 
 `Term.encode` escribe un valor como bytes [CBOR](https://www.rfc-editor.org/rfc/rfc8949), la forma binaria de un valor. JSON sirve para otros programas; CBOR conserva lo que JSON pierde o deforma: un `Map` con claves `Int`, los bits exactos de un `Float` (infinitos incluidos), `nil` como valor propio, `Bytes` y un enum como un arreglo simple. También es más pequeño. Usos típicos son un caché en disco y los mensajes entre programas de Agentica. `Term.decode` lee los bytes de vuelta en el tipo que nombras: el tipo es el esquema, así que nunca se construye nada fuera de él.
@@ -96,9 +96,13 @@ def main() -> Void
 end
 ```
 
+```output
+Shape.Circle(1.5)
+```
+
 Nunca hay una lectura sin tipo: los bytes no pueden nombrar un tipo para construir, y no se puede pedir una función, un handle ni una estructura sin límite.
 
-- **El mismo valor de vuelta:** `Term.decode(Term.encode(v), T)` da `v` para todo tipo que `Term.encode` escribe. `Term.encode(Term.decode(bytes, T))` devuelve `bytes` solo cuando `bytes` es lo que `Term.encode` escribe.
+- **El mismo valor de vuelta:** `Term.decode(Term.encode(v), T)` da `v` para todo tipo que `Term.decode` puede tomar como destino. `Term.encode(Term.decode(bytes, T))` devuelve `bytes` solo cuando `bytes` es lo que `Term.encode` escribe.
 - **Solo lo que `Term.encode` escribe:** una cabecera más larga de lo necesario, una longitud indefinida, un tag, un medio flotante, un flotante con el ancho de otro tipo (`Float` lee 8 bytes, `Float32` 4), un NaN con payload, texto que no es UTF-8, una clave de `Map` repetida y bytes después del valor son errores. Un `Int` fuera de 64 bits es un error, y también un valor fuera del rango de un `Int8` a `UInt32`.
 - **Estructuras:** las claves pueden venir en cualquier orden y una clave que no nombra ningún campo se lee y se ignora (con las mismas comprobaciones y los mismos límites). Un campo nombrado dos veces y un campo que falta son errores: el valor por defecto de un campo solo rellena un constructor, así que **añadir un campo rompe los datos viejos**. Quitar o reordenar campos es seguro.
 - **Enums:** un tag desconocido, una lista de payloads de otra longitud y un arreglo exterior que no es de dos elementos son errores.
