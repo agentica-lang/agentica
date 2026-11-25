@@ -1,8 +1,8 @@
 ---
 title: Tarea
 weight: 1
-description: Inicia, espera (con o sin tiempo de espera), pausa, cancela, vigila y cuenta tareas ligeras; aplica un bloque a cada elemento de una lista con concurrencia acotada; transfiere un handle a una tarea, y encuentra sus fallos.
-source_hash: "c55780594d31"
+description: Inicia, enlaza, espera (con o sin tiempo de espera), pausa, cancela, vigila y cuenta tareas ligeras; aplica un bloque a cada elemento de una lista con concurrencia acotada; transfiere un handle a una tarea, y encuentra sus fallos.
+source_hash: "3055d87e2a0a"
 ---
 
 Las tareas ejecutan funciones al mismo tiempo. Consulta la página del tour [Tareas](/tour/tasks/).
@@ -80,6 +80,43 @@ error("network: end of input", kind: "net.eof")
 ```
 
 `echo` nunca cierra la conexión. Su fin sí la cierra, así que el cliente lee el fin de la entrada.
+
+## Task.spawn_link {#taskspawn_link}
+
+```signature
+Task.spawn_link(function: Fn[R]) -> Task[R]
+Task.spawn_link(function: Fn[A, R], argument: A) -> Task[R]
+```
+
+Inicia la tarea como `Task.spawn` (las mismas formas y el bloque) y la enlaza con el llamador antes de que pueda ejecutarse.
+
+- Un enlace une las dos tareas en ambos sentidos y dura hasta que una de las dos termina. Solo `Task.spawn_link` crea uno: una tarea en marcha no se puede enlazar ni desenlazar.
+- Un fallo de un extremo termina la otra con el mismo diagnóstico: el mismo código, mensaje y lugar, así que una espera o un monitor de ella informa del error original. La tarea falla cuando le toca ejecutarse, y ninguno de su propio código se ejecuta entre medias. Una tarea que está en un turno en otro planificador cuando llega el fallo termina ese turno, y si devuelve algo en él, termina con su propio resultado. Cuando el fallo llega a `main`, la ejecución termina con ese diagnóstico.
+- El fallo sigue por los enlaces de las tareas que alcanza: una tarea hija fallida termina a su tarea padre, que termina a sus otras tareas hijas enlazadas, y así sucesivamente. Las tareas no enlazadas siguen el árbol de tareas como antes: un fallo cancela a las tareas hijas de la tarea fallida.
+- Una devolución o una cancelación deja la otra tarea en marcha. Una cancelación de una tarea padre aún llega a sus tareas hijas, como para cualquier tarea. Una tarea que terminó antes de que llegue el fallo no falla.
+- Un fallo cuenta una sola vez. Se imprime cuando ocurre, las tareas que alcanza no imprimen ni cuentan nada, y una espera o un monitor de cualquiera de ellas lo observa, así que la ejecución termina con código 1 solo si ninguna lo observa.
+
+```agentica
+def reader() -> Int = 10 / 0
+
+def pair(idle: Channel[Int]) -> Result[Int]
+  _reader = Task.spawn_link(&reader)
+  idle.recv(60000)
+end
+
+def main() -> Void
+  idle: Channel[Int] = Channel.new(1)
+  task = Task.spawn(&pair, idle)
+  case Task.await(task)
+    ok(n) -> puts(n)
+    error(e) -> puts(e.message.start_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
+  end
+end
+```
+
+```output
+true
+```
 
 ## Task.await {#taskawait}
 

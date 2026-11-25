@@ -2,7 +2,7 @@
 title: BDD
 weight: 2
 description: Programas de prueba con archivos de características Gherkin y el comando agentica test.
-source_hash: "ab3f77e8d407"
+source_hash: "3d4ae00333f7"
 ---
 
 `agentica test` ejecuta archivos Gherkin `.feature`. Cada escenario inicia tu programa como un proceso aparte, le envía una entrada y comprueba su salida.
@@ -51,6 +51,7 @@ Código de salida `0`: todos los escenarios pasan o se omiten (también cuando s
 - `--jobs N` y `--isolate` (cada escenario en un proceso propio, véase más abajo): [Pruebas](/cli/#test).
 - Un paso fallido se informa en su línea y columna del archivo de características.
 - Cada fila de un `Scenario Outline` recibe el nombre del outline y los valores de la fila en las columnas que el nombre no muestra, como `Name (sqlite, 42)`, así que `--only "(sqlite, 42)"` selecciona una fila. Las filas idénticas conservan un solo nombre; `--json` tiene la línea de cada fila en `example`.
+- Un escenario tiene 1.000.000 de pasos por cada uno de sus pasos, más uno (un paso que los gasta falla con `RUNTIME-STEP-LIMIT`); `--max-steps N` o `--max-steps unlimited` después de `test` cambia el 1.000.000, con o sin `--isolate`. Los programas bajo prueba no tienen límite de pasos.
 - `--seed N` hace que `Random` se repita en los pasos y los programas. Sin él, el ejecutor de pruebas obtiene una semilla para cada programa de pasos y cada programa bajo prueba, y la muestra cuando la ejecución falla.
 - También ejecuta los archivos de prueba unitaria `*_test.agc` ([Test](/library/testing/test/)) en el mismo informe. Sin rutas, busca en `specs/` y `test/`.
 
@@ -155,9 +156,9 @@ def main() -> Void
 end
 ```
 
-`BDD.run` pone los pasos integrados delante de la lista, ejecuta lo que pide `agentica test`, y nunca devuelve. `hooks` prepara una característica una vez para sus escenarios ([Ganchos de característica](#feature-hooks)).
+`BDD.run` pone los pasos integrados delante de la lista, ejecuta lo que pide `agentica test`, y nunca devuelve. `hooks` prepara una característica una vez para sus escenarios ([Hooks de característica](#feature-hooks)).
 
-## Ganchos de característica {#feature-hooks}
+## Hooks de característica {#feature-hooks}
 
 ```signature
 BDD.Feature(name: String, tags: List[String])
@@ -165,12 +166,12 @@ BDD.Hooks(before_all: Fn[BDD.Feature, Result[JSON.Value]], after_all: Fn[BDD.Fea
 BDD.feature_state(ctx: BDD.Context) -> JSON.Value
 ```
 
-`before_all` inicia lo que necesita una característica entera, como un servidor para todos sus escenarios, y `after_all` lo detiene. Son `before(:all)` y `after(:all)` de RSpec, y `BDD.after` es el gancho de cada escenario.
+`before_all` inicia lo que necesita una característica entera, como un servidor para todos sus escenarios, y `after_all` lo detiene. Son `before(:all)` y `after(:all)` de RSpec, y `BDD.after` es el hook de cada escenario.
 
 - Se ejecutan en el trabajador que corre los escenarios, una vez por característica y por trabajador: con `--jobs 4` una característica puede arrancar hasta cuatro veces, así que usa el puerto 0 y una carpeta propia. Con `--isolate` cada escenario tiene un proceso propio, así que se ejecutan en cada escenario.
-- `before_all` se ejecuta antes del primer escenario de la característica que toma el trabajador, en una tarea que queda viva hasta `after_all`. Un handle que abre (un programa iniciado con `Process.spawn`) pertenece a esa tarea, así que sobrevive a los escenarios y se cierra cuando la tarea termina. Devuelve el estado de la característica como JSON (un puerto, una carpeta) y cada escenario lo lee con `BDD.feature_state`. Sin ganchos es `null`.
+- `before_all` se ejecuta antes del primer escenario de la característica que toma el trabajador, en una tarea que queda viva hasta `after_all`. Un handle que abre (un programa iniciado con `Process.spawn`) pertenece a esa tarea, así que sobrevive a los escenarios y se cierra cuando la tarea termina. Devuelve el estado de la característica como JSON (un puerto, una carpeta) y cada escenario lo lee con `BDD.feature_state`. Sin hooks es `null`.
 - `after_all` se ejecuta, con ese estado, cuando el trabajador deja la característica (el siguiente escenario es de otra característica, o el hueco no tiene más). Un trabajador que terminó por un escenario fallido no ejecuta ninguno: sus handles se cierran con él, y el siguiente escenario recibe un trabajador nuevo y un `before_all` nuevo.
-- El runner no restablece nada. Cada escenario debe dejar lo que creó `before_all` como lo encontró: restablécelo en un paso `Background` o en un gancho `BDD.after`.
+- El ejecutor de pruebas no restablece nada. Cada escenario debe dejar lo que creó `before_all` como lo encontró: restablécelo en un paso `Background` o en un hook `BDD.after`.
 - Un `before_all` que devuelve un `error`, falla o tarda más de 25 segundos hace fallar al escenario que lo necesitaba con `RUNTIME-BDD-BEFORE-ALL`, en su primer paso. Los demás escenarios de esa característica en el hueco de ese trabajador quedan `not_executed`. Un `after_all` que devuelve un `error` o falla es `RUNTIME-BDD-AFTER-ALL` en el archivo de la característica, en su línea `Feature`, y la ejecución termina con `1`.
 
 ```agentica {mode="check"}

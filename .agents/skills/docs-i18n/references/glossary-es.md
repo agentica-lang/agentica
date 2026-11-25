@@ -240,7 +240,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | lexer | analizador léxico |  |
 | library | biblioteca | The standard library: biblioteca estándar |
 | limit | límite |  |
-| link | enlace | Link targets stay as in English |
+| link | enlace | Link targets stay as in English; the verb is enlazar |
 | linker | enlazador |  |
 | lint | stays |  |
 | list | lista | The type `List` stays |
@@ -308,6 +308,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | page | página | |
 | parallel | paralelo | Run in parallel: ejecutar en paralelo |
 | parameter | parámetro |  |
+| parent | padre | Of a task: tarea padre |
 | park | aparcar | A task that waits |
 | parse | analizar | Noun: análisis; parser stays |
 | parser | stays | Owner decision: the term stays |

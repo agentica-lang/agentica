@@ -2,7 +2,7 @@
 title: Optional
 weight: 8
 description: Un valor que puede faltar, con some y none.
-source_hash: "ce5dad8f1158"
+source_hash: "f3f477256624"
 ---
 
 `Optional[T]` es `some(value)` o `none`. Úsalo para un valor que puede faltar: un campo de estructura, un parámetro, un tipo devuelto, un elemento de una lista o un valor de un mapa. `map.get(key)` y `text.index_of(part)` dan uno.
@@ -261,6 +261,35 @@ end
 ```output
 ok(4)
 error("no even number")
+```
+
+## Navegación segura: o&.name {#safe-navigation-oname}
+
+`o&.name` lee un campo o llama a un método del valor dentro de un Optional, y da un Optional: `some(value.name)` para `some(value)`, y `none` para `none`, donde los argumentos no se calculan. Un miembro que es en sí un Optional da ese Optional, no uno dentro de otro, y un miembro que no da nada (`logger&.log("x")`, `xs&.each do |x| ... end`) hace que toda la expresión sea `Void`: se ejecuta para `some` y no hace nada para `none`. Un `.` simple después funciona sobre el Optional que dio, así que encadena `&.` en cada paso. Un receptor que no es un Optional (un valor, un tipo o un módulo) es `CHECK-SAFE-NAV-RECEIVER`: escribe `.`. No existe `&.call`: llama a una función dentro de un Optional desde un `case`.
+
+```agentica
+struct Address
+  city: String
+end
+
+struct User
+  name: String
+  address: Optional[Address]
+end
+
+def main() -> Void
+  ana = User(name: "Ana", address: some(Address(city: "Lima")))
+  ben = User(name: "Ben", address: none)
+  puts(ana.address&.city.unwrap_or("?"))
+  puts(ben.address&.city.unwrap_or("?"))
+  puts(some("abc")&.size)
+end
+```
+
+```output
+Lima
+?
+some(3)
 ```
 
 ## Optional o Result {#optional-or-result}

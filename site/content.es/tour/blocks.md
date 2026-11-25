@@ -2,7 +2,7 @@
 title: Bloques
 weight: 7
 description: Bloques con do ... end, closures y paso de bloques a tus propias funciones.
-source_hash: "729d1d27e3d1"
+source_hash: "544a977d1a82"
 ---
 
 ## Un bloque {#a-block}
@@ -200,7 +200,7 @@ end
 
 ## Encadenamientos en varias líneas {#chains-over-several-lines}
 
-Una línea que empieza con un punto y un nombre continúa la línea anterior. Así, un encadenamiento largo de llamadas a métodos y bloques entre llaves se lee un paso por línea, sin paréntesis. Un comentario puede terminar una línea, o ir solo en una línea entre dos pasos. Una línea en blanco termina la sentencia.
+Una línea que empieza con un punto (o `&.`, véase [Optional](/library/data-structures/optional/)) y un nombre continúa la línea anterior. Así, un encadenamiento largo de llamadas a métodos y bloques entre llaves se lee un paso por línea, sin paréntesis. Un comentario puede terminar una línea, o ir solo en una línea entre dos pasos. Una línea en blanco termina la sentencia.
 
 ```agentica
 def main() -> Void
