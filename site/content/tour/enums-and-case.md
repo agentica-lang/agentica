@@ -191,6 +191,53 @@ def main() -> Void
 end
 ```
 
+## Names, values and parsing
+
+`Color.values` is the list of the variants of an enum whose variants have no data, in declaration order. `Color.parse(text)` reads a variant from its name and gives a `Result`: an unknown name is an error that lists the valid names. `name` is the bare name of the variant of any enum value, with data or without, where `to_s` writes the enum too.
+
+```agentica
+enum Color
+  Red
+  Green
+  Blue
+end
+
+enum Shape
+  Dot
+  Circle(Int)
+end
+
+def main() -> Void
+  names = Color.values.map do |color| color.name end
+  puts(names.join(", "))
+  puts(Color.parse("Green").unwrap!)
+  puts(Color.parse("Pink").message)
+  puts(Shape.Circle(3).name)
+  puts(Shape.Circle(3))
+end
+```
+
+```output
+Red, Green, Blue
+Color.Green
+unknown name "Pink" for Color; valid names: Red, Green, Blue
+Circle
+Shape.Circle(3)
+```
+
+An enum with data in a variant has no `values` and no `parse`, since a name cannot make the data. A type that is not an enum has none either.
+
+```agentica {expect="CHECK-UNKNOWN-METHOD"}
+enum Shape
+  Dot
+  Circle(Int)
+end
+
+def main() -> Void
+  puts(Shape.values.size)
+end
+```
+
 ## Generic enums
 
 An enum can take a type parameter. For a value that may be missing, use the built-in [Optional](/library/data-structures/optional/), not your own enum.

@@ -27,6 +27,9 @@ EAG_MODULE = "std/eag.agc"
 ## The code of the error for a template without that import.
 EAG_IMPORT_CODE = "CHECK-EAG-IMPORT"
 
+## The names of a type that are written without parentheses (`User.members`) and read as a field access on the type.
+TYPE_MEMBERS = ["members", "codec", "values"]
+
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports and module blocks left out (a module block is a module of its own, Modules.enter_block).
 def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
@@ -402,9 +405,13 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   return pipe_method(cx, node) if pipe_method?(cx, node, parts)
 
   plain = node.args.size == 0 and !node.parenthesized and !node.piped
-  type_member = parts.size == 2 and (parts[1] == "members" or parts[1] == "codec")
+  type_member = parts.size == 2 and TYPE_MEMBERS.include?(parts[1])
   if type_member and plain and Resolve.declared_type?(cx, parts[0])
     return rewrite_members(cx, node, parts[0], parts[1])
+  end
+
+  if parts.size == 2 and parts[1] == "parse" and node.parenthesized and !node.piped
+    return rewrite_parse(cx, node, parts[0]) if Resolve.declared_type?(cx, parts[0])
   end
 
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
@@ -464,10 +471,10 @@ def safe_family_failure(cx: Resolve.Context, dot: Source.Span) -> String
   Failure.fail_at(site, "CHECK-SAFE-NAV-RECEIVER", message, Failure.hint("write . for a module function"))
 end
 
-# Type.members and Type.codec, written without parentheses and not piped, on a type of this file or one it imports by
-# name is a field access on the type name, as for a type behind an alias (`Alias.Type.members`), which has no
-# parenthesized form either. The checker decides whether the type is a struct (or, for codec, can be decoded). The type
-# name takes an id past the ids of the program, like the receiver of a constant.
+# Type.members, Type.codec and Type.values, written without parentheses and not piped, on a type of this file or one
+# it imports by name is a field access on the type name, as for a type behind an alias (`Alias.Type.members`), which
+# has no parenthesized form either. The checker decides whether the type is a struct (or, for codec, can be decoded;
+# for values, an enum). The type name takes an id past the ids of the program, like the receiver of a constant.
 def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member: String) -> Result[Ast.Expr]
   linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
   start = node.span.start
@@ -481,6 +488,34 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member
   ok(
     Ast.Expr.FieldAccess(
       Ast.FieldAccess(id: node.id, target: receiver, name: member, name_span: name_span, span: node.span),
+    ),
+  )
+end
+
+# Type.parse(text), not piped, on a type of this file or one it imports by name is a method call on the type name, as
+# `Alias.Type.parse(text)` is. The checker decides whether the type is an enum that has values.
+def rewrite_parse(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
+  linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
+  start = node.span.start
+  size = written.length
+  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
+  receiver = Ast.Expr.TypeName(
+    Ast.TypeName(id: cx.ids + node.id, name: linked, args: [], span: Source.Span(start: start, stop: stop)),
+  )
+
+  args = try rewrite_exprs(cx, node.args)
+  named = try rewrite_named(cx, node.named)
+  ok(
+    Ast.Expr.MethodCall(
+      Ast.MethodCall(
+        id: node.id,
+        target: receiver,
+        name: "parse",
+        name_span: member_span(cx, node, size, "parse"),
+        args: args,
+        span: node.span,
+        named: named,
+      ),
     ),
   )
 end
@@ -673,7 +708,7 @@ end
 # True when Family.Member.method is the call of a builtin function: Member is a group of functions, or a type before
 # any method but codec and members.
 def called_member?(family: String, member: String, method: String) -> Bool
-  !Builtins.member_type?(family, member) or (method != "codec" and method != "members")
+  !Builtins.member_type?(family, member) or (!TYPE_MEMBERS.include?(method) and method != "parse")
 end
 
 # Family.Member.fn(args), or Family.Member.fn with no parentheses: the call of the builtin Family.Member.fn, with the

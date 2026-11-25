@@ -5,6 +5,10 @@
 ## JSON.decode, JSON.encode and JSON.from with other arguments than theirs, or read a field of the codec record.
 CODEC_BUILTINS = Set.new(["Codec.decode", "Codec.encode", "Codec.from", "Codec.members"])
 
+## The builtins of the VM that lowering writes with no catalog row: `value.name` and `Type.parse` on an enum.
+ENUM_NAME = "Enum.name"
+ENUM_PARSE = "Enum.parse"
+
 ## The fewest arms that test a variant for a case to jump through a table on the variant (`jump-variant`) instead of
 ## trying the arms in order.
 TABLE_ARMS = 3
@@ -117,7 +121,7 @@ VM_BUILTINS = Set.new([
   "Time.Date.cwday", "Time.Date.yday", "Time.Date.strftime", "Time.TimeOfDay.strftime", "Time.NaiveDateTime.strftime",
   "Time.DateTime.strftime", "Path.replace", "Process.pid", "System.program_name", "Ref.new", "Task.spawn_link",
   "Float.to_float32", "Int.to_float32", "Float32.to_f", "Float32.to_bits", "Float32.from_bits", "Term.encode",
-  "Term.decode", "Terminal.raw", "Terminal.size", "Terminal.tty?",
+  "Term.decode", "Terminal.raw", "Terminal.size", "Terminal.tty?", "Enum.name", "Enum.parse",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

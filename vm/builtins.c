@@ -463,6 +463,77 @@ static agc_value builtin_value_equal(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_bool(agc_equal(vm, args[0], args[1], span));
 }
 
+static const agc_variant_def *variant_of(agc_vm *vm, uint32_t variant, uint32_t span) {
+  const agc_program *p = vm->rt->program;
+  if (variant >= p->variant_count) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown enum variant", span);
+  return &p->variants[variant];
+}
+
+/* Enum.name(value): the name of the variant of an enum value, without the name of the enum (`Plain` for
+   `Model.Rule.Plain(x)`). The front end writes it for `value.name` and checks that the value is an enum. */
+static agc_value builtin_enum_name(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_string_value(variant_of(vm, agc_as_enum(vm, args[0])->variant, span)->name);
+}
+
+static bool same_text(const agc_string *a, const agc_string *b) {
+  return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+}
+
+static char *put(char *at, const char *data, size_t bytes) {
+  memcpy(at, data, bytes);
+  return at + bytes;
+}
+
+/* The error of Enum.parse: `unknown name "x" for Color; valid names: Red, Green`. Only the variants without a payload
+   are names. */
+static agc_value enum_parse_error(agc_vm *vm, const agc_enum_def *d, const agc_string *shown, const agc_string *text) {
+  static const char head[] = "unknown name ", middle[] = " for ", tail[] = "; valid names: ", comma[] = ", ";
+  const agc_program *p = vm->rt->program;
+  size_t chars, form = agc_write_form(text, NULL, &chars);
+  size_t fixed = sizeof head - 1 + sizeof middle - 1 + sizeof tail - 1;
+  size_t bytes = agc_size_add(agc_size_add(fixed, form), shown->bytes);
+  size_t total = agc_size_add(agc_size_add(fixed, chars), shown->chars);
+  size_t listed = 0;
+  for (uint32_t k = d->first; k < d->first + d->count; k++) {
+    const agc_string *name = p->variants[k].name;
+    if (p->variants[k].arity != 0) continue;
+    size_t gap = listed++ ? sizeof comma - 1 : 0;
+    bytes = agc_size_add(bytes, agc_size_add(name->bytes, gap));
+    total = agc_size_add(total, agc_size_add(name->chars, gap));
+  }
+  agc_string *message = agc_new_string(bytes, total);
+  char *at = put(message->data, head, sizeof head - 1);
+  at += agc_write_form(text, at, &chars);
+  at = put(at, middle, sizeof middle - 1);
+  at = put(at, shown->data, shown->bytes);
+  at = put(at, tail, sizeof tail - 1);
+  listed = 0;
+  for (uint32_t k = d->first; k < d->first + d->count; k++) {
+    const agc_variant_def *v = &p->variants[k];
+    if (v->arity != 0) continue;
+    if (listed++) at = put(at, comma, sizeof comma - 1);
+    at = put(at, v->name->data, v->name->bytes);
+  }
+  return agc_error_string(vm, AGC_KIND_ARGUMENT, message);
+}
+
+/* Enum.parse(first, shown, text): ok(the variant of that name) of the enum that variant `first` belongs to, else an
+   error that lists the names. `shown` is the name of the enum for the message. The front end writes it for
+   `Color.parse(text)`, for an enum whose variants have no payload; a variant with one is never a name here. */
+static agc_value builtin_enum_parse(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t first = agc_as_int(vm, args[0]);
+  const agc_string *shown = agc_as_string(vm, args[1]);
+  const agc_string *text = agc_as_string(vm, args[2]);
+  const agc_program *p = vm->rt->program;
+  if (first < 0 || first > UINT32_MAX) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown enum variant", span);
+  const agc_enum_def *d = &p->enums[variant_of(vm, (uint32_t)first, span)->owner];
+  for (uint32_t k = d->first; k < d->first + d->count; k++) {
+    const agc_variant_def *v = &p->variants[k];
+    if (v->arity == 0 && v->shared && same_text(v->name, text)) return agc_result_value(true, agc_enum_value(v->shared));
+  }
+  return enum_parse_error(vm, d, shown, text);
+}
+
 static bool range_size(agc_vm *vm, agc_value v, uint64_t *size) {
   int64_t first, last;
   if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) {
@@ -594,6 +665,8 @@ const agc_builtin agc_core_builtins[] = {
   {"Error.is_a?", 2, builtin_error_is_a, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Optional.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
   {"Value.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Enum.name", 1, builtin_enum_name, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Enum.parse", 3, builtin_enum_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE, false, false, false, false},
   {"List.filter", 2, NULL, AGC_NATIVE_FILTER, AGC_COST_NONE, false, false, false, false},
   {"List.reduce", 3, NULL, AGC_NATIVE_REDUCE, AGC_COST_NONE, false, false, false, false},

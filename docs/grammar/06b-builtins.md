@@ -15,8 +15,9 @@ record has one and the method otherwise. `iso8601` is the one name with both
 forms: the method writes the text (`d.iso8601`) and `Time.Date.iso8601(text)`
 reads it. The forms on a type name are
 `Type.members`, the list of the fields of a struct
-(`docs/grammar/06-semantics.md`, "Structs and lists"), and `Type.codec`, its
-codec (JSON, below).
+(`docs/grammar/06-semantics.md`, "Structs and lists"), `Type.codec`, its codec
+(JSON, below), and `Type.values` and `Type.parse(text)` of an enum, with
+`value.name` on its values ("Enums and pattern matching").
 
 A builtin has its Ruby name (`strip`, `include?`, `start_with?`, `to_i`,
 `to_f`, `to_s` and `join`); an old name (`trim`, `contains?`, `to_int`,

@@ -105,6 +105,9 @@ def resolved_text(resolved: State.Resolved) -> String
     State.Resolved.Members(fields) -> members_text(fields)
     State.Resolved.Codec(name, fields) -> "codec(#{Text.quote(name)}, #{members_text(fields)})"
     State.Resolved.FieldCall -> "field-call"
+    State.Resolved.VariantName -> "variant-name"
+    State.Resolved.Values(name, variants) -> "values(#{Text.quote(name)}, #{variants.join(", ")})"
+    State.Resolved.Parse(name, first) -> "parse(#{Text.quote(name)}, #{first})"
   end
 end
 
