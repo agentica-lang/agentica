@@ -77,6 +77,9 @@ What the files cannot see, or how they must run:
   holds the build on a FIFO opens the writer end without blocking
   (`BlockingFile.write`): the VM can end with the build still in its open, and
   a blocking open then waits for ever.
+- A heavy fixture (tens of millions of steps, a limits case) stays out of
+  `tests/fixtures/vm/`: every file there gets the `--max-steps` sweep,
+  gc-stress and ASan. Give it its own folder and its own test module.
 - A golden or test that guards a fix must fail on the code before the fix. Build
   the parent commit's binary (a worktree of the parent, then `make`) and run the
   test with `AGENTICA_VM_BINARY=/absolute/path/dist/agentica`: the product CLI

@@ -45,8 +45,20 @@ its `.expected` (`python3 benchmarks/run.py --update-goldens --only NAME`; `make
 goldens` rewrites them all). A change that alters an output on purpose rewrites
 the goldens, and their diff is the review.
 
+A test or a summary that wraps a runner script asserts that every row has
+the success status, not only that the rows exist (a missing runner printed
+`missing` rows and exited 0): the script fails on a runner it was asked for and
+lacks, and the test gives it the same binary override. A summary also checks
+that every number is finite and every quality metric is inside its tolerance,
+and a crashed run fails the pipeline (`set -o pipefail`; `| tee` hides exit
+codes).
+
 ## Speed work
 
+- A performance PR has a test that fails on the base binary: a cost test with a
+  threshold that master also passes proves nothing. It writes `Closes #N` only
+  after measuring every input kind the issue names (bindings and declarations,
+  not one of them); when one layer is fixed, `Part of #N`.
 - Profile before timing. `AGENTICA_VM_TRACE=profile` prints the report when a
   run ends; its rows, options and the costs in steps are in
   `agentica-programming` `references/performance.md`. The `events`, `op` and
