@@ -410,3 +410,30 @@ Every failure is an error value. The checks run in this order:
   terminator, and a last unterminated line of exactly `buffer_bytes`. It checks
   the buffer range first (`RUNTIME-INVALID-COUNT`), then the timeout, then the
   path.
+
+### 2.9 Term.encode
+
+The user-facing rules (the types it writes, the form of each, the limits) are in
+`site/content/library/text-and-data/term.md`. The VM side (`vm/term.c`):
+
+- `Term.encode(v)` walks the value of its argument with one explicit frame
+  stack, never C recursion, and writes CBOR (RFC 8949) from the tags and
+  definitions of the values: it reads no type table. The checker has refused
+  every type that holds a tag the walk does not write; a value of another tag,
+  which only hostile bytecode makes, is `RUNTIME-INTERNAL`.
+- Heads are the shortest; every length is definite. `Int` is major type 0 or 1,
+  `UInt64` major type 0, a `Float` always `0xFB` with 8 bytes and a `Float32`
+  always `0xFA` with 4; a NaN is written as the quiet NaN of its width. A
+  struct is a map of its field names (in declaration order) to its values, and
+  a `Map` keeps the order of `agc_map_keys`, the insertion order. An enum value
+  is `[name, [payloads...]]` with the variant name from the program's variant
+  table; an `Optional` (found by the loader as for JSON) is `null` or its value
+  and is no level.
+- The limits are counted as the walk goes: 10,000 levels (a container opened
+  past it fails before it is written), 4,000,000 values (each value visited,
+  a Map key included, a field name excluded) and 64 MiB of output (a head or
+  body that would pass it is not written). The failure is the `Result` error of
+  kind `term.encode` with the message `path: reason`; the path is the last
+  child that each open frame took, so it needs no state beyond the frames.
+- The row is plain: no lock, no cost rule; the bytes written are charged once
+  at the end (`agc_charge_bytes`).

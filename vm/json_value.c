@@ -359,7 +359,7 @@ static bool field_value(agc_vm *vm, agc_value *item) {
 
 /* A value as JSON writes it when it is an Optional, which may be anywhere a type is: none is nil (null) and some(x)
    is x, so some(none) is null too. Any other value is unchanged. */
-static void optional_value(agc_vm *vm, agc_value *item) {
+void agc_optional_value(agc_vm *vm, agc_value *item) {
   /* Only an enum value reads the program: the C tests encode plain values with no program loaded. */
   if (!agc_is(*item, AGC_T_ENUM)) return;
   uint32_t first = vm->rt->program->optional;
@@ -392,7 +392,7 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
   agc_value item = root;
   for (;;) {
     stack = agc_json_grow(stack, &capacity, depth, sizeof(walk_frame));
-    optional_value(vm, &item);
+    agc_optional_value(vm, &item);
     if (open_frame(vm, item, &stack[depth])) {
       agc_json_put(&b, is_object(vm, item) ? "{" : "[", 1);
       depth++;
@@ -458,7 +458,7 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
     agc_charge(vm, 1);
     stack = agc_json_grow(stack, &capacity, depth, sizeof(walk_frame));
     walk_frame *f = &stack[depth];
-    optional_value(vm, &item);
+    agc_optional_value(vm, &item);
     if (agc_is(item, AGC_T_JSON)) {
       v = item;
     } else if (open_frame(vm, item, f)) {

@@ -2,7 +2,7 @@
 title: Texto y datos
 weight: 2
 description: Trabaja con texto y números, busca y reemplaza texto con expresiones regulares, lee y escribe JSON y TOML, codifica URL, escapa HTML y gestiona cookies, halla el tipo de medio de un archivo, lee la hora Unix como fecha UTC y como texto RFC 3339, empaqueta números en bytes, calcula hashes y firma bytes, y genera bytes aleatorios seguros.
-source_hash: "eaba0ceeafb0"
+source_hash: "1658f0a865ee"
 ---
 
 - Usa [String](/library/text-and-data/string/) para cortar, buscar, cambiar y convertir texto, y para convertirlo en números.
@@ -10,6 +10,7 @@ source_hash: "eaba0ceeafb0"
 - Usa [Int y Float](/library/text-and-data/numbers/) para convertir entre `Int`, `Float` y `String`, para redondear, acotar y sacar raíces cuadradas, y para trabajar con bits.
 - Usa [JSON](/library/text-and-data/json/) para mover datos hacia dentro y hacia fuera de los programas, con una forma conocida (estructuras) o sin ella.
 - Usa [Datos binarios](/library/text-and-data/binary/) (`std/binary`) para leer y escribir números en un `Bytes`, y para enmarcar mensajes.
+- Usa [Term](/library/text-and-data/term/) (`Term.encode`) para escribir un valor como CBOR, una forma binaria compacta que conserva claves `Int`, los bits exactos de un `Float`, `nil` y `Bytes`.
 - Usa [TOML](/library/text-and-data/toml/) (`std/toml`) para leer y escribir documentos TOML 1.0, como los archivos de configuración.
 - Usa [HTML](/library/text-and-data/html/) (`std/html`) para escapar y desescapar texto HTML.
 - Usa [Plantillas EAG](/library/text-and-data/eag/) (`<<~EAG` y `std/eag`) para crear texto a partir de una plantilla con etiquetas ERB.

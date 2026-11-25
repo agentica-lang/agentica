@@ -453,6 +453,7 @@ Task.spawn
 Task.spawn_link
 Task.spawn_owning
 Task.unobserved_crash
+Term.encode
 Test.assert
 Test.eq
 Test.error?

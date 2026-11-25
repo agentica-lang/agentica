@@ -158,6 +158,28 @@ end
 ## encodable type other than Nil (and other than an Optional, for a JSON.Field).
 def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
 
+## True when Term.encode can write a value of the type: Nil, Bool, String, Bytes, the number types, lists, maps with
+## Int or String keys, an Optional of one of those (not of Nil or of another Optional), and the structs and user enums
+## of those (a generic one by its fields and payloads with the type arguments put in). A type variable, a Set, a
+## Result, a Json, a JSON.Field, a time and every handle are not.
+def term_encodable?(cx: State.Cx, type: ResolvedType) -> Bool = term_walk(cx, type, {}).passes
+
+## True when the type holds an Optional of Nil or of another Optional: Term writes none and nil alike, so they could
+## not be told apart. It only picks the help of Term.encode when it refuses the type.
+def term_optional_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  inside?(cx, type) do |current: ResolvedType|
+    item = Types.item(current)
+    Types.is?(current, "Optional") and (Types.is?(item, "Nil") or Types.is?(item, "Optional"))
+  end
+end
+
+## True when the type holds a Map whose keys are neither Int nor String. It only picks the help of Term.encode.
+def term_key_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  inside?(cx, type) do |current: ResolvedType|
+    Types.is?(current, "Map") and !(Types.is?(Types.key(current), "Int") or Types.is?(Types.key(current), "String"))
+  end
+end
+
 ## What a type with type variables needs to be encodable once they are bound, or none when no binding makes it
 ## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JSON.Field of one
 ## (its item must not be a null), or a Map with one as key and String as value (the key must be a String). A variable
@@ -1204,6 +1226,30 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   refused(seen)
 end
 
+def term_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+  if primitive?(type) or Types.sized_int?(type) or Types.is?(type, "Float32") or Types.is?(type, "Bytes")
+    return passed(seen)
+  elsif Types.is?(type, "Optional")
+    return refused(seen) if Types.is?(Types.item(type), "Nil") or Types.is?(Types.item(type), "Optional")
+
+    return term_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "List")
+    return term_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Map")
+    return refused(seen) if !(Types.is?(Types.key(type), "Int") or Types.is?(Types.key(type), "String"))
+
+    return term_walk(cx, Types.value(type), seen)
+  elsif sealed?(type)
+    return refused(seen)
+  elsif Types.is?(type, "Struct")
+    return struct_walk(cx, type, seen, 2)
+  elsif Types.is?(type, "Enum")
+    return enum_walk(cx, type, seen, 2)
+  end
+
+  refused(seen)
+end
+
 def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   scalar = Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
   if scalar or Types.sized_int?(type) or Types.is?(type, "Float32")
@@ -1276,6 +1322,7 @@ end
 # arguments first (an encodable generic enum such as Option[Int] has them; a decodable enum has none), then every
 # payload once for each key, with a stand-in for each parameter. A builtin enum other than JSON.Field, which the
 # callers handle, has no JSON form.
+# Test 2 is Term.encode: the same walk with term_walk.
 def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   return refused(seen) if !user_enum?(cx, type)
 
@@ -1375,10 +1422,11 @@ def sealed?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and SEALED.i
 # entered before either passed or aborted the whole walk, and a key still being walked counts as passed, as the type is
 # recursive. A key has only two shapes for each parameter, so a recursion that changes its type arguments each time
 # (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+# Test 2 is Term.encode: the same walk with term_walk.
 def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
-  if test == 0
+  if test != 1
     for argument in Types.args(type)
-      found = encode_walk(cx, argument, seen)
+      found = test_walk(cx, argument, seen, test)
       return found if !found.passes
 
       seen = found.seen
@@ -1399,9 +1447,10 @@ def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test:
   passed(seen)
 end
 
-# encode_walk for test 0, decode_walk for test 1.
+# encode_walk for test 0, decode_walk for test 1, term_walk for test 2.
 def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   return encode_walk(cx, type, seen) if test == 0
+  return term_walk(cx, type, seen) if test == 2
 
   decode_walk(cx, type, seen)
 end

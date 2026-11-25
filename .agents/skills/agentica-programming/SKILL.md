@@ -89,7 +89,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `System.Profile`, step costs |
-| `binary.md` | bit operations, `std/binary` (integers and floats in bytes, frames), `String.from_bytes` |
+| `binary.md` | bit operations, `std/binary` (integers and floats in bytes, frames), `Term.encode` (CBOR), `String.from_bytes` |
 | `crypto.md` | `OpenSSL` (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`), `Base64`, hex |
 | `regex.md` | `std/regex` and `/re/` literals |
 | `<name>.md` | `std/<name>`: `archive` (TAR/ZIP by allowlist), `cache` (string cache tasks share), `cookie`, `html`, `logger`, `mime`, `option_parser` (command-line options), `toml`, `uri` (percent-encoding, query strings), `utc` (deprecated: use `Time`) |
