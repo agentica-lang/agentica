@@ -13496,1007 +13496,1007 @@ program #11 0:1:1-106:7:1
         type: type-ref #13 1471:30:9-1474:30:12 name="Int"
       field: field-decl #16 1477:31:3-1492:32:1 name="reason"
         type: type-ref #15 1485:31:11-1491:31:17 name="String"
-    declaration: struct-decl #30 1754:37:1-1854:45:1 name="@3::Head" doc="The head of a frame. It is read in two steps: the first two bytes (head_of) and then the tail they announce\n(tail_size, complete). `length` holds the 7-bit length until the tail completes it, and is -1 for a 64-bit length\nthat has its top bit set."
-      field: field-decl #19 1768:38:3-1778:39:1 name="fin"
-        type: type-ref #18 1773:38:8-1777:38:12 name="Bool"
-      field: field-decl #21 1780:39:3-1792:40:1 name="opcode"
-        type: type-ref #20 1788:39:11-1791:39:14 name="Int"
-      field: field-decl #23 1794:40:3-1807:41:1 name="masked"
-        type: type-ref #22 1802:40:11-1806:40:15 name="Bool"
-      field: field-decl #25 1809:41:3-1823:42:1 name="reserved"
-        type: type-ref #24 1819:41:13-1822:41:16 name="Int"
-      field: field-decl #27 1825:42:3-1837:43:1 name="length"
-        type: type-ref #26 1833:42:11-1836:42:14 name="Int"
-      field: field-decl #29 1839:43:3-1850:44:1 name="key"
-        type: type-ref #28 1844:43:8-1849:43:13 name="Bytes"
-    declaration: struct-decl #40 1953:47:1-2033:53:1 name="@3::Assembly" doc="The frames of a message that arrives in fragments: its kind, the pieces so far and their size."
-      field: field-decl #32 1971:48:3-1982:49:1 name="text"
-        type: type-ref #31 1977:48:9-1981:48:13 name="Bool"
-      field: field-decl #34 1984:49:3-1995:50:1 name="open"
-        type: type-ref #33 1990:49:9-1994:49:13 name="Bool"
-      field: field-decl #37 1997:50:3-2016:51:1 name="parts"
-        type: type-ref #36 2004:50:10-2015:50:21 name="List"
-          arg: type-ref #35 2009:50:15-2014:50:20 name="Bytes"
-      field: field-decl #39 2018:51:3-2029:52:1 name="total"
-        type: type-ref #38 2025:51:10-2028:51:13 name="Int"
-    declaration: enum-decl #49 2093:55:1-2174:60:1 name="@3::Taken" type-parameters=[] doc="What one data frame did to the message being assembled."
-      variant: enum-variant #42 2106:56:3-2121:57:1 name="More"
-        payload: type-ref #41 2111:56:8-2119:56:16 name="@3::Assembly"
-      variant: enum-variant #46 2123:57:3-2152:58:1 name="Whole"
-        payload: type-ref #43 2129:57:9-2133:57:13 name="Bool"
-        payload: type-ref #44 2135:57:15-2140:57:20 name="Bytes"
-        payload: type-ref #45 2142:57:22-2150:57:30 name="@3::Assembly"
-      variant: enum-variant #48 2154:58:3-2170:59:1 name="Broken"
-        payload: type-ref #47 2161:58:10-2168:58:17 name="@3::Problem"
-    declaration: enum-decl #55 2260:62:1-2316:66:1 name="@3::Closing" type-parameters=[] doc="What a close frame says: the peer's code and reason, or a problem with the frame."
-      variant: enum-variant #52 2275:63:3-2293:64:1 name="Peer"
-        payload: type-ref #50 2280:63:8-2283:63:11 name="Int"
-        payload: type-ref #51 2285:63:13-2291:63:19 name="String"
-      variant: enum-variant #54 2295:64:3-2312:65:1 name="Invalid"
-        payload: type-ref #53 2303:64:11-2310:64:18 name="@3::Problem"
-    declaration: function-decl #67 2443:69:1-2550:70:1 name="@3::accept_key" doc="The `Sec-WebSocket-Accept` for a `Sec-WebSocket-Key` (RFC 6455 4.2.2): the base64 of the SHA-1 of the key and\nthe GUID." expression
-      param: param #57 2458:69:16-2469:69:27 name="key"
-        type: type-ref #56 2463:69:21-2469:69:27 name="String"
-      result: type-ref #58 2474:69:32-2480:69:38 name="String"
-      body: return-stmt #66 2483:69:41-2549:69:107 implicit
-        value: call #65 2483:69:41-2549:69:107 name="Base64.strict_encode64" piped=false
-          arg: call #64 2506:69:64-2548:69:106 name="OpenSSL.Digest.sha1" piped=false
-            arg: field-access #63 2526:69:84-2547:69:105 name="bytes"
-              target: interpolation #62 2526:69:84-2541:69:99
-                part: name-ref #60 2529:69:87-2532:69:90 name="key"
-                part: const-ref #61 2535:69:93-2539:69:97 name="@3::GUID"
-    declaration: function-decl #85 2647:72:1-2801:78:1 name="@3::valid_accept?" doc="A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes."
-      param: param #69 2665:72:19-2679:72:33 name="accept"
-        type: type-ref #68 2673:72:27-2679:72:33 name="String"
-      result: type-ref #70 2684:72:38-2688:72:42 name="Bool"
-      body: case-stmt #84 2691:73:3-2797:77:1
-        value: call #72 2696:73:8-2726:73:38 name="Base64.strict_decode64" piped=false
-          arg: name-ref #71 2719:73:31-2725:73:37 name="accept"
-        arm: case-arm #79 2731:74:5-2769:75:1
-          pattern: variant-pattern #73 2731:74:5-2739:74:13 enum="Result" variant="Ok" bindings=["data"]
-          body: return-stmt #78 2743:74:17-2768:74:42 implicit
-            value: binary #77 2743:74:17-2768:74:42 op=equal op-span=2753:74:27-2755:74:29
-              left: field-access #75 2743:74:17-2752:74:26 name="size"
-                target: name-ref #74 2743:74:17-2747:74:21 name="data"
-              right: const-ref #76 2756:74:30-2768:74:42 name="@3::ACCEPT_BYTES"
-        arm: case-arm #83 2773:75:5-2791:76:1
-          pattern: variant-pattern #80 2773:75:5-2781:75:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #82 2785:75:17-2790:75:22 implicit
-            value: literal #81 2785:75:17-2790:75:22 value=bool:false
-    declaration: function-decl #101 2973:81:1-3091:88:1 name="@3::token?" doc="True for a name made only of token bytes (no space, comma, control byte or quote), as a subprotocol is. An empty\nname is a token here: it stands for no subprotocol."
-      param: param #87 2984:81:12-2996:81:24 name="name"
-        type: type-ref #86 2990:81:18-2996:81:24 name="String"
-      result: type-ref #88 3001:81:29-3005:81:33 name="Bool"
-      body: for-stmt #98 3008:82:3-3079:85:1 variable="byte"
-        iterable: field-access #90 3020:82:15-3030:82:25 name="bytes"
-          target: name-ref #89 3020:82:15-3024:82:19 name="name"
-        body: if-stmt #97 3035:83:5-3073:84:1 guard
-          branch: if-branch #96 3035:83:5-3072:83:42
-            condition: unary #95 3051:83:21-3072:83:42 op=not op-span=3051:83:21-3054:83:24
-              operand: call #94 3055:83:25-3072:83:42 name="@3::token_byte?" piped=false
-                arg: name-ref #93 3067:83:37-3071:83:41 name="byte"
-            body: return-stmt #92 3035:83:5-3047:83:17
-              value: literal #91 3042:83:12-3047:83:17 value=bool:false
-      body: return-stmt #100 3082:86:3-3086:86:7 implicit
-        value: literal #99 3082:86:3-3086:86:7 value=bool:true
-    declaration: function-decl #119 3149:90:1-3291:96:1 name="@3::valid_key?" doc="A Sec-WebSocket-Key is the base64 of 16 random bytes."
-      param: param #103 3164:90:16-3175:90:27 name="key"
-        type: type-ref #102 3169:90:21-3175:90:27 name="String"
-      result: type-ref #104 3180:90:32-3184:90:36 name="Bool"
-      body: case-stmt #118 3187:91:3-3287:95:1
-        value: call #106 3192:91:8-3219:91:35 name="Base64.strict_decode64" piped=false
-          arg: name-ref #105 3215:91:31-3218:91:34 name="key"
-        arm: case-arm #113 3224:92:5-3259:93:1
-          pattern: variant-pattern #107 3224:92:5-3232:92:13 enum="Result" variant="Ok" bindings=["data"]
-          body: return-stmt #112 3236:92:17-3258:92:39 implicit
-            value: binary #111 3236:92:17-3258:92:39 op=equal op-span=3246:92:27-3248:92:29
-              left: field-access #109 3236:92:17-3245:92:26 name="size"
-                target: name-ref #108 3236:92:17-3240:92:21 name="data"
-              right: const-ref #110 3249:92:30-3258:92:39 name="@3::KEY_BYTES"
-        arm: case-arm #117 3263:93:5-3281:94:1
-          pattern: variant-pattern #114 3263:93:5-3271:93:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #116 3275:93:17-3280:93:22 implicit
-            value: literal #115 3275:93:17-3280:93:22 value=bool:false
-    declaration: function-decl #140 3408:98:1-3559:105:1 name="@3::has_token?" doc="True when `value`, a comma-separated list as in `Connection` and `Upgrade`, has `token`, as HTTP compares names."
-      param: param #121 3423:98:16-3436:98:29 name="value"
-        type: type-ref #120 3430:98:23-3436:98:29 name="String"
-      param: param #123 3438:98:31-3451:98:44 name="token"
-        type: type-ref #122 3445:98:38-3451:98:44 name="String"
-      result: type-ref #124 3456:98:49-3460:98:53 name="Bool"
-      body: for-stmt #137 3463:99:3-3546:102:1 variable="part"
-        iterable: method-call #127 3475:99:15-3491:99:31 name="split"
-          target: name-ref #125 3475:99:15-3480:99:20 name="value"
-          arg: literal #126 3487:99:27-3490:99:30 value=string:","
-        body: if-stmt #136 3496:100:5-3540:101:1 guard
-          branch: if-branch #135 3496:100:5-3539:100:48
-            condition: binary #134 3511:100:20-3539:100:48 op=equal op-span=3531:100:40-3533:100:42
-              left: field-access #132 3511:100:20-3530:100:39 name="downcase"
-                target: field-access #131 3511:100:20-3521:100:30 name="strip"
-                  target: name-ref #130 3511:100:20-3515:100:24 name="part"
-              right: name-ref #133 3534:100:43-3539:100:48 name="token"
-            body: return-stmt #129 3496:100:5-3507:100:16
-              value: literal #128 3503:100:12-3507:100:16 value=bool:true
-      body: return-stmt #139 3549:103:3-3554:103:8 implicit
-        value: literal #138 3549:103:3-3554:103:8 value=bool:false
-    declaration: function-decl #178 3628:107:1-3866:119:1 name="@3::head_of" doc="The first two bytes of a frame as a `Head` that has no tail yet."
-      param: param #142 3640:107:13-3650:107:23 name="two"
-        type: type-ref #141 3645:107:18-3650:107:23 name="Bytes"
-      result: type-ref #143 3655:107:28-3659:107:32 name="@3::Head"
-      body: binding #147 3662:108:3-3680:109:1 name="first"
-        value: method-call #146 3670:108:11-3679:108:20 name="at"
-          target: name-ref #144 3670:108:11-3673:108:14 name="two"
-          arg: literal #145 3677:108:18-3678:108:19 value=int:0
-      body: binding #151 3682:109:3-3701:110:1 name="second"
-        value: method-call #150 3691:109:12-3700:109:21 name="at"
-          target: name-ref #148 3691:109:12-3694:109:15 name="two"
-          arg: literal #149 3698:109:19-3699:109:20 value=int:1
-      body: return-stmt #177 3703:110:3-3861:117:4 implicit
-        value: construct #176 3703:110:3-3861:117:4 type="@3::Head"
-          arg: named-arg #155 3713:111:5-3730:111:22 name="fin"
-            value: binary #154 3718:111:10-3730:111:22 op=greater-equal op-span=3724:111:16-3726:111:18
-              left: name-ref #152 3718:111:10-3723:111:15 name="first"
-              right: literal #153 3727:111:19-3730:111:22 value=int:128
-          arg: named-arg #159 3736:112:5-3754:112:23 name="opcode"
-            value: binary #158 3744:112:13-3754:112:23 op=modulo op-span=3750:112:19-3751:112:20
-              left: name-ref #156 3744:112:13-3749:112:18 name="first"
-              right: literal #157 3752:112:21-3754:112:23 value=int:16
-          arg: named-arg #163 3760:113:5-3781:113:26 name="masked"
-            value: binary #162 3768:113:13-3781:113:26 op=greater-equal op-span=3775:113:20-3777:113:22
-              left: name-ref #160 3768:113:13-3774:113:19 name="second"
-              right: literal #161 3778:113:23-3781:113:26 value=int:128
-          arg: named-arg #169 3787:114:5-3813:114:31 name="reserved"
-            value: binary #168 3797:114:15-3813:114:31 op=modulo op-span=3810:114:28-3811:114:29
-              left: binary #166 3798:114:16-3808:114:26 op=divide op-span=3804:114:22-3805:114:23
-                left: name-ref #164 3798:114:16-3803:114:21 name="first"
-                right: literal #165 3806:114:24-3808:114:26 value=int:16
-              right: literal #167 3812:114:30-3813:114:31 value=int:8
-          arg: named-arg #173 3819:115:5-3839:115:25 name="length"
-            value: binary #172 3827:115:13-3839:115:25 op=modulo op-span=3834:115:20-3835:115:21
-              left: name-ref #170 3827:115:13-3833:115:19 name="second"
-              right: literal #171 3836:115:22-3839:115:25 value=int:128
-          arg: named-arg #175 3845:116:5-3856:116:16 name="key"
-            value: const-ref #174 3850:116:10-3856:116:16 name="@3::NO_KEY"
-    declaration: function-decl #210 3985:121:1-4181:137:1 name="@3::tail_size" doc="The bytes after the first two: the extended length (2 or 8 bytes) and the mask (4 bytes when the frame is masked)."
-      param: param #180 3999:121:15-4009:121:25 name="head"
-        type: type-ref #179 4005:121:21-4009:121:25 name="@3::Head"
-      result: type-ref #181 4014:121:30-4017:121:33 name="Int"
-      body: binding #183 4020:122:3-4029:123:1 name="size"
-        value: literal #182 4027:122:10-4028:122:11 value=int:0
-      body: if-stmt #191 4031:123:3-4072:126:1
-        branch: if-branch #190 4031:123:3-4066:125:1
-          condition: binary #187 4034:123:6-4052:123:24 op=equal op-span=4046:123:18-4048:123:20
-            left: field-access #185 4034:123:6-4045:123:17 name="length"
-              target: name-ref #184 4034:123:6-4038:123:10 name="head"
-            right: literal #186 4049:123:21-4052:123:24 value=int:126
-          body: binding #189 4057:124:5-4066:125:1 name="size"
-            value: literal #188 4064:124:12-4065:124:13 value=int:2
-      body: if-stmt #199 4075:127:3-4116:130:1
-        branch: if-branch #198 4075:127:3-4110:129:1
-          condition: binary #195 4078:127:6-4096:127:24 op=equal op-span=4090:127:18-4092:127:20
-            left: field-access #193 4078:127:6-4089:127:17 name="length"
-              target: name-ref #192 4078:127:6-4082:127:10 name="head"
-            right: literal #194 4093:127:21-4096:127:24 value=int:127
-          body: binding #197 4101:128:5-4110:129:1 name="size"
-            value: literal #196 4108:128:12-4109:128:13 value=int:8
-      body: if-stmt #207 4119:131:3-4169:134:1
-        branch: if-branch #206 4119:131:3-4163:133:1
-          condition: field-access #201 4122:131:6-4133:131:17 name="masked"
-            target: name-ref #200 4122:131:6-4126:131:10 name="head"
-          body: binding #205 4138:132:5-4163:133:1 name="size"
-            value: binary #204 4145:132:12-4162:132:29 op=plus op-span=4150:132:17-4151:132:18
-              left: name-ref #202 4145:132:12-4149:132:16 name="size"
-              right: const-ref #203 4152:132:19-4162:132:29 name="@3::MASK_BYTES"
-      body: return-stmt #209 4172:135:3-4176:135:7 implicit
-        value: name-ref #208 4172:135:3-4176:135:7 name="size"
-    declaration: function-decl #279 4255:139:1-4737:159:1 name="@3::complete" doc="The head with its length and mask, from the tail `tail_size` counted."
-      param: param #212 4268:139:14-4278:139:24 name="head"
-        type: type-ref #211 4274:139:20-4278:139:24 name="@3::Head"
-      param: param #214 4280:139:26-4291:139:37 name="tail"
-        type: type-ref #213 4286:139:32-4291:139:37 name="Bytes"
-      result: type-ref #215 4296:139:42-4300:139:46 name="@3::Head"
-      body: binding #218 4303:140:3-4324:141:1 name="length"
-        value: field-access #217 4312:140:12-4323:140:23 name="length"
-          target: name-ref #216 4312:140:12-4316:140:16 name="head"
-      body: binding #220 4326:141:3-4335:142:1 name="used"
-        value: literal #219 4333:141:10-4334:141:11 value=int:0
-      body: if-stmt #234 4337:142:3-4432:146:1
-        branch: if-branch #233 4337:142:3-4426:145:1
-          condition: binary #224 4340:142:6-4358:142:24 op=equal op-span=4352:142:18-4354:142:20
-            left: field-access #222 4340:142:6-4351:142:17 name="length"
-              target: name-ref #221 4340:142:6-4344:142:10 name="head"
-            right: literal #223 4355:142:21-4358:142:24 value=int:126
-          body: binding #230 4363:143:5-4413:144:1 name="length"
-            value: field-access #229 4372:143:14-4412:143:54 name="to_i"
-              target: field-access #228 4372:143:14-4407:143:49 name="unwrap!"
-                target: call #227 4372:143:14-4399:143:41 name="@4::read_u16_be" piped=false
-                  arg: name-ref #225 4391:143:33-4395:143:37 name="tail"
-                  arg: literal #226 4397:143:39-4398:143:40 value=int:0
-          body: binding #232 4417:144:5-4426:145:1 name="used"
-            value: literal #231 4424:144:12-4425:144:13 value=int:2
-      body: if-stmt #249 4435:147:3-4539:151:1
-        branch: if-branch #248 4435:147:3-4533:150:1
-          condition: binary #238 4438:147:6-4456:147:24 op=equal op-span=4450:147:18-4452:147:20
-            left: field-access #236 4438:147:6-4449:147:17 name="length"
-              target: name-ref #235 4438:147:6-4442:147:10 name="head"
-            right: literal #237 4453:147:21-4456:147:24 value=int:127
-          body: binding #245 4461:148:5-4520:149:1 name="length"
-            value: call #244 4470:148:14-4519:148:63 name="Result.unwrap_or" piped=false
-              arg: call #241 4487:148:31-4514:148:58 name="@4::read_i64_be" piped=false
-                arg: name-ref #239 4506:148:50-4510:148:54 name="tail"
-                arg: literal #240 4512:148:56-4513:148:57 value=int:0
-              arg: unary #243 4516:148:60-4518:148:62 op=minus op-span=4516:148:60-4517:148:61
-                operand: literal #242 4517:148:61-4518:148:62 value=int:1
-          body: binding #247 4524:149:5-4533:150:1 name="used"
-            value: literal #246 4531:149:12-4532:149:13 value=int:8
-      body: binding #251 4542:152:3-4555:153:1 name="key"
-        value: const-ref #250 4548:152:9-4554:152:15 name="@3::NO_KEY"
-      body: if-stmt #260 4557:153:3-4617:156:1
-        branch: if-branch #259 4557:153:3-4611:155:1
-          condition: field-access #253 4560:153:6-4571:153:17 name="masked"
-            target: name-ref #252 4560:153:6-4564:153:10 name="head"
-          body: binding #258 4576:154:5-4611:155:1 name="key"
-            value: method-call #257 4582:154:11-4610:154:39 name="slice"
-              target: name-ref #254 4582:154:11-4586:154:15 name="tail"
-              arg: name-ref #255 4593:154:22-4597:154:26 name="used"
-              arg: const-ref #256 4599:154:28-4609:154:38 name="@3::MASK_BYTES"
-      body: return-stmt #278 4620:157:3-4732:157:115 implicit
-        value: construct #277 4620:157:3-4732:157:115 type="@3::Head"
-          arg: named-arg #263 4625:157:8-4638:157:21 name="fin"
-            value: field-access #262 4630:157:13-4638:157:21 name="fin"
-              target: name-ref #261 4630:157:13-4634:157:17 name="head"
-          arg: named-arg #266 4640:157:23-4659:157:42 name="opcode"
-            value: field-access #265 4648:157:31-4659:157:42 name="opcode"
-              target: name-ref #264 4648:157:31-4652:157:35 name="head"
-          arg: named-arg #269 4661:157:44-4680:157:63 name="masked"
-            value: field-access #268 4669:157:52-4680:157:63 name="masked"
-              target: name-ref #267 4669:157:52-4673:157:56 name="head"
-          arg: named-arg #272 4682:157:65-4705:157:88 name="reserved"
-            value: field-access #271 4692:157:75-4705:157:88 name="reserved"
-              target: name-ref #270 4692:157:75-4696:157:79 name="head"
-          arg: named-arg #274 4707:157:90-4721:157:104 name="length"
-            value: name-ref #273 4715:157:98-4721:157:104 name="length"
-          arg: named-arg #276 4723:157:106-4731:157:114 name="key"
-            value: name-ref #275 4728:157:111-4731:157:114 name="key"
-    declaration: function-decl #332 4815:161:1-5242:172:1 name="@3::check_head" doc="What is wrong with a head, before any payload is read, when something is."
-      param: param #281 4830:161:16-4840:161:26 name="head"
-        type: type-ref #280 4836:161:22-4840:161:26 name="@3::Head"
-      result: type-ref #283 4845:161:31-4862:161:48 name="Optional"
-        arg: type-ref #282 4854:161:40-4861:161:47 name="@3::Problem"
-      body: if-stmt #296 4865:162:3-4963:163:1 guard
-        branch: if-branch #295 4865:162:3-4962:162:100
-          condition: binary #294 4944:162:82-4962:162:100 op=not-equal op-span=4958:162:96-4960:162:98
-            left: field-access #292 4944:162:82-4957:162:95 name="reserved"
-              target: name-ref #291 4944:162:82-4948:162:86 name="head"
-            right: literal #293 4961:162:99-4962:162:100 value=int:0
-          body: return-stmt #290 4865:162:3-4940:162:78
-            value: call #289 4872:162:10-4940:162:78 name="some" piped=false
-              arg: construct #288 4877:162:15-4939:162:77 type="@3::Problem"
-                arg: named-arg #285 4885:162:23-4905:162:43 name="code"
-                  value: const-ref #284 4891:162:29-4905:162:43 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #287 4907:162:45-4938:162:76 name="reason"
-                  value: literal #286 4915:162:53-4938:162:76 value=string:"reserved bits are set"
-      body: if-stmt #308 4966:164:3-5069:165:1 guard
-        branch: if-branch #307 4966:164:3-5068:164:105
-          condition: unary #306 5053:164:90-5068:164:105 op=not op-span=5053:164:90-5056:164:93
-            operand: field-access #305 5057:164:94-5068:164:105 name="masked"
-              target: name-ref #304 5057:164:94-5061:164:98 name="head"
-          body: return-stmt #303 4966:164:3-5049:164:86
-            value: call #302 4973:164:10-5049:164:86 name="some" piped=false
-              arg: construct #301 4978:164:15-5048:164:85 type="@3::Problem"
-                arg: named-arg #298 4986:164:23-5006:164:43 name="code"
-                  value: const-ref #297 4992:164:29-5006:164:43 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #300 5008:164:45-5047:164:84 name="reason"
-                  value: literal #299 5016:164:53-5047:164:84 value=string:"a client frame must be masked"
-      body: if-stmt #321 5072:166:3-5175:167:1 guard
-        branch: if-branch #320 5072:166:3-5174:166:105
-          condition: unary #319 5144:166:75-5174:166:105 op=not op-span=5144:166:75-5147:166:78
-            operand: call #318 5148:166:79-5174:166:105 name="@3::known_opcode?" piped=false
-              arg: field-access #317 5162:166:93-5173:166:104 name="opcode"
-                target: name-ref #316 5162:166:93-5166:166:97 name="head"
-          body: return-stmt #315 5072:166:3-5140:166:71
-            value: call #314 5079:166:10-5140:166:71 name="some" piped=false
-              arg: construct #313 5084:166:15-5139:166:70 type="@3::Problem"
-                arg: named-arg #310 5092:166:23-5112:166:43 name="code"
-                  value: const-ref #309 5098:166:29-5112:166:43 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #312 5114:166:45-5138:166:69 name="reason"
-                  value: literal #311 5122:166:53-5138:166:69 value=string:"unknown opcode"
-      body: if-stmt #329 5178:168:3-5230:169:1 guard
-        branch: if-branch #328 5178:168:3-5229:168:54
-          condition: call #327 5208:168:33-5229:168:54 name="@3::control?" piped=false
-            arg: field-access #326 5217:168:42-5228:168:53 name="opcode"
-              target: name-ref #325 5217:168:42-5221:168:46 name="head"
-          body: return-stmt #324 5178:168:3-5204:168:29
-            value: call #323 5185:168:10-5204:168:29 name="@3::check_control" piped=false
-              arg: name-ref #322 5199:168:24-5203:168:28 name="head"
-      body: return-stmt #331 5233:170:3-5237:170:7 implicit
-        value: call #330 5233:170:3-5237:170:7 name="none" piped=false
-    declaration: function-decl #376 5465:175:1-5784:184:1 name="@3::check_length" doc="What is wrong with the length of a head whose tail was read: a 64-bit length that is not a length, or a data frame\nthat would take its message past the cap, given the `held` bytes of the message's earlier fragments."
-      param: param #334 5482:175:18-5492:175:28 name="head"
-        type: type-ref #333 5488:175:24-5492:175:28 name="@3::Head"
-      param: param #336 5494:175:30-5502:175:38 name="max"
-        type: type-ref #335 5499:175:35-5502:175:38 name="Int"
-      param: param #338 5504:175:40-5513:175:49 name="held"
-        type: type-ref #337 5510:175:46-5513:175:49 name="Int"
-      result: type-ref #340 5518:175:54-5535:175:71 name="Optional"
-        arg: type-ref #339 5527:175:63-5534:175:70 name="@3::Problem"
-      body: if-stmt #353 5538:176:3-5632:177:1 guard
-        branch: if-branch #352 5538:176:3-5631:176:96
-          condition: binary #351 5616:176:81-5631:176:96 op=less op-span=5628:176:93-5629:176:94
-            left: field-access #349 5616:176:81-5627:176:92 name="length"
-              target: name-ref #348 5616:176:81-5620:176:85 name="head"
-            right: literal #350 5630:176:95-5631:176:96 value=int:0
-          body: return-stmt #347 5538:176:3-5612:176:77
-            value: call #346 5545:176:10-5612:176:77 name="some" piped=false
-              arg: construct #345 5550:176:15-5611:176:76 type="@3::Problem"
-                arg: named-arg #342 5558:176:23-5578:176:43 name="code"
-                  value: const-ref #341 5564:176:29-5578:176:43 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #344 5580:176:45-5610:176:75 name="reason"
-                  value: literal #343 5588:176:53-5610:176:75 value=string:"invalid frame length"
-      body: if-stmt #373 5635:178:3-5772:181:1
-        branch: if-branch #372 5635:178:3-5766:180:1
-          condition: binary #364 5638:178:6-5692:178:60 op=and op-span=5664:178:32-5667:178:35
-            left: unary #357 5638:178:6-5663:178:31 op=not op-span=5638:178:6-5641:178:9
-              operand: call #356 5642:178:10-5663:178:31 name="@3::control?" piped=false
-                arg: field-access #355 5651:178:19-5662:178:30 name="opcode"
-                  target: name-ref #354 5651:178:19-5655:178:23 name="head"
-            right: binary #363 5668:178:36-5692:178:60 op=greater op-span=5687:178:55-5688:178:56
-              left: binary #361 5668:178:36-5686:178:54 op=plus op-span=5673:178:41-5674:178:42
-                left: name-ref #358 5668:178:36-5672:178:40 name="held"
-                right: field-access #360 5675:178:43-5686:178:54 name="length"
-                  target: name-ref #359 5675:178:43-5679:178:47 name="head"
-              right: name-ref #362 5689:178:57-5692:178:60 name="max"
-          body: return-stmt #371 5697:179:5-5766:180:1
-            value: call #370 5704:179:12-5765:179:73 name="some" piped=false
-              arg: construct #369 5709:179:17-5764:179:72 type="@3::Problem"
-                arg: named-arg #366 5717:179:25-5736:179:44 name="code"
-                  value: const-ref #365 5723:179:31-5736:179:44 name="@3::CLOSE_TOO_BIG"
-                arg: named-arg #368 5738:179:46-5763:179:71 name="reason"
-                  value: literal #367 5746:179:54-5763:179:71 value=string:"message too big"
-      body: return-stmt #375 5775:182:3-5779:182:7 implicit
-        value: call #374 5775:182:3-5779:182:7 name="none" piped=false
-    declaration: function-decl #384 5848:186:1-5900:187:1 name="@3::control?" doc="True for the opcodes of control frames (close, ping, pong)." expression
-      param: param #378 5861:186:14-5872:186:25 name="opcode"
-        type: type-ref #377 5869:186:22-5872:186:25 name="Int"
-      result: type-ref #379 5877:186:30-5881:186:34 name="Bool"
-      body: return-stmt #383 5884:186:37-5899:186:52 implicit
-        value: binary #382 5884:186:37-5899:186:52 op=greater-equal op-span=5891:186:44-5893:186:46
-          left: name-ref #380 5884:186:37-5890:186:43 name="opcode"
-          right: const-ref #381 5894:186:47-5899:186:52 name="@3::CLOSE"
-    declaration: function-decl #392 5931:189:1-5981:190:1 name="@3::close?" doc="True for the close opcode." expression
-      param: param #386 5942:189:12-5953:189:23 name="opcode"
-        type: type-ref #385 5950:189:20-5953:189:23 name="Int"
-      result: type-ref #387 5958:189:28-5962:189:32 name="Bool"
-      body: return-stmt #391 5965:189:35-5980:189:50 implicit
-        value: binary #390 5965:189:35-5980:189:50 op=equal op-span=5972:189:42-5974:189:44
-          left: name-ref #388 5965:189:35-5971:189:41 name="opcode"
-          right: const-ref #389 5975:189:45-5980:189:50 name="@3::CLOSE"
-    declaration: function-decl #400 6011:192:1-6059:193:1 name="@3::ping?" doc="True for the ping opcode." expression
-      param: param #394 6021:192:11-6032:192:22 name="opcode"
-        type: type-ref #393 6029:192:19-6032:192:22 name="Int"
-      result: type-ref #395 6037:192:27-6041:192:31 name="Bool"
-      body: return-stmt #399 6044:192:34-6058:192:48 implicit
-        value: binary #398 6044:192:34-6058:192:48 op=equal op-span=6051:192:41-6053:192:43
-          left: name-ref #396 6044:192:34-6050:192:40 name="opcode"
-          right: const-ref #397 6054:192:44-6058:192:48 name="@3::PING"
-    declaration: function-decl #441 6178:195:1-6447:208:1 name="@3::unmask" doc="The payload with the mask of the frame taken off: each byte is xor-ed with the byte of the key at its place mod 4."
-      param: param #402 6189:195:12-6200:195:23 name="data"
-        type: type-ref #401 6195:195:18-6200:195:23 name="Bytes"
-      param: param #404 6202:195:25-6212:195:35 name="key"
-        type: type-ref #403 6207:195:30-6212:195:35 name="Bytes"
-      result: type-ref #405 6217:195:40-6222:195:45 name="Bytes"
-      body: if-stmt #411 6225:196:3-6251:197:1 guard
-        branch: if-branch #410 6225:196:3-6250:196:28
-          condition: field-access #409 6240:196:18-6250:196:28 name="empty?"
-            target: name-ref #408 6240:196:18-6243:196:21 name="key"
-          body: return-stmt #407 6225:196:3-6236:196:14
-            value: name-ref #406 6232:196:10-6236:196:14 name="data"
-      body: binding #414 6254:198:3-6267:199:1 name="k"
-        value: field-access #413 6258:198:7-6266:198:15 name="to_a"
-          target: name-ref #412 6258:198:7-6261:198:10 name="key"
-      body: binding #418 6269:199:3-6289:200:1 name="out"
-        type: type-ref #416 6274:199:8-6283:199:17 name="List"
-          arg: type-ref #415 6279:199:13-6282:199:16 name="Int"
-        value: list-lit #417 6286:199:20-6288:199:22
-      body: binding #420 6291:200:3-6301:201:1 name="place"
-        value: literal #419 6299:200:11-6300:200:12 value=int:0
-      body: for-stmt #436 6303:201:3-6411:205:1 variable="byte"
-        iterable: name-ref #421 6315:201:15-6319:201:19 name="data"
-        body: binding #429 6324:202:5-6368:203:1 name="out"
-          value: method-call #428 6330:202:11-6367:202:48 name="push"
-            target: name-ref #422 6330:202:11-6333:202:14 name="out"
-            arg: call #427 6339:202:20-6366:202:47 name="Int.bit_xor" piped=false
-              arg: name-ref #423 6351:202:32-6355:202:36 name="byte"
-              arg: index-access #426 6357:202:38-6365:202:46
-                target: name-ref #424 6357:202:38-6358:202:39 name="k"
-                index: name-ref #425 6359:202:40-6364:202:45 name="place"
-        body: binding #435 6372:203:5-6405:204:1 name="place"
-          value: binary #434 6380:203:13-6404:203:37 op=modulo op-span=6392:203:25-6393:203:26
-            left: binary #432 6381:203:14-6390:203:23 op=plus op-span=6387:203:20-6388:203:21
-              left: name-ref #430 6381:203:14-6386:203:19 name="place"
-              right: literal #431 6389:203:22-6390:203:23 value=int:1
-            right: const-ref #433 6394:203:27-6404:203:37 name="@3::MASK_BYTES"
-      body: return-stmt #440 6414:206:3-6442:206:31 implicit
-        value: field-access #439 6414:206:3-6442:206:31 name="unwrap!"
-          target: call #438 6414:206:3-6434:206:23 name="Bytes.from_list" piped=false
-            arg: name-ref #437 6430:206:19-6433:206:22 name="out"
-    declaration: function-decl #453 6498:210:1-6587:211:1 name="@3::new_assembly" doc="The state before the first frame of a message." expression
-      result: type-ref #442 6520:210:23-6528:210:31 name="@3::Assembly"
-      body: return-stmt #452 6531:210:34-6586:210:89 implicit
-        value: construct #451 6531:210:34-6586:210:89 type="@3::Assembly"
-          arg: named-arg #444 6540:210:43-6551:210:54 name="text"
-            value: literal #443 6546:210:49-6551:210:54 value=bool:false
-          arg: named-arg #446 6553:210:56-6564:210:67 name="open"
-            value: literal #445 6559:210:62-6564:210:67 value=bool:false
-          arg: named-arg #448 6566:210:69-6575:210:78 name="parts"
-            value: list-lit #447 6573:210:76-6575:210:78
-          arg: named-arg #450 6577:210:80-6585:210:88 name="total"
-            value: literal #449 6584:210:87-6585:210:88 value=int:0
-    declaration: function-decl #552 6901:215:1-7707:238:1 name="@3::take" doc="Adds a data frame (text, binary or continuation) to the message being assembled. The message is whole at its last\nframe, and a text message must then be UTF-8. A fragment that starts a message while another is open, or that\ncontinues none, breaks the protocol; so does a message past `max` bytes in all."
-      param: param #455 6910:215:10-6928:215:28 name="assembly"
-        type: type-ref #454 6920:215:20-6928:215:28 name="@3::Assembly"
-      param: param #457 6930:215:30-6940:215:40 name="head"
-        type: type-ref #456 6936:215:36-6940:215:40 name="@3::Head"
-      param: param #459 6942:215:42-6956:215:56 name="payload"
-        type: type-ref #458 6951:215:51-6956:215:56 name="Bytes"
-      param: param #461 6958:215:58-6966:215:66 name="max"
-        type: type-ref #460 6963:215:63-6966:215:66 name="Int"
-      result: type-ref #462 6971:215:71-6976:215:76 name="@3::Taken"
-      body: binding #467 6979:216:3-7020:217:1 name="continuing"
-        value: binary #466 6992:216:16-7019:216:43 op=equal op-span=7004:216:28-7006:216:30
-          left: field-access #464 6992:216:16-7003:216:27 name="opcode"
-            target: name-ref #463 6992:216:16-6996:216:20 name="head"
-          right: const-ref #465 7007:216:31-7019:216:43 name="@3::CONTINUATION"
-      body: if-stmt #481 7022:217:3-7161:220:1
-        branch: if-branch #480 7022:217:3-7155:219:1
-          condition: binary #472 7025:217:6-7057:217:38 op=and op-span=7036:217:17-7039:217:20
-            left: name-ref #468 7025:217:6-7035:217:16 name="continuing"
-            right: unary #471 7040:217:21-7057:217:38 op=not op-span=7040:217:21-7043:217:24
-              operand: field-access #470 7044:217:25-7057:217:38 name="open"
-                target: name-ref #469 7044:217:25-7052:217:33 name="assembly"
-          body: return-stmt #479 7062:218:5-7155:219:1
-            value: enum-constructor #478 7069:218:12-7154:218:97 enum="@3::Taken" variant="Broken"
-              arg: construct #477 7082:218:25-7153:218:96 type="@3::Problem"
-                arg: named-arg #474 7090:218:33-7110:218:53 name="code"
-                  value: const-ref #473 7096:218:39-7110:218:53 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #476 7112:218:55-7152:218:95 name="reason"
-                  value: literal #475 7120:218:63-7152:218:95 value=string:"a continuation with no message"
-      body: if-stmt #495 7164:221:3-7310:224:1
-        branch: if-branch #494 7164:221:3-7304:223:1
-          condition: binary #486 7167:221:6-7199:221:38 op=and op-span=7182:221:21-7185:221:24
-            left: unary #483 7167:221:6-7181:221:20 op=not op-span=7167:221:6-7170:221:9
-              operand: name-ref #482 7171:221:10-7181:221:20 name="continuing"
-            right: field-access #485 7186:221:25-7199:221:38 name="open"
-              target: name-ref #484 7186:221:25-7194:221:33 name="assembly"
-          body: return-stmt #493 7204:222:5-7304:223:1
-            value: enum-constructor #492 7211:222:12-7303:222:104 enum="@3::Taken" variant="Broken"
-              arg: construct #491 7224:222:25-7302:222:103 type="@3::Problem"
-                arg: named-arg #488 7232:222:33-7252:222:53 name="code"
-                  value: const-ref #487 7238:222:39-7252:222:53 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #490 7254:222:55-7301:222:102 name="reason"
-                  value: literal #489 7262:222:63-7301:222:102 value=string:"a new message inside a fragmented one"
-      body: binding #498 7313:225:3-7334:226:1 name="text"
-        value: field-access #497 7320:225:10-7333:225:23 name="text"
-          target: name-ref #496 7320:225:10-7328:225:18 name="assembly"
-      body: if-stmt #507 7336:226:3-7391:229:1
-        branch: if-branch #506 7336:226:3-7385:228:1
-          condition: unary #500 7339:226:6-7353:226:20 op=not op-span=7339:226:6-7342:226:9
-            operand: name-ref #499 7343:226:10-7353:226:20 name="continuing"
-          body: binding #505 7358:227:5-7385:228:1 name="text"
-            value: binary #504 7365:227:12-7384:227:31 op=equal op-span=7377:227:24-7379:227:26
-              left: field-access #502 7365:227:12-7376:227:23 name="opcode"
-                target: name-ref #501 7365:227:12-7369:227:16 name="head"
-              right: const-ref #503 7380:227:27-7384:227:31 name="@3::TEXT"
-      body: binding #513 7394:230:3-7432:231:1 name="total"
-        value: binary #512 7402:230:11-7431:230:40 op=plus op-span=7417:230:26-7418:230:27
-          left: field-access #509 7402:230:11-7416:230:25 name="total"
-            target: name-ref #508 7402:230:11-7410:230:19 name="assembly"
-          right: field-access #511 7419:230:28-7431:230:40 name="size"
-            target: name-ref #510 7419:230:28-7426:230:35 name="payload"
-      body: if-stmt #525 7434:231:3-7526:232:1 guard
-        branch: if-branch #524 7434:231:3-7525:231:94
-          condition: binary #523 7514:231:83-7525:231:94 op=greater op-span=7520:231:89-7521:231:90
-            left: name-ref #521 7514:231:83-7519:231:88 name="total"
-            right: name-ref #522 7522:231:91-7525:231:94 name="max"
-          body: return-stmt #520 7434:231:3-7510:231:79
-            value: enum-constructor #519 7441:231:10-7510:231:79 enum="@3::Taken" variant="Broken"
-              arg: construct #518 7454:231:23-7509:231:78 type="@3::Problem"
-                arg: named-arg #515 7462:231:31-7481:231:50 name="code"
-                  value: const-ref #514 7468:231:37-7481:231:50 name="@3::CLOSE_TOO_BIG"
-                arg: named-arg #517 7483:231:52-7508:231:77 name="reason"
-                  value: literal #516 7491:231:60-7508:231:77 value=string:"message too big"
-      body: binding #530 7529:233:3-7566:234:1 name="parts"
-        value: method-call #529 7537:233:11-7565:233:39 name="push"
-          target: field-access #527 7537:233:11-7551:233:25 name="parts"
-            target: name-ref #526 7537:233:11-7545:233:19 name="assembly"
-          arg: name-ref #528 7557:233:31-7564:233:38 name="payload"
-      body: if-stmt #546 7568:234:3-7664:235:1 guard
-        branch: if-branch #545 7568:234:3-7663:234:98
-          condition: unary #544 7651:234:86-7663:234:98 op=not op-span=7651:234:86-7654:234:89
-            operand: field-access #543 7655:234:90-7663:234:98 name="fin"
-              target: name-ref #542 7655:234:90-7659:234:94 name="head"
-          body: return-stmt #541 7568:234:3-7647:234:82
-            value: enum-constructor #540 7575:234:10-7647:234:82 enum="@3::Taken" variant="More"
-              arg: construct #539 7586:234:21-7646:234:81 type="@3::Assembly"
-                arg: named-arg #532 7595:234:30-7605:234:40 name="text"
-                  value: name-ref #531 7601:234:36-7605:234:40 name="text"
-                arg: named-arg #534 7607:234:42-7617:234:52 name="open"
-                  value: literal #533 7613:234:48-7617:234:52 value=bool:true
-                arg: named-arg #536 7619:234:54-7631:234:66 name="parts"
-                  value: name-ref #535 7626:234:61-7631:234:66 name="parts"
-                arg: named-arg #538 7633:234:68-7645:234:80 name="total"
-                  value: name-ref #537 7640:234:75-7645:234:80 name="total"
-      body: return-stmt #551 7667:236:3-7702:236:38 implicit
-        value: call #550 7667:236:3-7702:236:38 name="@3::finished" piped=false
-          arg: name-ref #547 7676:236:12-7680:236:16 name="text"
-          arg: call #549 7682:236:18-7701:236:37 name="Bytes.concat" piped=false
-            arg: name-ref #548 7695:236:31-7700:236:36 name="parts"
-    declaration: function-decl #615 7931:241:1-8518:254:1 name="@3::parse_close" doc="A close frame: no payload (no code), or a code of two bytes and a reason that is UTF-8. A code that no peer may send\n(below 1000, 1004 to 1006, 1015 to 2999, past 4999) is a protocol error, as is one byte of payload."
-      param: param #554 7947:241:17-7961:241:31 name="payload"
-        type: type-ref #553 7956:241:26-7961:241:31 name="Bytes"
-      result: type-ref #555 7966:241:36-7973:241:43 name="@3::Closing"
-      body: if-stmt #563 7976:242:3-8032:243:1 guard
-        branch: if-branch #562 7976:242:3-8031:242:58
-          condition: field-access #561 8017:242:44-8031:242:58 name="empty?"
-            target: name-ref #560 8017:242:44-8024:242:51 name="payload"
-          body: return-stmt #559 7976:242:3-8013:242:40
-            value: enum-constructor #558 7983:242:10-8013:242:40 enum="@3::Closing" variant="Peer"
-              arg: const-ref #556 7996:242:23-8008:242:35 name="@3::CLOSE_NORMAL"
-              arg: literal #557 8010:242:37-8012:242:39 value=string:""
-      body: if-stmt #576 8035:244:3-8149:245:1 guard
-        branch: if-branch #575 8035:244:3-8148:244:116
-          condition: binary #574 8131:244:99-8148:244:116 op=equal op-span=8144:244:112-8146:244:114
-            left: field-access #572 8131:244:99-8143:244:111 name="size"
-              target: name-ref #571 8131:244:99-8138:244:106 name="payload"
-            right: literal #573 8147:244:115-8148:244:116 value=int:1
-          body: return-stmt #570 8035:244:3-8127:244:95
-            value: enum-constructor #569 8042:244:10-8127:244:95 enum="@3::Closing" variant="Invalid"
-              arg: construct #568 8058:244:26-8126:244:94 type="@3::Problem"
-                arg: named-arg #565 8066:244:34-8086:244:54 name="code"
-                  value: const-ref #564 8072:244:40-8086:244:54 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #567 8088:244:56-8125:244:93 name="reason"
-                  value: literal #566 8096:244:64-8125:244:93 value=string:"a close frame with one byte"
-      body: binding #582 8152:246:3-8203:247:1 name="code"
-        value: field-access #581 8159:246:10-8202:246:53 name="to_i"
-          target: field-access #580 8159:246:10-8197:246:48 name="unwrap!"
-            target: call #579 8159:246:10-8189:246:40 name="@4::read_u16_be" piped=false
-              arg: name-ref #577 8178:246:29-8185:246:36 name="payload"
-              arg: literal #578 8187:246:38-8188:246:39 value=int:0
-      body: if-stmt #594 8205:247:3-8314:248:1 guard
-        branch: if-branch #593 8205:247:3-8313:247:111
-          condition: unary #592 8292:247:90-8313:247:111 op=not op-span=8292:247:90-8295:247:93
-            operand: call #591 8296:247:94-8313:247:111 name="@3::valid_code?" piped=false
-              arg: name-ref #590 8308:247:106-8312:247:110 name="code"
-          body: return-stmt #589 8205:247:3-8288:247:86
-            value: enum-constructor #588 8212:247:10-8288:247:86 enum="@3::Closing" variant="Invalid"
-              arg: construct #587 8228:247:26-8287:247:85 type="@3::Problem"
-                arg: named-arg #584 8236:247:34-8256:247:54 name="code"
-                  value: const-ref #583 8242:247:40-8256:247:54 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #586 8258:247:56-8286:247:84 name="reason"
-                  value: literal #585 8266:247:64-8286:247:84 value=string:"invalid close code"
-      body: case-stmt #614 8317:249:3-8514:253:1
-        value: call #598 8322:249:8-8356:249:42 name="String.from_bytes" piped=false
-          arg: method-call #597 8340:249:26-8355:249:41 name="drop"
-            target: name-ref #595 8340:249:26-8347:249:33 name="payload"
-            arg: literal #596 8353:249:39-8354:249:40 value=int:2
-        arm: case-arm #604 8361:250:5-8402:251:1
-          pattern: variant-pattern #599 8361:250:5-8371:250:15 enum="Result" variant="Ok" bindings=["reason"]
-          body: return-stmt #603 8375:250:19-8401:250:45 implicit
-            value: enum-constructor #602 8375:250:19-8401:250:45 enum="@3::Closing" variant="Peer"
-              arg: name-ref #600 8388:250:32-8392:250:36 name="code"
-              arg: name-ref #601 8394:250:38-8400:250:44 name="reason"
-        arm: case-arm #613 8406:251:5-8508:252:1
-          pattern: variant-pattern #605 8406:251:5-8414:251:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #612 8418:251:17-8507:251:106 implicit
-            value: enum-constructor #611 8418:251:17-8507:251:106 enum="@3::Closing" variant="Invalid"
-              arg: construct #610 8434:251:33-8506:251:105 type="@3::Problem"
-                arg: named-arg #607 8442:251:41-8462:251:61 name="code"
-                  value: const-ref #606 8448:251:47-8462:251:61 name="@3::CLOSE_BAD_DATA"
-                arg: named-arg #609 8464:251:63-8505:251:104 name="reason"
-                  value: literal #608 8472:251:71-8505:251:104 value=string:"close reason is not valid UTF-8"
-    declaration: function-decl #673 8632:256:1-9070:267:1 name="@3::frame" doc="A frame the server writes: the first byte (FIN set and the opcode), the length and the payload, never masked."
-      param: param #617 8642:256:11-8653:256:22 name="opcode"
-        type: type-ref #616 8650:256:19-8653:256:22 name="Int"
-      param: param #619 8655:256:24-8669:256:38 name="payload"
-        type: type-ref #618 8664:256:33-8669:256:38 name="Bytes"
-      result: type-ref #620 8674:256:43-8679:256:48 name="Bytes"
-      body: binding #623 8682:257:3-8702:258:1 name="size"
-        value: field-access #622 8689:257:10-8701:257:22 name="size"
-          target: name-ref #621 8689:257:10-8696:257:17 name="payload"
-      body: binding #630 8704:258:3-8751:259:1 name="head"
-        value: field-access #629 8711:258:10-8750:258:49 name="unwrap!"
-          target: call #628 8711:258:10-8742:258:41 name="Bytes.from_list" piped=false
-            arg: list-lit #627 8727:258:26-8741:258:40
-              element: binary #626 8728:258:27-8740:258:39 op=plus op-span=8732:258:31-8733:258:32
-                left: literal #624 8728:258:27-8731:258:30 value=int:128
-                right: name-ref #625 8734:258:33-8740:258:39 name="opcode"
-      body: if-stmt #644 8753:259:3-8837:260:1 guard
-        branch: if-branch #643 8753:259:3-8836:259:86
-          condition: binary #642 8826:259:76-8836:259:86 op=less op-span=8831:259:81-8832:259:82
-            left: name-ref #640 8826:259:76-8830:259:80 name="size"
-            right: literal #641 8833:259:83-8836:259:86 value=int:126
-          body: return-stmt #639 8753:259:3-8822:259:72
-            value: call #638 8760:259:10-8822:259:72 name="Bytes.concat" piped=false
-              arg: list-lit #637 8773:259:23-8821:259:71
-                element: name-ref #631 8774:259:24-8778:259:28 name="head"
-                element: field-access #635 8780:259:30-8811:259:61 name="unwrap!"
-                  target: call #634 8780:259:30-8803:259:53 name="Bytes.from_list" piped=false
-                    arg: list-lit #633 8796:259:46-8802:259:52
-                      element: name-ref #632 8797:259:47-8801:259:51 name="size"
-                element: name-ref #636 8813:259:63-8820:259:70 name="payload"
-      body: if-stmt #661 8840:261:3-8974:264:1
-        branch: if-branch #660 8840:261:3-8968:263:1
-          condition: binary #647 8843:261:6-8855:261:18 op=less op-span=8848:261:11-8849:261:12
-            left: name-ref #645 8843:261:6-8847:261:10 name="size"
-            right: literal #646 8850:261:13-8855:261:18 value=int:65536
-          body: return-stmt #659 8860:262:5-8968:263:1
-            value: call #658 8867:262:12-8967:262:112 name="Bytes.concat" piped=false
-              arg: list-lit #657 8880:262:25-8966:262:111
-                element: name-ref #648 8881:262:26-8885:262:30 name="head"
-                element: field-access #652 8887:262:32-8917:262:62 name="unwrap!"
-                  target: call #651 8887:262:32-8909:262:54 name="Bytes.from_list" piped=false
-                    arg: list-lit #650 8903:262:48-8908:262:53
-                      element: literal #649 8904:262:49-8907:262:52 value=int:126
-                element: call #655 8919:262:64-8956:262:101 name="@4::write_u16_be" piped=false
-                  arg: field-access #654 8939:262:84-8955:262:100 name="wrap_uint16"
-                    target: name-ref #653 8939:262:84-8943:262:88 name="size"
-                element: name-ref #656 8958:262:103-8965:262:110 name="payload"
-      body: return-stmt #672 8977:265:3-9065:265:91 implicit
-        value: call #671 8977:265:3-9065:265:91 name="Bytes.concat" piped=false
-          arg: list-lit #670 8990:265:16-9064:265:90
-            element: name-ref #662 8991:265:17-8995:265:21 name="head"
-            element: field-access #666 8997:265:23-9027:265:53 name="unwrap!"
-              target: call #665 8997:265:23-9019:265:45 name="Bytes.from_list" piped=false
-                arg: list-lit #664 9013:265:39-9018:265:44
-                  element: literal #663 9014:265:40-9017:265:43 value=int:127
-            element: call #668 9029:265:55-9054:265:80 name="@4::write_i64_be" piped=false
-              arg: name-ref #667 9049:265:75-9053:265:79 name="size"
-            element: name-ref #669 9056:265:82-9063:265:89 name="payload"
-    declaration: function-decl #682 9106:269:1-9170:270:1 name="@3::text_frame" doc="A text frame the server writes." expression
-      param: param #675 9121:269:16-9133:269:28 name="text"
-        type: type-ref #674 9127:269:22-9133:269:28 name="String"
-      result: type-ref #676 9138:269:33-9143:269:38 name="Bytes"
-      body: return-stmt #681 9146:269:41-9169:269:64 implicit
-        value: call #680 9146:269:41-9169:269:64 name="@3::frame" piped=false
-          arg: const-ref #677 9152:269:47-9156:269:51 name="@3::TEXT"
-          arg: field-access #679 9158:269:53-9168:269:63 name="bytes"
-            target: name-ref #678 9158:269:53-9162:269:57 name="text"
-    declaration: function-decl #690 9208:272:1-9269:273:1 name="@3::binary_frame" doc="A binary frame the server writes." expression
-      param: param #684 9225:272:18-9236:272:29 name="data"
-        type: type-ref #683 9231:272:24-9236:272:29 name="Bytes"
-      result: type-ref #685 9241:272:34-9246:272:39 name="Bytes"
-      body: return-stmt #689 9249:272:42-9268:272:61 implicit
-        value: call #688 9249:272:42-9268:272:61 name="@3::frame" piped=false
-          arg: const-ref #686 9255:272:48-9261:272:54 name="@3::BINARY"
-          arg: name-ref #687 9263:272:56-9267:272:60 name="data"
-    declaration: function-decl #783 9573:277:1-10072:295:1 name="@3::data_frame?" doc="True for the bytes of one whole text or binary frame as the server writes them: FIN set, no reserved bits, not\nmasked, the shortest length form, and exactly that many bytes of payload. It reads the head only, so it costs the\nsame for any size; the UTF-8 of a text payload is not checked again."
-      param: param #692 9589:277:17-9601:277:29 name="frame"
-        type: type-ref #691 9596:277:24-9601:277:29 name="Bytes"
-      result: type-ref #693 9606:277:34-9610:277:38 name="Bool"
-      body: if-stmt #717 9613:278:3-9707:279:1 guard
-        branch: if-branch #716 9613:278:3-9706:278:96
-          condition: binary #715 9629:278:19-9706:278:96 op=or op-span=9644:278:34-9646:278:36
-            left: binary #699 9629:278:19-9643:278:33 op=less op-span=9640:278:30-9641:278:31
-              left: field-access #697 9629:278:19-9639:278:29 name="size"
-                target: name-ref #696 9629:278:19-9634:278:24 name="frame"
-              right: literal #698 9642:278:32-9643:278:33 value=int:2
-            right: binary #714 9648:278:38-9705:278:95 op=and op-span=9674:278:64-9677:278:67
-              left: binary #706 9648:278:38-9673:278:63 op=not-equal op-span=9660:278:50-9662:278:52
-                left: method-call #702 9648:278:38-9659:278:49 name="at"
-                  target: name-ref #700 9648:278:38-9653:278:43 name="frame"
-                  arg: literal #701 9657:278:47-9658:278:48 value=int:0
-                right: binary #705 9663:278:53-9673:278:63 op=plus op-span=9667:278:57-9668:278:58
-                  left: literal #703 9663:278:53-9666:278:56 value=int:128
-                  right: const-ref #704 9669:278:59-9673:278:63 name="@3::TEXT"
-              right: binary #713 9678:278:68-9705:278:95 op=not-equal op-span=9690:278:80-9692:278:82
-                left: method-call #709 9678:278:68-9689:278:79 name="at"
-                  target: name-ref #707 9678:278:68-9683:278:73 name="frame"
-                  arg: literal #708 9687:278:77-9688:278:78 value=int:0
-                right: binary #712 9693:278:83-9705:278:95 op=plus op-span=9697:278:87-9698:278:88
-                  left: literal #710 9693:278:83-9696:278:86 value=int:128
-                  right: const-ref #711 9699:278:89-9705:278:95 name="@3::BINARY"
-          body: return-stmt #695 9613:278:3-9625:278:15
-            value: literal #694 9620:278:10-9625:278:15 value=bool:false
-      body: binding #721 9710:280:3-9731:281:1 name="length"
-        value: method-call #720 9719:280:12-9730:280:23 name="at"
-          target: name-ref #718 9719:280:12-9724:280:17 name="frame"
-          arg: literal #719 9728:280:21-9729:280:22 value=int:1
-      body: if-stmt #733 9733:281:3-9781:282:1 guard
-        branch: if-branch #732 9733:281:3-9780:281:50
-          condition: binary #731 9768:281:38-9780:281:50 op=less op-span=9775:281:45-9776:281:46
-            left: name-ref #729 9768:281:38-9774:281:44 name="length"
-            right: literal #730 9777:281:47-9780:281:50 value=int:126
-          body: return-stmt #728 9733:281:3-9764:281:34
-            value: binary #727 9740:281:10-9764:281:34 op=equal op-span=9755:281:25-9757:281:27
-              left: binary #725 9740:281:10-9754:281:24 op=minus op-span=9751:281:21-9752:281:22
-                left: field-access #723 9740:281:10-9750:281:20 name="size"
-                  target: name-ref #722 9740:281:10-9745:281:15 name="frame"
-                right: literal #724 9753:281:23-9754:281:24 value=int:2
-              right: name-ref #726 9758:281:28-9764:281:34 name="length"
-      body: if-stmt #757 9784:283:3-9926:287:1
-        branch: if-branch #756 9784:283:3-9920:286:1
-          condition: binary #736 9787:283:6-9800:283:19 op=equal op-span=9794:283:13-9796:283:15
-            left: name-ref #734 9787:283:6-9793:283:12 name="length"
-            right: literal #735 9797:283:16-9800:283:19 value=int:126
-          body: binding #744 9805:284:5-9870:285:1 name="size"
-            value: field-access #743 9812:284:12-9869:284:69 name="to_i"
-              target: method-call #742 9812:284:12-9864:284:64 name="unwrap_or"
-                target: call #739 9812:284:12-9840:284:40 name="@4::read_u16_be" piped=false
-                  arg: name-ref #737 9831:284:31-9836:284:36 name="frame"
-                  arg: literal #738 9838:284:38-9839:284:39 value=int:2
-                arg: field-access #741 9851:284:51-9863:284:63 name="to_uint16!"
-                  target: literal #740 9851:284:51-9852:284:52 value=int:0
-          body: return-stmt #755 9874:285:5-9920:286:1
-            value: binary #754 9881:285:12-9919:285:50 op=and op-span=9893:285:24-9896:285:27
-              left: binary #747 9881:285:12-9892:285:23 op=greater-equal op-span=9886:285:17-9888:285:19
-                left: name-ref #745 9881:285:12-9885:285:16 name="size"
-                right: literal #746 9889:285:20-9892:285:23 value=int:126
-              right: binary #753 9897:285:28-9919:285:50 op=equal op-span=9912:285:43-9914:285:45
-                left: binary #751 9897:285:28-9911:285:42 op=minus op-span=9908:285:39-9909:285:40
-                  left: field-access #749 9897:285:28-9907:285:38 name="size"
-                    target: name-ref #748 9897:285:28-9902:285:33 name="frame"
-                  right: literal #750 9910:285:41-9911:285:42 value=int:4
-                right: name-ref #752 9915:285:46-9919:285:50 name="size"
-      body: if-stmt #780 9929:288:3-10059:292:1
-        branch: if-branch #779 9929:288:3-10053:291:1
-          condition: binary #760 9932:288:6-9945:288:19 op=equal op-span=9939:288:13-9941:288:15
-            left: name-ref #758 9932:288:6-9938:288:12 name="length"
-            right: literal #759 9942:288:16-9945:288:19 value=int:127
-          body: binding #767 9950:289:5-10000:290:1 name="size"
-            value: method-call #766 9957:289:12-9999:289:54 name="unwrap_or"
-              target: call #763 9957:289:12-9985:289:40 name="@4::read_i64_be" piped=false
-                arg: name-ref #761 9976:289:31-9981:289:36 name="frame"
-                arg: literal #762 9983:289:38-9984:289:39 value=int:2
-              arg: unary #765 9996:289:51-9998:289:53 op=minus op-span=9996:289:51-9997:289:52
-                operand: literal #764 9997:289:52-9998:289:53 value=int:1
-          body: return-stmt #778 10004:290:5-10053:291:1
-            value: binary #777 10011:290:12-10052:290:53 op=and op-span=10025:290:26-10028:290:29
-              left: binary #770 10011:290:12-10024:290:25 op=greater-equal op-span=10016:290:17-10018:290:19
-                left: name-ref #768 10011:290:12-10015:290:16 name="size"
-                right: literal #769 10019:290:20-10024:290:25 value=int:65536
-              right: binary #776 10029:290:30-10052:290:53 op=equal op-span=10045:290:46-10047:290:48
-                left: binary #774 10029:290:30-10044:290:45 op=minus op-span=10040:290:41-10041:290:42
-                  left: field-access #772 10029:290:30-10039:290:40 name="size"
-                    target: name-ref #771 10029:290:30-10034:290:35 name="frame"
-                  right: literal #773 10042:290:43-10044:290:45 value=int:10
-                right: name-ref #775 10048:290:49-10052:290:53 name="size"
-      body: return-stmt #782 10062:293:3-10067:293:8 implicit
-        value: literal #781 10062:293:3-10067:293:8 value=bool:false
-    declaration: function-decl #791 10108:297:1-10165:298:1 name="@3::ping_frame" doc="A ping frame the server writes." expression
-      param: param #785 10123:297:16-10134:297:27 name="data"
-        type: type-ref #784 10129:297:22-10134:297:27 name="Bytes"
-      result: type-ref #786 10139:297:32-10144:297:37 name="Bytes"
-      body: return-stmt #790 10147:297:40-10164:297:57 implicit
-        value: call #789 10147:297:40-10164:297:57 name="@3::frame" piped=false
-          arg: const-ref #787 10153:297:46-10157:297:50 name="@3::PING"
-          arg: name-ref #788 10159:297:52-10163:297:56 name="data"
-    declaration: function-decl #799 10201:300:1-10258:301:1 name="@3::pong_frame" doc="A pong frame the server writes." expression
-      param: param #793 10216:300:16-10227:300:27 name="data"
-        type: type-ref #792 10222:300:22-10227:300:27 name="Bytes"
-      result: type-ref #794 10232:300:32-10237:300:37 name="Bytes"
-      body: return-stmt #798 10240:300:40-10257:300:57 implicit
-        value: call #797 10240:300:40-10257:300:57 name="@3::frame" piped=false
-          arg: const-ref #795 10246:300:46-10250:300:50 name="@3::PONG"
-          arg: name-ref #796 10252:300:52-10256:300:56 name="data"
-    declaration: function-decl #815 10354:303:1-10502:306:1 name="@3::close_frame" doc="A close frame; the reason is cut to what a control frame can hold, at a character boundary."
-      param: param #801 10370:303:17-10379:303:26 name="code"
-        type: type-ref #800 10376:303:23-10379:303:26 name="Int"
-      param: param #803 10381:303:28-10395:303:42 name="reason"
-        type: type-ref #802 10389:303:36-10395:303:42 name="String"
-      result: type-ref #804 10400:303:47-10405:303:52 name="Bytes"
-      body: return-stmt #814 10408:304:3-10497:304:92 implicit
-        value: call #813 10408:304:3-10497:304:92 name="@3::frame" piped=false
-          arg: const-ref #805 10414:304:9-10419:304:14 name="@3::CLOSE"
-          arg: call #812 10421:304:16-10496:304:91 name="Bytes.concat" piped=false
-            arg: list-lit #811 10434:304:29-10495:304:90
-              element: call #808 10435:304:30-10472:304:67 name="@4::write_u16_be" piped=false
-                arg: field-access #807 10455:304:50-10471:304:66 name="wrap_uint16"
-                  target: name-ref #806 10455:304:50-10459:304:54 name="code"
-              element: call #810 10474:304:69-10494:304:89 name="@3::short_reason" piped=false
-                arg: name-ref #809 10487:304:82-10493:304:88 name="reason"
-    declaration: function-decl #850 10602:308:1-10772:313:1 name="@3::valid_code?" doc="True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999."
-      param: param #817 10618:308:17-10627:308:26 name="code"
-        type: type-ref #816 10624:308:23-10627:308:26 name="Int"
-      result: type-ref #818 10632:308:31-10636:308:35 name="Bool"
-      body: if-stmt #829 10639:309:3-10684:310:1 guard
-        branch: if-branch #828 10639:309:3-10683:309:47
-          condition: binary #827 10654:309:18-10683:309:47 op=and op-span=10667:309:31-10670:309:34
-            left: binary #823 10654:309:18-10666:309:30 op=greater-equal op-span=10659:309:23-10661:309:25
-              left: name-ref #821 10654:309:18-10658:309:22 name="code"
-              right: literal #822 10662:309:26-10666:309:30 value=int:3000
-            right: binary #826 10671:309:35-10683:309:47 op=less-equal op-span=10676:309:40-10678:309:42
-              left: name-ref #824 10671:309:35-10675:309:39 name="code"
-              right: literal #825 10679:309:43-10683:309:47 value=int:4999
-          body: return-stmt #820 10639:309:3-10650:309:14
-            value: literal #819 10646:309:10-10650:309:14 value=bool:true
-      body: return-stmt #849 10687:311:3-10767:311:83 implicit
-        value: binary #848 10687:311:3-10767:311:83 op=and op-span=10751:311:67-10754:311:70
-          left: binary #844 10687:311:3-10750:311:66 op=and op-span=10734:311:50-10737:311:53
-            left: binary #840 10687:311:3-10733:311:49 op=and op-span=10717:311:33-10720:311:36
-              left: binary #836 10687:311:3-10716:311:32 op=and op-span=10700:311:16-10703:311:19
-                left: binary #832 10687:311:3-10699:311:15 op=greater-equal op-span=10692:311:8-10694:311:10
-                  left: name-ref #830 10687:311:3-10691:311:7 name="code"
-                  right: literal #831 10695:311:11-10699:311:15 value=int:1000
-                right: binary #835 10704:311:20-10716:311:32 op=less-equal op-span=10709:311:25-10711:311:27
-                  left: name-ref #833 10704:311:20-10708:311:24 name="code"
-                  right: literal #834 10712:311:28-10716:311:32 value=int:1014
-              right: binary #839 10721:311:37-10733:311:49 op=not-equal op-span=10726:311:42-10728:311:44
-                left: name-ref #837 10721:311:37-10725:311:41 name="code"
-                right: literal #838 10729:311:45-10733:311:49 value=int:1004
-            right: binary #843 10738:311:54-10750:311:66 op=not-equal op-span=10743:311:59-10745:311:61
-              left: name-ref #841 10738:311:54-10742:311:58 name="code"
-              right: literal #842 10746:311:62-10750:311:66 value=int:1005
-          right: binary #847 10755:311:71-10767:311:83 op=not-equal op-span=10760:311:76-10762:311:78
-            left: name-ref #845 10755:311:71-10759:311:75 name="code"
-            right: literal #846 10763:311:79-10767:311:83 value=int:1006
-    declaration: const-decl #852 10782:316:1-10828:317:1 name="@3::GUID"
-      value: literal #851 10789:316:8-10827:316:46 value=string:"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    declaration: const-decl #854 10828:317:1-10843:318:1 name="@3::KEY_BYTES"
-      value: literal #853 10840:317:13-10842:317:15 value=int:16
-    declaration: const-decl #856 10843:318:1-10858:319:1 name="@3::MASK_BYTES"
-      value: literal #855 10856:318:14-10857:318:15 value=int:4
-    declaration: const-decl #860 10957:320:1-10994:321:1 name="@3::NO_KEY"
-      value: field-access #859 10966:320:10-10993:320:37 name="unwrap!"
-        target: call #858 10966:320:10-10985:320:29 name="Bytes.from_list" piped=false
-          arg: list-lit #857 10982:320:26-10984:320:28
-    declaration: const-decl #862 10994:321:1-11012:322:1 name="@3::ACCEPT_BYTES"
-      value: literal #861 11009:321:16-11011:321:18 value=int:20
-    declaration: const-decl #865 11089:323:1-11189:324:1 name="@3::TOKEN_BYTES"
-      value: field-access #864 11103:323:15-11188:323:100 name="bytes"
-        target: literal #863 11103:323:15-11182:323:94 value=string:"!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    declaration: const-decl #867 11189:324:1-11209:325:1 name="@3::CONTROL_BYTES"
-      value: literal #866 11205:324:17-11208:324:20 value=int:125
-    declaration: const-decl #869 11209:325:1-11228:326:1 name="@3::REASON_BYTES"
-      value: literal #868 11224:325:16-11227:325:19 value=int:123
-    declaration: const-decl #871 11259:327:1-11276:328:1 name="@3::CONTINUATION"
-      value: literal #870 11274:327:16-11275:327:17 value=int:0
-    declaration: const-decl #873 11276:328:1-11285:329:1 name="@3::TEXT"
-      value: literal #872 11283:328:8-11284:328:9 value=int:1
-    declaration: const-decl #875 11285:329:1-11296:330:1 name="@3::BINARY"
-      value: literal #874 11294:329:10-11295:329:11 value=int:2
-    declaration: const-decl #877 11296:330:1-11306:331:1 name="@3::CLOSE"
-      value: literal #876 11304:330:9-11305:330:10 value=int:8
-    declaration: const-decl #879 11306:331:1-11315:332:1 name="@3::PING"
-      value: literal #878 11313:331:8-11314:331:9 value=int:9
-    declaration: const-decl #881 11315:332:1-11325:333:1 name="@3::PONG"
-      value: literal #880 11322:332:8-11324:332:10 value=int:10
-    declaration: function-decl #897 11326:334:1-11424:335:1 name="@3::known_opcode?" expression
-      param: param #883 11344:334:19-11355:334:30 name="opcode"
-        type: type-ref #882 11352:334:27-11355:334:30 name="Int"
-      result: type-ref #884 11360:334:35-11364:334:39 name="Bool"
-      body: return-stmt #896 11367:334:42-11423:334:98 implicit
-        value: binary #895 11367:334:42-11423:334:98 op=or op-span=11384:334:59-11386:334:61
-          left: binary #887 11367:334:42-11383:334:58 op=less-equal op-span=11374:334:49-11376:334:51
-            left: name-ref #885 11367:334:42-11373:334:48 name="opcode"
-            right: const-ref #886 11377:334:52-11383:334:58 name="@3::BINARY"
-          right: binary #894 11388:334:63-11422:334:97 op=and op-span=11404:334:79-11407:334:82
-            left: binary #890 11388:334:63-11403:334:78 op=greater-equal op-span=11395:334:70-11397:334:72
-              left: name-ref #888 11388:334:63-11394:334:69 name="opcode"
-              right: const-ref #889 11398:334:73-11403:334:78 name="@3::CLOSE"
-            right: binary #893 11408:334:83-11422:334:97 op=less-equal op-span=11415:334:90-11417:334:92
-              left: name-ref #891 11408:334:83-11414:334:89 name="opcode"
-              right: const-ref #892 11418:334:93-11422:334:97 name="@3::PONG"
-    declaration: function-decl #929 11539:337:1-11846:346:1 name="@3::check_control"
-      param: param #899 11557:337:19-11567:337:29 name="head"
-        type: type-ref #898 11563:337:25-11567:337:29 name="@3::Head"
-      result: type-ref #901 11572:337:34-11589:337:51 name="Optional"
-        arg: type-ref #900 11581:337:43-11588:337:50 name="@3::Problem"
-      body: if-stmt #913 11592:338:3-11699:339:1 guard
-        branch: if-branch #912 11592:338:3-11698:338:109
-          condition: unary #911 11686:338:97-11698:338:109 op=not op-span=11686:338:97-11689:338:100
-            operand: field-access #910 11690:338:101-11698:338:109 name="fin"
-              target: name-ref #909 11690:338:101-11694:338:105 name="head"
-          body: return-stmt #908 11592:338:3-11682:338:93
-            value: call #907 11599:338:10-11682:338:93 name="some" piped=false
-              arg: construct #906 11604:338:15-11681:338:92 type="@3::Problem"
-                arg: named-arg #903 11612:338:23-11632:338:43 name="code"
-                  value: const-ref #902 11618:338:29-11632:338:43 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #905 11634:338:45-11680:338:91 name="reason"
-                  value: literal #904 11642:338:53-11680:338:91 value=string:"a control frame cannot be fragmented"
-      body: if-stmt #926 11702:340:3-11834:343:1
-        branch: if-branch #925 11702:340:3-11828:342:1
-          condition: binary #917 11705:340:6-11732:340:33 op=greater op-span=11717:340:18-11718:340:19
-            left: field-access #915 11705:340:6-11716:340:17 name="length"
-              target: name-ref #914 11705:340:6-11709:340:10 name="head"
-            right: const-ref #916 11719:340:20-11732:340:33 name="@3::CONTROL_BYTES"
-          body: return-stmt #924 11737:341:5-11828:342:1
-            value: call #923 11744:341:12-11827:341:95 name="some" piped=false
-              arg: construct #922 11749:341:17-11826:341:94 type="@3::Problem"
-                arg: named-arg #919 11757:341:25-11777:341:45 name="code"
-                  value: const-ref #918 11763:341:31-11777:341:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #921 11779:341:47-11825:341:93 name="reason"
-                  value: literal #920 11787:341:55-11825:341:93 value=string:"a control frame is at most 125 bytes"
-      body: return-stmt #928 11837:344:3-11841:344:7 implicit
-        value: call #927 11837:344:3-11841:344:7 name="none" piped=false
-    declaration: function-decl #954 11847:347:1-12057:352:1 name="@3::finished"
-      param: param #931 11860:347:14-11870:347:24 name="text"
-        type: type-ref #930 11866:347:20-11870:347:24 name="Bool"
-      param: param #933 11872:347:26-11883:347:37 name="data"
-        type: type-ref #932 11878:347:32-11883:347:37 name="Bytes"
-      result: type-ref #934 11888:347:42-11893:347:47 name="@3::Taken"
-      body: if-stmt #948 11896:348:3-12010:349:1 guard
-        branch: if-branch #947 11896:348:3-12009:348:116
-          condition: binary #946 11985:348:92-12009:348:116 op=and op-span=11990:348:97-11993:348:100
-            left: name-ref #942 11985:348:92-11989:348:96 name="text"
-            right: unary #945 11994:348:101-12009:348:116 op=not op-span=11994:348:101-11997:348:104
-              operand: call #944 11998:348:105-12009:348:116 name="@3::utf8?" piped=false
-                arg: name-ref #943 12004:348:111-12008:348:115 name="data"
-          body: return-stmt #941 11896:348:3-11981:348:88
-            value: enum-constructor #940 11903:348:10-11981:348:88 enum="@3::Taken" variant="Broken"
-              arg: construct #939 11916:348:23-11980:348:87 type="@3::Problem"
-                arg: named-arg #936 11924:348:31-11944:348:51 name="code"
-                  value: const-ref #935 11930:348:37-11944:348:51 name="@3::CLOSE_BAD_DATA"
-                arg: named-arg #938 11946:348:53-11979:348:86 name="reason"
-                  value: literal #937 11954:348:61-11979:348:86 value=string:"text is not valid UTF-8"
-      body: return-stmt #953 12013:350:3-12052:350:42 implicit
-        value: enum-constructor #952 12013:350:3-12052:350:42 enum="@3::Taken" variant="Whole"
-          arg: name-ref #949 12025:350:15-12029:350:19 name="text"
-          arg: name-ref #950 12031:350:21-12035:350:25 name="data"
-          arg: call #951 12037:350:27-12051:350:41 name="@3::new_assembly" piped=false
-    declaration: function-decl #989 12127:354:1-12354:365:1 name="@3::short_reason"
-      param: param #956 12144:354:18-12158:354:32 name="reason"
-        type: type-ref #955 12152:354:26-12158:354:32 name="String"
-      result: type-ref #957 12163:354:37-12168:354:42 name="Bytes"
-      body: binding #960 12171:355:3-12191:356:1 name="data"
-        value: field-access #959 12178:355:10-12190:355:22 name="bytes"
-          target: name-ref #958 12178:355:10-12184:355:16 name="reason"
-      body: if-stmt #968 12193:356:3-12234:357:1 guard
-        branch: if-branch #967 12193:356:3-12233:356:43
-          condition: binary #966 12208:356:18-12233:356:43 op=less-equal op-span=12218:356:28-12220:356:30
-            left: field-access #964 12208:356:18-12217:356:27 name="size"
-              target: name-ref #963 12208:356:18-12212:356:22 name="data"
-            right: const-ref #965 12221:356:31-12233:356:43 name="@3::REASON_BYTES"
-          body: return-stmt #962 12193:356:3-12204:356:14
-            value: name-ref #961 12200:356:10-12204:356:14 name="data"
-      body: binding #970 12237:358:3-12257:359:1 name="size"
-        value: const-ref #969 12244:358:10-12256:358:22 name="@3::REASON_BYTES"
-      body: while-stmt #984 12259:359:3-12331:362:1
-        condition: binary #979 12265:359:9-12304:359:48 op=and op-span=12274:359:18-12277:359:21
-          left: binary #973 12265:359:9-12273:359:17 op=greater op-span=12270:359:14-12271:359:15
-            left: name-ref #971 12265:359:9-12269:359:13 name="size"
-            right: literal #972 12272:359:16-12273:359:17 value=int:0
-          right: unary #978 12278:359:22-12304:359:48 op=not op-span=12278:359:22-12281:359:25
-            operand: call #977 12282:359:26-12304:359:48 name="@3::utf8?" piped=false
-              arg: method-call #976 12288:359:32-12303:359:47 name="take"
-                target: name-ref #974 12288:359:32-12292:359:36 name="data"
-                arg: name-ref #975 12298:359:42-12302:359:46 name="size"
-        body: binding #983 12309:360:5-12325:361:1 name="size"
-          value: binary #982 12316:360:12-12324:360:20 op=minus op-span=12321:360:17-12322:360:18
-            left: name-ref #980 12316:360:12-12320:360:16 name="size"
-            right: literal #981 12323:360:19-12324:360:20 value=int:1
-      body: return-stmt #988 12334:363:3-12349:363:18 implicit
-        value: method-call #987 12334:363:3-12349:363:18 name="take"
-          target: name-ref #985 12334:363:3-12338:363:7 name="data"
-          arg: name-ref #986 12344:363:13-12348:363:17 name="size"
-    declaration: function-decl #1004 12355:366:1-12467:372:1 name="@3::utf8?"
-      param: param #991 12365:366:11-12376:366:22 name="data"
-        type: type-ref #990 12371:366:17-12376:366:22 name="Bytes"
-      result: type-ref #992 12381:366:27-12385:366:31 name="Bool"
-      body: case-stmt #1003 12388:367:3-12463:371:1
-        value: call #994 12393:367:8-12416:367:31 name="String.from_bytes" piped=false
-          arg: name-ref #993 12411:367:26-12415:367:30 name="data"
-        arm: case-arm #998 12421:368:5-12435:369:1
-          pattern: variant-pattern #995 12421:368:5-12426:368:10 enum="Result" variant="Ok" bindings=[-]
-          body: return-stmt #997 12430:368:14-12434:368:18 implicit
-            value: literal #996 12430:368:14-12434:368:18 value=bool:true
-        arm: case-arm #1002 12439:369:5-12457:370:1
-          pattern: variant-pattern #999 12439:369:5-12447:369:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #1001 12451:369:17-12456:369:22 implicit
-            value: literal #1000 12451:369:17-12456:369:22 value=bool:false
-    declaration: function-decl #1019 12468:373:1-12586:380:1 name="@3::token_byte?"
-      param: param #1006 12484:373:17-12493:373:26 name="byte"
-        type: type-ref #1005 12490:373:23-12493:373:26 name="Int"
-      result: type-ref #1007 12498:373:31-12502:373:35 name="Bool"
-      body: for-stmt #1016 12505:374:3-12573:377:1 variable="allowed"
-        iterable: const-ref #1008 12520:374:18-12531:374:29 name="@3::TOKEN_BYTES"
-        body: if-stmt #1015 12536:375:5-12567:376:1 guard
-          branch: if-branch #1014 12536:375:5-12566:375:35
-            condition: binary #1013 12551:375:20-12566:375:35 op=equal op-span=12559:375:28-12561:375:30
-              left: name-ref #1011 12551:375:20-12558:375:27 name="allowed"
-              right: name-ref #1012 12562:375:31-12566:375:35 name="byte"
-            body: return-stmt #1010 12536:375:5-12547:375:16
-              value: literal #1009 12543:375:12-12547:375:16 value=bool:true
-      body: return-stmt #1018 12576:378:3-12581:378:8 implicit
-        value: literal #1017 12576:378:3-12581:378:8 value=bool:false
+    declaration: struct-decl #30 1760:37:1-1860:45:1 name="@3::Head" doc="The head of a frame. It is read in two steps: the first two bytes (head_of) and then the tail they announce\n(tail_size, complete). `length` holds the 7-bit length until the tail completes it, and is negative for a 64-bit\nlength that has its top bit set."
+      field: field-decl #19 1774:38:3-1784:39:1 name="fin"
+        type: type-ref #18 1779:38:8-1783:38:12 name="Bool"
+      field: field-decl #21 1786:39:3-1798:40:1 name="opcode"
+        type: type-ref #20 1794:39:11-1797:39:14 name="Int"
+      field: field-decl #23 1800:40:3-1813:41:1 name="masked"
+        type: type-ref #22 1808:40:11-1812:40:15 name="Bool"
+      field: field-decl #25 1815:41:3-1829:42:1 name="reserved"
+        type: type-ref #24 1825:41:13-1828:41:16 name="Int"
+      field: field-decl #27 1831:42:3-1843:43:1 name="length"
+        type: type-ref #26 1839:42:11-1842:42:14 name="Int"
+      field: field-decl #29 1845:43:3-1856:44:1 name="key"
+        type: type-ref #28 1850:43:8-1855:43:13 name="Bytes"
+    declaration: struct-decl #40 1959:47:1-2039:53:1 name="@3::Assembly" doc="The frames of a message that arrives in fragments: its kind, the pieces so far and their size."
+      field: field-decl #32 1977:48:3-1988:49:1 name="text"
+        type: type-ref #31 1983:48:9-1987:48:13 name="Bool"
+      field: field-decl #34 1990:49:3-2001:50:1 name="open"
+        type: type-ref #33 1996:49:9-2000:49:13 name="Bool"
+      field: field-decl #37 2003:50:3-2022:51:1 name="parts"
+        type: type-ref #36 2010:50:10-2021:50:21 name="List"
+          arg: type-ref #35 2015:50:15-2020:50:20 name="Bytes"
+      field: field-decl #39 2024:51:3-2035:52:1 name="total"
+        type: type-ref #38 2031:51:10-2034:51:13 name="Int"
+    declaration: enum-decl #49 2099:55:1-2180:60:1 name="@3::Taken" type-parameters=[] doc="What one data frame did to the message being assembled."
+      variant: enum-variant #42 2112:56:3-2127:57:1 name="More"
+        payload: type-ref #41 2117:56:8-2125:56:16 name="@3::Assembly"
+      variant: enum-variant #46 2129:57:3-2158:58:1 name="Whole"
+        payload: type-ref #43 2135:57:9-2139:57:13 name="Bool"
+        payload: type-ref #44 2141:57:15-2146:57:20 name="Bytes"
+        payload: type-ref #45 2148:57:22-2156:57:30 name="@3::Assembly"
+      variant: enum-variant #48 2160:58:3-2176:59:1 name="Broken"
+        payload: type-ref #47 2167:58:10-2174:58:17 name="@3::Problem"
+    declaration: enum-decl #55 2266:62:1-2322:66:1 name="@3::Closing" type-parameters=[] doc="What a close frame says: the peer's code and reason, or a problem with the frame."
+      variant: enum-variant #52 2281:63:3-2299:64:1 name="Peer"
+        payload: type-ref #50 2286:63:8-2289:63:11 name="Int"
+        payload: type-ref #51 2291:63:13-2297:63:19 name="String"
+      variant: enum-variant #54 2301:64:3-2318:65:1 name="Invalid"
+        payload: type-ref #53 2309:64:11-2316:64:18 name="@3::Problem"
+    declaration: function-decl #67 2449:69:1-2556:70:1 name="@3::accept_key" doc="The `Sec-WebSocket-Accept` for a `Sec-WebSocket-Key` (RFC 6455 4.2.2): the base64 of the SHA-1 of the key and\nthe GUID." expression
+      param: param #57 2464:69:16-2475:69:27 name="key"
+        type: type-ref #56 2469:69:21-2475:69:27 name="String"
+      result: type-ref #58 2480:69:32-2486:69:38 name="String"
+      body: return-stmt #66 2489:69:41-2555:69:107 implicit
+        value: call #65 2489:69:41-2555:69:107 name="Base64.strict_encode64" piped=false
+          arg: call #64 2512:69:64-2554:69:106 name="OpenSSL.Digest.sha1" piped=false
+            arg: field-access #63 2532:69:84-2553:69:105 name="bytes"
+              target: interpolation #62 2532:69:84-2547:69:99
+                part: name-ref #60 2535:69:87-2538:69:90 name="key"
+                part: const-ref #61 2541:69:93-2545:69:97 name="@3::GUID"
+    declaration: function-decl #85 2653:72:1-2807:78:1 name="@3::valid_accept?" doc="A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes."
+      param: param #69 2671:72:19-2685:72:33 name="accept"
+        type: type-ref #68 2679:72:27-2685:72:33 name="String"
+      result: type-ref #70 2690:72:38-2694:72:42 name="Bool"
+      body: case-stmt #84 2697:73:3-2803:77:1
+        value: call #72 2702:73:8-2732:73:38 name="Base64.strict_decode64" piped=false
+          arg: name-ref #71 2725:73:31-2731:73:37 name="accept"
+        arm: case-arm #79 2737:74:5-2775:75:1
+          pattern: variant-pattern #73 2737:74:5-2745:74:13 enum="Result" variant="Ok" bindings=["data"]
+          body: return-stmt #78 2749:74:17-2774:74:42 implicit
+            value: binary #77 2749:74:17-2774:74:42 op=equal op-span=2759:74:27-2761:74:29
+              left: field-access #75 2749:74:17-2758:74:26 name="size"
+                target: name-ref #74 2749:74:17-2753:74:21 name="data"
+              right: const-ref #76 2762:74:30-2774:74:42 name="@3::ACCEPT_BYTES"
+        arm: case-arm #83 2779:75:5-2797:76:1
+          pattern: variant-pattern #80 2779:75:5-2787:75:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #82 2791:75:17-2796:75:22 implicit
+            value: literal #81 2791:75:17-2796:75:22 value=bool:false
+    declaration: function-decl #101 2979:81:1-3097:88:1 name="@3::token?" doc="True for a name made only of token bytes (no space, comma, control byte or quote), as a subprotocol is. An empty\nname is a token here: it stands for no subprotocol."
+      param: param #87 2990:81:12-3002:81:24 name="name"
+        type: type-ref #86 2996:81:18-3002:81:24 name="String"
+      result: type-ref #88 3007:81:29-3011:81:33 name="Bool"
+      body: for-stmt #98 3014:82:3-3085:85:1 variable="byte"
+        iterable: field-access #90 3026:82:15-3036:82:25 name="bytes"
+          target: name-ref #89 3026:82:15-3030:82:19 name="name"
+        body: if-stmt #97 3041:83:5-3079:84:1 guard
+          branch: if-branch #96 3041:83:5-3078:83:42
+            condition: unary #95 3057:83:21-3078:83:42 op=not op-span=3057:83:21-3060:83:24
+              operand: call #94 3061:83:25-3078:83:42 name="@3::token_byte?" piped=false
+                arg: name-ref #93 3073:83:37-3077:83:41 name="byte"
+            body: return-stmt #92 3041:83:5-3053:83:17
+              value: literal #91 3048:83:12-3053:83:17 value=bool:false
+      body: return-stmt #100 3088:86:3-3092:86:7 implicit
+        value: literal #99 3088:86:3-3092:86:7 value=bool:true
+    declaration: function-decl #119 3155:90:1-3297:96:1 name="@3::valid_key?" doc="A Sec-WebSocket-Key is the base64 of 16 random bytes."
+      param: param #103 3170:90:16-3181:90:27 name="key"
+        type: type-ref #102 3175:90:21-3181:90:27 name="String"
+      result: type-ref #104 3186:90:32-3190:90:36 name="Bool"
+      body: case-stmt #118 3193:91:3-3293:95:1
+        value: call #106 3198:91:8-3225:91:35 name="Base64.strict_decode64" piped=false
+          arg: name-ref #105 3221:91:31-3224:91:34 name="key"
+        arm: case-arm #113 3230:92:5-3265:93:1
+          pattern: variant-pattern #107 3230:92:5-3238:92:13 enum="Result" variant="Ok" bindings=["data"]
+          body: return-stmt #112 3242:92:17-3264:92:39 implicit
+            value: binary #111 3242:92:17-3264:92:39 op=equal op-span=3252:92:27-3254:92:29
+              left: field-access #109 3242:92:17-3251:92:26 name="size"
+                target: name-ref #108 3242:92:17-3246:92:21 name="data"
+              right: const-ref #110 3255:92:30-3264:92:39 name="@3::KEY_BYTES"
+        arm: case-arm #117 3269:93:5-3287:94:1
+          pattern: variant-pattern #114 3269:93:5-3277:93:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #116 3281:93:17-3286:93:22 implicit
+            value: literal #115 3281:93:17-3286:93:22 value=bool:false
+    declaration: function-decl #140 3414:98:1-3565:105:1 name="@3::has_token?" doc="True when `value`, a comma-separated list as in `Connection` and `Upgrade`, has `token`, as HTTP compares names."
+      param: param #121 3429:98:16-3442:98:29 name="value"
+        type: type-ref #120 3436:98:23-3442:98:29 name="String"
+      param: param #123 3444:98:31-3457:98:44 name="token"
+        type: type-ref #122 3451:98:38-3457:98:44 name="String"
+      result: type-ref #124 3462:98:49-3466:98:53 name="Bool"
+      body: for-stmt #137 3469:99:3-3552:102:1 variable="part"
+        iterable: method-call #127 3481:99:15-3497:99:31 name="split"
+          target: name-ref #125 3481:99:15-3486:99:20 name="value"
+          arg: literal #126 3493:99:27-3496:99:30 value=string:","
+        body: if-stmt #136 3502:100:5-3546:101:1 guard
+          branch: if-branch #135 3502:100:5-3545:100:48
+            condition: binary #134 3517:100:20-3545:100:48 op=equal op-span=3537:100:40-3539:100:42
+              left: field-access #132 3517:100:20-3536:100:39 name="downcase"
+                target: field-access #131 3517:100:20-3527:100:30 name="strip"
+                  target: name-ref #130 3517:100:20-3521:100:24 name="part"
+              right: name-ref #133 3540:100:43-3545:100:48 name="token"
+            body: return-stmt #129 3502:100:5-3513:100:16
+              value: literal #128 3509:100:12-3513:100:16 value=bool:true
+      body: return-stmt #139 3555:103:3-3560:103:8 implicit
+        value: literal #138 3555:103:3-3560:103:8 value=bool:false
+    declaration: function-decl #178 3634:107:1-3872:119:1 name="@3::head_of" doc="The first two bytes of a frame as a `Head` that has no tail yet."
+      param: param #142 3646:107:13-3656:107:23 name="two"
+        type: type-ref #141 3651:107:18-3656:107:23 name="Bytes"
+      result: type-ref #143 3661:107:28-3665:107:32 name="@3::Head"
+      body: binding #147 3668:108:3-3686:109:1 name="first"
+        value: method-call #146 3676:108:11-3685:108:20 name="at"
+          target: name-ref #144 3676:108:11-3679:108:14 name="two"
+          arg: literal #145 3683:108:18-3684:108:19 value=int:0
+      body: binding #151 3688:109:3-3707:110:1 name="second"
+        value: method-call #150 3697:109:12-3706:109:21 name="at"
+          target: name-ref #148 3697:109:12-3700:109:15 name="two"
+          arg: literal #149 3704:109:19-3705:109:20 value=int:1
+      body: return-stmt #177 3709:110:3-3867:117:4 implicit
+        value: construct #176 3709:110:3-3867:117:4 type="@3::Head"
+          arg: named-arg #155 3719:111:5-3736:111:22 name="fin"
+            value: binary #154 3724:111:10-3736:111:22 op=greater-equal op-span=3730:111:16-3732:111:18
+              left: name-ref #152 3724:111:10-3729:111:15 name="first"
+              right: literal #153 3733:111:19-3736:111:22 value=int:128
+          arg: named-arg #159 3742:112:5-3760:112:23 name="opcode"
+            value: binary #158 3750:112:13-3760:112:23 op=modulo op-span=3756:112:19-3757:112:20
+              left: name-ref #156 3750:112:13-3755:112:18 name="first"
+              right: literal #157 3758:112:21-3760:112:23 value=int:16
+          arg: named-arg #163 3766:113:5-3787:113:26 name="masked"
+            value: binary #162 3774:113:13-3787:113:26 op=greater-equal op-span=3781:113:20-3783:113:22
+              left: name-ref #160 3774:113:13-3780:113:19 name="second"
+              right: literal #161 3784:113:23-3787:113:26 value=int:128
+          arg: named-arg #169 3793:114:5-3819:114:31 name="reserved"
+            value: binary #168 3803:114:15-3819:114:31 op=modulo op-span=3816:114:28-3817:114:29
+              left: binary #166 3804:114:16-3814:114:26 op=divide op-span=3810:114:22-3811:114:23
+                left: name-ref #164 3804:114:16-3809:114:21 name="first"
+                right: literal #165 3812:114:24-3814:114:26 value=int:16
+              right: literal #167 3818:114:30-3819:114:31 value=int:8
+          arg: named-arg #173 3825:115:5-3845:115:25 name="length"
+            value: binary #172 3833:115:13-3845:115:25 op=modulo op-span=3840:115:20-3841:115:21
+              left: name-ref #170 3833:115:13-3839:115:19 name="second"
+              right: literal #171 3842:115:22-3845:115:25 value=int:128
+          arg: named-arg #175 3851:116:5-3862:116:16 name="key"
+            value: const-ref #174 3856:116:10-3862:116:16 name="@3::NO_KEY"
+    declaration: function-decl #210 3991:121:1-4187:137:1 name="@3::tail_size" doc="The bytes after the first two: the extended length (2 or 8 bytes) and the mask (4 bytes when the frame is masked)."
+      param: param #180 4005:121:15-4015:121:25 name="head"
+        type: type-ref #179 4011:121:21-4015:121:25 name="@3::Head"
+      result: type-ref #181 4020:121:30-4023:121:33 name="Int"
+      body: binding #183 4026:122:3-4035:123:1 name="size"
+        value: literal #182 4033:122:10-4034:122:11 value=int:0
+      body: if-stmt #191 4037:123:3-4078:126:1
+        branch: if-branch #190 4037:123:3-4072:125:1
+          condition: binary #187 4040:123:6-4058:123:24 op=equal op-span=4052:123:18-4054:123:20
+            left: field-access #185 4040:123:6-4051:123:17 name="length"
+              target: name-ref #184 4040:123:6-4044:123:10 name="head"
+            right: literal #186 4055:123:21-4058:123:24 value=int:126
+          body: binding #189 4063:124:5-4072:125:1 name="size"
+            value: literal #188 4070:124:12-4071:124:13 value=int:2
+      body: if-stmt #199 4081:127:3-4122:130:1
+        branch: if-branch #198 4081:127:3-4116:129:1
+          condition: binary #195 4084:127:6-4102:127:24 op=equal op-span=4096:127:18-4098:127:20
+            left: field-access #193 4084:127:6-4095:127:17 name="length"
+              target: name-ref #192 4084:127:6-4088:127:10 name="head"
+            right: literal #194 4099:127:21-4102:127:24 value=int:127
+          body: binding #197 4107:128:5-4116:129:1 name="size"
+            value: literal #196 4114:128:12-4115:128:13 value=int:8
+      body: if-stmt #207 4125:131:3-4175:134:1
+        branch: if-branch #206 4125:131:3-4169:133:1
+          condition: field-access #201 4128:131:6-4139:131:17 name="masked"
+            target: name-ref #200 4128:131:6-4132:131:10 name="head"
+          body: binding #205 4144:132:5-4169:133:1 name="size"
+            value: binary #204 4151:132:12-4168:132:29 op=plus op-span=4156:132:17-4157:132:18
+              left: name-ref #202 4151:132:12-4155:132:16 name="size"
+              right: const-ref #203 4158:132:19-4168:132:29 name="@3::MASK_BYTES"
+      body: return-stmt #209 4178:135:3-4182:135:7 implicit
+        value: name-ref #208 4178:135:3-4182:135:7 name="size"
+    declaration: function-decl #279 4261:139:1-4743:159:1 name="@3::complete" doc="The head with its length and mask, from the tail `tail_size` counted."
+      param: param #212 4274:139:14-4284:139:24 name="head"
+        type: type-ref #211 4280:139:20-4284:139:24 name="@3::Head"
+      param: param #214 4286:139:26-4297:139:37 name="tail"
+        type: type-ref #213 4292:139:32-4297:139:37 name="Bytes"
+      result: type-ref #215 4302:139:42-4306:139:46 name="@3::Head"
+      body: binding #218 4309:140:3-4330:141:1 name="length"
+        value: field-access #217 4318:140:12-4329:140:23 name="length"
+          target: name-ref #216 4318:140:12-4322:140:16 name="head"
+      body: binding #220 4332:141:3-4341:142:1 name="used"
+        value: literal #219 4339:141:10-4340:141:11 value=int:0
+      body: if-stmt #234 4343:142:3-4438:146:1
+        branch: if-branch #233 4343:142:3-4432:145:1
+          condition: binary #224 4346:142:6-4364:142:24 op=equal op-span=4358:142:18-4360:142:20
+            left: field-access #222 4346:142:6-4357:142:17 name="length"
+              target: name-ref #221 4346:142:6-4350:142:10 name="head"
+            right: literal #223 4361:142:21-4364:142:24 value=int:126
+          body: binding #230 4369:143:5-4419:144:1 name="length"
+            value: field-access #229 4378:143:14-4418:143:54 name="to_i"
+              target: field-access #228 4378:143:14-4413:143:49 name="unwrap!"
+                target: call #227 4378:143:14-4405:143:41 name="@4::read_u16_be" piped=false
+                  arg: name-ref #225 4397:143:33-4401:143:37 name="tail"
+                  arg: literal #226 4403:143:39-4404:143:40 value=int:0
+          body: binding #232 4423:144:5-4432:145:1 name="used"
+            value: literal #231 4430:144:12-4431:144:13 value=int:2
+      body: if-stmt #249 4441:147:3-4545:151:1
+        branch: if-branch #248 4441:147:3-4539:150:1
+          condition: binary #238 4444:147:6-4462:147:24 op=equal op-span=4456:147:18-4458:147:20
+            left: field-access #236 4444:147:6-4455:147:17 name="length"
+              target: name-ref #235 4444:147:6-4448:147:10 name="head"
+            right: literal #237 4459:147:21-4462:147:24 value=int:127
+          body: binding #245 4467:148:5-4526:149:1 name="length"
+            value: call #244 4476:148:14-4525:148:63 name="Result.unwrap_or" piped=false
+              arg: call #241 4493:148:31-4520:148:58 name="@4::read_i64_be" piped=false
+                arg: name-ref #239 4512:148:50-4516:148:54 name="tail"
+                arg: literal #240 4518:148:56-4519:148:57 value=int:0
+              arg: unary #243 4522:148:60-4524:148:62 op=minus op-span=4522:148:60-4523:148:61
+                operand: literal #242 4523:148:61-4524:148:62 value=int:1
+          body: binding #247 4530:149:5-4539:150:1 name="used"
+            value: literal #246 4537:149:12-4538:149:13 value=int:8
+      body: binding #251 4548:152:3-4561:153:1 name="key"
+        value: const-ref #250 4554:152:9-4560:152:15 name="@3::NO_KEY"
+      body: if-stmt #260 4563:153:3-4623:156:1
+        branch: if-branch #259 4563:153:3-4617:155:1
+          condition: field-access #253 4566:153:6-4577:153:17 name="masked"
+            target: name-ref #252 4566:153:6-4570:153:10 name="head"
+          body: binding #258 4582:154:5-4617:155:1 name="key"
+            value: method-call #257 4588:154:11-4616:154:39 name="slice"
+              target: name-ref #254 4588:154:11-4592:154:15 name="tail"
+              arg: name-ref #255 4599:154:22-4603:154:26 name="used"
+              arg: const-ref #256 4605:154:28-4615:154:38 name="@3::MASK_BYTES"
+      body: return-stmt #278 4626:157:3-4738:157:115 implicit
+        value: construct #277 4626:157:3-4738:157:115 type="@3::Head"
+          arg: named-arg #263 4631:157:8-4644:157:21 name="fin"
+            value: field-access #262 4636:157:13-4644:157:21 name="fin"
+              target: name-ref #261 4636:157:13-4640:157:17 name="head"
+          arg: named-arg #266 4646:157:23-4665:157:42 name="opcode"
+            value: field-access #265 4654:157:31-4665:157:42 name="opcode"
+              target: name-ref #264 4654:157:31-4658:157:35 name="head"
+          arg: named-arg #269 4667:157:44-4686:157:63 name="masked"
+            value: field-access #268 4675:157:52-4686:157:63 name="masked"
+              target: name-ref #267 4675:157:52-4679:157:56 name="head"
+          arg: named-arg #272 4688:157:65-4711:157:88 name="reserved"
+            value: field-access #271 4698:157:75-4711:157:88 name="reserved"
+              target: name-ref #270 4698:157:75-4702:157:79 name="head"
+          arg: named-arg #274 4713:157:90-4727:157:104 name="length"
+            value: name-ref #273 4721:157:98-4727:157:104 name="length"
+          arg: named-arg #276 4729:157:106-4737:157:114 name="key"
+            value: name-ref #275 4734:157:111-4737:157:114 name="key"
+    declaration: function-decl #332 4821:161:1-5248:172:1 name="@3::check_head" doc="What is wrong with a head, before any payload is read, when something is."
+      param: param #281 4836:161:16-4846:161:26 name="head"
+        type: type-ref #280 4842:161:22-4846:161:26 name="@3::Head"
+      result: type-ref #283 4851:161:31-4868:161:48 name="Optional"
+        arg: type-ref #282 4860:161:40-4867:161:47 name="@3::Problem"
+      body: if-stmt #296 4871:162:3-4969:163:1 guard
+        branch: if-branch #295 4871:162:3-4968:162:100
+          condition: binary #294 4950:162:82-4968:162:100 op=not-equal op-span=4964:162:96-4966:162:98
+            left: field-access #292 4950:162:82-4963:162:95 name="reserved"
+              target: name-ref #291 4950:162:82-4954:162:86 name="head"
+            right: literal #293 4967:162:99-4968:162:100 value=int:0
+          body: return-stmt #290 4871:162:3-4946:162:78
+            value: call #289 4878:162:10-4946:162:78 name="some" piped=false
+              arg: construct #288 4883:162:15-4945:162:77 type="@3::Problem"
+                arg: named-arg #285 4891:162:23-4911:162:43 name="code"
+                  value: const-ref #284 4897:162:29-4911:162:43 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #287 4913:162:45-4944:162:76 name="reason"
+                  value: literal #286 4921:162:53-4944:162:76 value=string:"reserved bits are set"
+      body: if-stmt #308 4972:164:3-5075:165:1 guard
+        branch: if-branch #307 4972:164:3-5074:164:105
+          condition: unary #306 5059:164:90-5074:164:105 op=not op-span=5059:164:90-5062:164:93
+            operand: field-access #305 5063:164:94-5074:164:105 name="masked"
+              target: name-ref #304 5063:164:94-5067:164:98 name="head"
+          body: return-stmt #303 4972:164:3-5055:164:86
+            value: call #302 4979:164:10-5055:164:86 name="some" piped=false
+              arg: construct #301 4984:164:15-5054:164:85 type="@3::Problem"
+                arg: named-arg #298 4992:164:23-5012:164:43 name="code"
+                  value: const-ref #297 4998:164:29-5012:164:43 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #300 5014:164:45-5053:164:84 name="reason"
+                  value: literal #299 5022:164:53-5053:164:84 value=string:"a client frame must be masked"
+      body: if-stmt #321 5078:166:3-5181:167:1 guard
+        branch: if-branch #320 5078:166:3-5180:166:105
+          condition: unary #319 5150:166:75-5180:166:105 op=not op-span=5150:166:75-5153:166:78
+            operand: call #318 5154:166:79-5180:166:105 name="@3::known_opcode?" piped=false
+              arg: field-access #317 5168:166:93-5179:166:104 name="opcode"
+                target: name-ref #316 5168:166:93-5172:166:97 name="head"
+          body: return-stmt #315 5078:166:3-5146:166:71
+            value: call #314 5085:166:10-5146:166:71 name="some" piped=false
+              arg: construct #313 5090:166:15-5145:166:70 type="@3::Problem"
+                arg: named-arg #310 5098:166:23-5118:166:43 name="code"
+                  value: const-ref #309 5104:166:29-5118:166:43 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #312 5120:166:45-5144:166:69 name="reason"
+                  value: literal #311 5128:166:53-5144:166:69 value=string:"unknown opcode"
+      body: if-stmt #329 5184:168:3-5236:169:1 guard
+        branch: if-branch #328 5184:168:3-5235:168:54
+          condition: call #327 5214:168:33-5235:168:54 name="@3::control?" piped=false
+            arg: field-access #326 5223:168:42-5234:168:53 name="opcode"
+              target: name-ref #325 5223:168:42-5227:168:46 name="head"
+          body: return-stmt #324 5184:168:3-5210:168:29
+            value: call #323 5191:168:10-5210:168:29 name="@3::check_control" piped=false
+              arg: name-ref #322 5205:168:24-5209:168:28 name="head"
+      body: return-stmt #331 5239:170:3-5243:170:7 implicit
+        value: call #330 5239:170:3-5243:170:7 name="none" piped=false
+    declaration: function-decl #376 5471:175:1-5790:184:1 name="@3::check_length" doc="What is wrong with the length of a head whose tail was read: a 64-bit length that is not a length, or a data frame\nthat would take its message past the cap, given the `held` bytes of the message's earlier fragments."
+      param: param #334 5488:175:18-5498:175:28 name="head"
+        type: type-ref #333 5494:175:24-5498:175:28 name="@3::Head"
+      param: param #336 5500:175:30-5508:175:38 name="max"
+        type: type-ref #335 5505:175:35-5508:175:38 name="Int"
+      param: param #338 5510:175:40-5519:175:49 name="held"
+        type: type-ref #337 5516:175:46-5519:175:49 name="Int"
+      result: type-ref #340 5524:175:54-5541:175:71 name="Optional"
+        arg: type-ref #339 5533:175:63-5540:175:70 name="@3::Problem"
+      body: if-stmt #353 5544:176:3-5638:177:1 guard
+        branch: if-branch #352 5544:176:3-5637:176:96
+          condition: binary #351 5622:176:81-5637:176:96 op=less op-span=5634:176:93-5635:176:94
+            left: field-access #349 5622:176:81-5633:176:92 name="length"
+              target: name-ref #348 5622:176:81-5626:176:85 name="head"
+            right: literal #350 5636:176:95-5637:176:96 value=int:0
+          body: return-stmt #347 5544:176:3-5618:176:77
+            value: call #346 5551:176:10-5618:176:77 name="some" piped=false
+              arg: construct #345 5556:176:15-5617:176:76 type="@3::Problem"
+                arg: named-arg #342 5564:176:23-5584:176:43 name="code"
+                  value: const-ref #341 5570:176:29-5584:176:43 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #344 5586:176:45-5616:176:75 name="reason"
+                  value: literal #343 5594:176:53-5616:176:75 value=string:"invalid frame length"
+      body: if-stmt #373 5641:178:3-5778:181:1
+        branch: if-branch #372 5641:178:3-5772:180:1
+          condition: binary #364 5644:178:6-5698:178:60 op=and op-span=5670:178:32-5673:178:35
+            left: unary #357 5644:178:6-5669:178:31 op=not op-span=5644:178:6-5647:178:9
+              operand: call #356 5648:178:10-5669:178:31 name="@3::control?" piped=false
+                arg: field-access #355 5657:178:19-5668:178:30 name="opcode"
+                  target: name-ref #354 5657:178:19-5661:178:23 name="head"
+            right: binary #363 5674:178:36-5698:178:60 op=greater op-span=5693:178:55-5694:178:56
+              left: binary #361 5674:178:36-5692:178:54 op=plus op-span=5679:178:41-5680:178:42
+                left: name-ref #358 5674:178:36-5678:178:40 name="held"
+                right: field-access #360 5681:178:43-5692:178:54 name="length"
+                  target: name-ref #359 5681:178:43-5685:178:47 name="head"
+              right: name-ref #362 5695:178:57-5698:178:60 name="max"
+          body: return-stmt #371 5703:179:5-5772:180:1
+            value: call #370 5710:179:12-5771:179:73 name="some" piped=false
+              arg: construct #369 5715:179:17-5770:179:72 type="@3::Problem"
+                arg: named-arg #366 5723:179:25-5742:179:44 name="code"
+                  value: const-ref #365 5729:179:31-5742:179:44 name="@3::CLOSE_TOO_BIG"
+                arg: named-arg #368 5744:179:46-5769:179:71 name="reason"
+                  value: literal #367 5752:179:54-5769:179:71 value=string:"message too big"
+      body: return-stmt #375 5781:182:3-5785:182:7 implicit
+        value: call #374 5781:182:3-5785:182:7 name="none" piped=false
+    declaration: function-decl #384 5854:186:1-5906:187:1 name="@3::control?" doc="True for the opcodes of control frames (close, ping, pong)." expression
+      param: param #378 5867:186:14-5878:186:25 name="opcode"
+        type: type-ref #377 5875:186:22-5878:186:25 name="Int"
+      result: type-ref #379 5883:186:30-5887:186:34 name="Bool"
+      body: return-stmt #383 5890:186:37-5905:186:52 implicit
+        value: binary #382 5890:186:37-5905:186:52 op=greater-equal op-span=5897:186:44-5899:186:46
+          left: name-ref #380 5890:186:37-5896:186:43 name="opcode"
+          right: const-ref #381 5900:186:47-5905:186:52 name="@3::CLOSE"
+    declaration: function-decl #392 5937:189:1-5987:190:1 name="@3::close?" doc="True for the close opcode." expression
+      param: param #386 5948:189:12-5959:189:23 name="opcode"
+        type: type-ref #385 5956:189:20-5959:189:23 name="Int"
+      result: type-ref #387 5964:189:28-5968:189:32 name="Bool"
+      body: return-stmt #391 5971:189:35-5986:189:50 implicit
+        value: binary #390 5971:189:35-5986:189:50 op=equal op-span=5978:189:42-5980:189:44
+          left: name-ref #388 5971:189:35-5977:189:41 name="opcode"
+          right: const-ref #389 5981:189:45-5986:189:50 name="@3::CLOSE"
+    declaration: function-decl #400 6017:192:1-6065:193:1 name="@3::ping?" doc="True for the ping opcode." expression
+      param: param #394 6027:192:11-6038:192:22 name="opcode"
+        type: type-ref #393 6035:192:19-6038:192:22 name="Int"
+      result: type-ref #395 6043:192:27-6047:192:31 name="Bool"
+      body: return-stmt #399 6050:192:34-6064:192:48 implicit
+        value: binary #398 6050:192:34-6064:192:48 op=equal op-span=6057:192:41-6059:192:43
+          left: name-ref #396 6050:192:34-6056:192:40 name="opcode"
+          right: const-ref #397 6060:192:44-6064:192:48 name="@3::PING"
+    declaration: function-decl #441 6184:195:1-6453:208:1 name="@3::unmask" doc="The payload with the mask of the frame taken off: each byte is xor-ed with the byte of the key at its place mod 4."
+      param: param #402 6195:195:12-6206:195:23 name="data"
+        type: type-ref #401 6201:195:18-6206:195:23 name="Bytes"
+      param: param #404 6208:195:25-6218:195:35 name="key"
+        type: type-ref #403 6213:195:30-6218:195:35 name="Bytes"
+      result: type-ref #405 6223:195:40-6228:195:45 name="Bytes"
+      body: if-stmt #411 6231:196:3-6257:197:1 guard
+        branch: if-branch #410 6231:196:3-6256:196:28
+          condition: field-access #409 6246:196:18-6256:196:28 name="empty?"
+            target: name-ref #408 6246:196:18-6249:196:21 name="key"
+          body: return-stmt #407 6231:196:3-6242:196:14
+            value: name-ref #406 6238:196:10-6242:196:14 name="data"
+      body: binding #414 6260:198:3-6273:199:1 name="k"
+        value: field-access #413 6264:198:7-6272:198:15 name="to_a"
+          target: name-ref #412 6264:198:7-6267:198:10 name="key"
+      body: binding #418 6275:199:3-6295:200:1 name="out"
+        type: type-ref #416 6280:199:8-6289:199:17 name="List"
+          arg: type-ref #415 6285:199:13-6288:199:16 name="Int"
+        value: list-lit #417 6292:199:20-6294:199:22
+      body: binding #420 6297:200:3-6307:201:1 name="place"
+        value: literal #419 6305:200:11-6306:200:12 value=int:0
+      body: for-stmt #436 6309:201:3-6417:205:1 variable="byte"
+        iterable: name-ref #421 6321:201:15-6325:201:19 name="data"
+        body: binding #429 6330:202:5-6374:203:1 name="out"
+          value: method-call #428 6336:202:11-6373:202:48 name="push"
+            target: name-ref #422 6336:202:11-6339:202:14 name="out"
+            arg: call #427 6345:202:20-6372:202:47 name="Int.bit_xor" piped=false
+              arg: name-ref #423 6357:202:32-6361:202:36 name="byte"
+              arg: index-access #426 6363:202:38-6371:202:46
+                target: name-ref #424 6363:202:38-6364:202:39 name="k"
+                index: name-ref #425 6365:202:40-6370:202:45 name="place"
+        body: binding #435 6378:203:5-6411:204:1 name="place"
+          value: binary #434 6386:203:13-6410:203:37 op=modulo op-span=6398:203:25-6399:203:26
+            left: binary #432 6387:203:14-6396:203:23 op=plus op-span=6393:203:20-6394:203:21
+              left: name-ref #430 6387:203:14-6392:203:19 name="place"
+              right: literal #431 6395:203:22-6396:203:23 value=int:1
+            right: const-ref #433 6400:203:27-6410:203:37 name="@3::MASK_BYTES"
+      body: return-stmt #440 6420:206:3-6448:206:31 implicit
+        value: field-access #439 6420:206:3-6448:206:31 name="unwrap!"
+          target: call #438 6420:206:3-6440:206:23 name="Bytes.from_list" piped=false
+            arg: name-ref #437 6436:206:19-6439:206:22 name="out"
+    declaration: function-decl #453 6504:210:1-6593:211:1 name="@3::new_assembly" doc="The state before the first frame of a message." expression
+      result: type-ref #442 6526:210:23-6534:210:31 name="@3::Assembly"
+      body: return-stmt #452 6537:210:34-6592:210:89 implicit
+        value: construct #451 6537:210:34-6592:210:89 type="@3::Assembly"
+          arg: named-arg #444 6546:210:43-6557:210:54 name="text"
+            value: literal #443 6552:210:49-6557:210:54 value=bool:false
+          arg: named-arg #446 6559:210:56-6570:210:67 name="open"
+            value: literal #445 6565:210:62-6570:210:67 value=bool:false
+          arg: named-arg #448 6572:210:69-6581:210:78 name="parts"
+            value: list-lit #447 6579:210:76-6581:210:78
+          arg: named-arg #450 6583:210:80-6591:210:88 name="total"
+            value: literal #449 6590:210:87-6591:210:88 value=int:0
+    declaration: function-decl #552 6907:215:1-7713:238:1 name="@3::take" doc="Adds a data frame (text, binary or continuation) to the message being assembled. The message is whole at its last\nframe, and a text message must then be UTF-8. A fragment that starts a message while another is open, or that\ncontinues none, breaks the protocol; so does a message past `max` bytes in all."
+      param: param #455 6916:215:10-6934:215:28 name="assembly"
+        type: type-ref #454 6926:215:20-6934:215:28 name="@3::Assembly"
+      param: param #457 6936:215:30-6946:215:40 name="head"
+        type: type-ref #456 6942:215:36-6946:215:40 name="@3::Head"
+      param: param #459 6948:215:42-6962:215:56 name="payload"
+        type: type-ref #458 6957:215:51-6962:215:56 name="Bytes"
+      param: param #461 6964:215:58-6972:215:66 name="max"
+        type: type-ref #460 6969:215:63-6972:215:66 name="Int"
+      result: type-ref #462 6977:215:71-6982:215:76 name="@3::Taken"
+      body: binding #467 6985:216:3-7026:217:1 name="continuing"
+        value: binary #466 6998:216:16-7025:216:43 op=equal op-span=7010:216:28-7012:216:30
+          left: field-access #464 6998:216:16-7009:216:27 name="opcode"
+            target: name-ref #463 6998:216:16-7002:216:20 name="head"
+          right: const-ref #465 7013:216:31-7025:216:43 name="@3::CONTINUATION"
+      body: if-stmt #481 7028:217:3-7167:220:1
+        branch: if-branch #480 7028:217:3-7161:219:1
+          condition: binary #472 7031:217:6-7063:217:38 op=and op-span=7042:217:17-7045:217:20
+            left: name-ref #468 7031:217:6-7041:217:16 name="continuing"
+            right: unary #471 7046:217:21-7063:217:38 op=not op-span=7046:217:21-7049:217:24
+              operand: field-access #470 7050:217:25-7063:217:38 name="open"
+                target: name-ref #469 7050:217:25-7058:217:33 name="assembly"
+          body: return-stmt #479 7068:218:5-7161:219:1
+            value: enum-constructor #478 7075:218:12-7160:218:97 enum="@3::Taken" variant="Broken"
+              arg: construct #477 7088:218:25-7159:218:96 type="@3::Problem"
+                arg: named-arg #474 7096:218:33-7116:218:53 name="code"
+                  value: const-ref #473 7102:218:39-7116:218:53 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #476 7118:218:55-7158:218:95 name="reason"
+                  value: literal #475 7126:218:63-7158:218:95 value=string:"a continuation with no message"
+      body: if-stmt #495 7170:221:3-7316:224:1
+        branch: if-branch #494 7170:221:3-7310:223:1
+          condition: binary #486 7173:221:6-7205:221:38 op=and op-span=7188:221:21-7191:221:24
+            left: unary #483 7173:221:6-7187:221:20 op=not op-span=7173:221:6-7176:221:9
+              operand: name-ref #482 7177:221:10-7187:221:20 name="continuing"
+            right: field-access #485 7192:221:25-7205:221:38 name="open"
+              target: name-ref #484 7192:221:25-7200:221:33 name="assembly"
+          body: return-stmt #493 7210:222:5-7310:223:1
+            value: enum-constructor #492 7217:222:12-7309:222:104 enum="@3::Taken" variant="Broken"
+              arg: construct #491 7230:222:25-7308:222:103 type="@3::Problem"
+                arg: named-arg #488 7238:222:33-7258:222:53 name="code"
+                  value: const-ref #487 7244:222:39-7258:222:53 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #490 7260:222:55-7307:222:102 name="reason"
+                  value: literal #489 7268:222:63-7307:222:102 value=string:"a new message inside a fragmented one"
+      body: binding #498 7319:225:3-7340:226:1 name="text"
+        value: field-access #497 7326:225:10-7339:225:23 name="text"
+          target: name-ref #496 7326:225:10-7334:225:18 name="assembly"
+      body: if-stmt #507 7342:226:3-7397:229:1
+        branch: if-branch #506 7342:226:3-7391:228:1
+          condition: unary #500 7345:226:6-7359:226:20 op=not op-span=7345:226:6-7348:226:9
+            operand: name-ref #499 7349:226:10-7359:226:20 name="continuing"
+          body: binding #505 7364:227:5-7391:228:1 name="text"
+            value: binary #504 7371:227:12-7390:227:31 op=equal op-span=7383:227:24-7385:227:26
+              left: field-access #502 7371:227:12-7382:227:23 name="opcode"
+                target: name-ref #501 7371:227:12-7375:227:16 name="head"
+              right: const-ref #503 7386:227:27-7390:227:31 name="@3::TEXT"
+      body: binding #513 7400:230:3-7438:231:1 name="total"
+        value: binary #512 7408:230:11-7437:230:40 op=plus op-span=7423:230:26-7424:230:27
+          left: field-access #509 7408:230:11-7422:230:25 name="total"
+            target: name-ref #508 7408:230:11-7416:230:19 name="assembly"
+          right: field-access #511 7425:230:28-7437:230:40 name="size"
+            target: name-ref #510 7425:230:28-7432:230:35 name="payload"
+      body: if-stmt #525 7440:231:3-7532:232:1 guard
+        branch: if-branch #524 7440:231:3-7531:231:94
+          condition: binary #523 7520:231:83-7531:231:94 op=greater op-span=7526:231:89-7527:231:90
+            left: name-ref #521 7520:231:83-7525:231:88 name="total"
+            right: name-ref #522 7528:231:91-7531:231:94 name="max"
+          body: return-stmt #520 7440:231:3-7516:231:79
+            value: enum-constructor #519 7447:231:10-7516:231:79 enum="@3::Taken" variant="Broken"
+              arg: construct #518 7460:231:23-7515:231:78 type="@3::Problem"
+                arg: named-arg #515 7468:231:31-7487:231:50 name="code"
+                  value: const-ref #514 7474:231:37-7487:231:50 name="@3::CLOSE_TOO_BIG"
+                arg: named-arg #517 7489:231:52-7514:231:77 name="reason"
+                  value: literal #516 7497:231:60-7514:231:77 value=string:"message too big"
+      body: binding #530 7535:233:3-7572:234:1 name="parts"
+        value: method-call #529 7543:233:11-7571:233:39 name="push"
+          target: field-access #527 7543:233:11-7557:233:25 name="parts"
+            target: name-ref #526 7543:233:11-7551:233:19 name="assembly"
+          arg: name-ref #528 7563:233:31-7570:233:38 name="payload"
+      body: if-stmt #546 7574:234:3-7670:235:1 guard
+        branch: if-branch #545 7574:234:3-7669:234:98
+          condition: unary #544 7657:234:86-7669:234:98 op=not op-span=7657:234:86-7660:234:89
+            operand: field-access #543 7661:234:90-7669:234:98 name="fin"
+              target: name-ref #542 7661:234:90-7665:234:94 name="head"
+          body: return-stmt #541 7574:234:3-7653:234:82
+            value: enum-constructor #540 7581:234:10-7653:234:82 enum="@3::Taken" variant="More"
+              arg: construct #539 7592:234:21-7652:234:81 type="@3::Assembly"
+                arg: named-arg #532 7601:234:30-7611:234:40 name="text"
+                  value: name-ref #531 7607:234:36-7611:234:40 name="text"
+                arg: named-arg #534 7613:234:42-7623:234:52 name="open"
+                  value: literal #533 7619:234:48-7623:234:52 value=bool:true
+                arg: named-arg #536 7625:234:54-7637:234:66 name="parts"
+                  value: name-ref #535 7632:234:61-7637:234:66 name="parts"
+                arg: named-arg #538 7639:234:68-7651:234:80 name="total"
+                  value: name-ref #537 7646:234:75-7651:234:80 name="total"
+      body: return-stmt #551 7673:236:3-7708:236:38 implicit
+        value: call #550 7673:236:3-7708:236:38 name="@3::finished" piped=false
+          arg: name-ref #547 7682:236:12-7686:236:16 name="text"
+          arg: call #549 7688:236:18-7707:236:37 name="Bytes.concat" piped=false
+            arg: name-ref #548 7701:236:31-7706:236:36 name="parts"
+    declaration: function-decl #615 7937:241:1-8524:254:1 name="@3::parse_close" doc="A close frame: no payload (no code), or a code of two bytes and a reason that is UTF-8. A code that no peer may send\n(below 1000, 1004 to 1006, 1015 to 2999, past 4999) is a protocol error, as is one byte of payload."
+      param: param #554 7953:241:17-7967:241:31 name="payload"
+        type: type-ref #553 7962:241:26-7967:241:31 name="Bytes"
+      result: type-ref #555 7972:241:36-7979:241:43 name="@3::Closing"
+      body: if-stmt #563 7982:242:3-8038:243:1 guard
+        branch: if-branch #562 7982:242:3-8037:242:58
+          condition: field-access #561 8023:242:44-8037:242:58 name="empty?"
+            target: name-ref #560 8023:242:44-8030:242:51 name="payload"
+          body: return-stmt #559 7982:242:3-8019:242:40
+            value: enum-constructor #558 7989:242:10-8019:242:40 enum="@3::Closing" variant="Peer"
+              arg: const-ref #556 8002:242:23-8014:242:35 name="@3::CLOSE_NORMAL"
+              arg: literal #557 8016:242:37-8018:242:39 value=string:""
+      body: if-stmt #576 8041:244:3-8155:245:1 guard
+        branch: if-branch #575 8041:244:3-8154:244:116
+          condition: binary #574 8137:244:99-8154:244:116 op=equal op-span=8150:244:112-8152:244:114
+            left: field-access #572 8137:244:99-8149:244:111 name="size"
+              target: name-ref #571 8137:244:99-8144:244:106 name="payload"
+            right: literal #573 8153:244:115-8154:244:116 value=int:1
+          body: return-stmt #570 8041:244:3-8133:244:95
+            value: enum-constructor #569 8048:244:10-8133:244:95 enum="@3::Closing" variant="Invalid"
+              arg: construct #568 8064:244:26-8132:244:94 type="@3::Problem"
+                arg: named-arg #565 8072:244:34-8092:244:54 name="code"
+                  value: const-ref #564 8078:244:40-8092:244:54 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #567 8094:244:56-8131:244:93 name="reason"
+                  value: literal #566 8102:244:64-8131:244:93 value=string:"a close frame with one byte"
+      body: binding #582 8158:246:3-8209:247:1 name="code"
+        value: field-access #581 8165:246:10-8208:246:53 name="to_i"
+          target: field-access #580 8165:246:10-8203:246:48 name="unwrap!"
+            target: call #579 8165:246:10-8195:246:40 name="@4::read_u16_be" piped=false
+              arg: name-ref #577 8184:246:29-8191:246:36 name="payload"
+              arg: literal #578 8193:246:38-8194:246:39 value=int:0
+      body: if-stmt #594 8211:247:3-8320:248:1 guard
+        branch: if-branch #593 8211:247:3-8319:247:111
+          condition: unary #592 8298:247:90-8319:247:111 op=not op-span=8298:247:90-8301:247:93
+            operand: call #591 8302:247:94-8319:247:111 name="@3::valid_code?" piped=false
+              arg: name-ref #590 8314:247:106-8318:247:110 name="code"
+          body: return-stmt #589 8211:247:3-8294:247:86
+            value: enum-constructor #588 8218:247:10-8294:247:86 enum="@3::Closing" variant="Invalid"
+              arg: construct #587 8234:247:26-8293:247:85 type="@3::Problem"
+                arg: named-arg #584 8242:247:34-8262:247:54 name="code"
+                  value: const-ref #583 8248:247:40-8262:247:54 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #586 8264:247:56-8292:247:84 name="reason"
+                  value: literal #585 8272:247:64-8292:247:84 value=string:"invalid close code"
+      body: case-stmt #614 8323:249:3-8520:253:1
+        value: call #598 8328:249:8-8362:249:42 name="String.from_bytes" piped=false
+          arg: method-call #597 8346:249:26-8361:249:41 name="drop"
+            target: name-ref #595 8346:249:26-8353:249:33 name="payload"
+            arg: literal #596 8359:249:39-8360:249:40 value=int:2
+        arm: case-arm #604 8367:250:5-8408:251:1
+          pattern: variant-pattern #599 8367:250:5-8377:250:15 enum="Result" variant="Ok" bindings=["reason"]
+          body: return-stmt #603 8381:250:19-8407:250:45 implicit
+            value: enum-constructor #602 8381:250:19-8407:250:45 enum="@3::Closing" variant="Peer"
+              arg: name-ref #600 8394:250:32-8398:250:36 name="code"
+              arg: name-ref #601 8400:250:38-8406:250:44 name="reason"
+        arm: case-arm #613 8412:251:5-8514:252:1
+          pattern: variant-pattern #605 8412:251:5-8420:251:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #612 8424:251:17-8513:251:106 implicit
+            value: enum-constructor #611 8424:251:17-8513:251:106 enum="@3::Closing" variant="Invalid"
+              arg: construct #610 8440:251:33-8512:251:105 type="@3::Problem"
+                arg: named-arg #607 8448:251:41-8468:251:61 name="code"
+                  value: const-ref #606 8454:251:47-8468:251:61 name="@3::CLOSE_BAD_DATA"
+                arg: named-arg #609 8470:251:63-8511:251:104 name="reason"
+                  value: literal #608 8478:251:71-8511:251:104 value=string:"close reason is not valid UTF-8"
+    declaration: function-decl #673 8638:256:1-9076:267:1 name="@3::frame" doc="A frame the server writes: the first byte (FIN set and the opcode), the length and the payload, never masked."
+      param: param #617 8648:256:11-8659:256:22 name="opcode"
+        type: type-ref #616 8656:256:19-8659:256:22 name="Int"
+      param: param #619 8661:256:24-8675:256:38 name="payload"
+        type: type-ref #618 8670:256:33-8675:256:38 name="Bytes"
+      result: type-ref #620 8680:256:43-8685:256:48 name="Bytes"
+      body: binding #623 8688:257:3-8708:258:1 name="size"
+        value: field-access #622 8695:257:10-8707:257:22 name="size"
+          target: name-ref #621 8695:257:10-8702:257:17 name="payload"
+      body: binding #630 8710:258:3-8757:259:1 name="head"
+        value: field-access #629 8717:258:10-8756:258:49 name="unwrap!"
+          target: call #628 8717:258:10-8748:258:41 name="Bytes.from_list" piped=false
+            arg: list-lit #627 8733:258:26-8747:258:40
+              element: binary #626 8734:258:27-8746:258:39 op=plus op-span=8738:258:31-8739:258:32
+                left: literal #624 8734:258:27-8737:258:30 value=int:128
+                right: name-ref #625 8740:258:33-8746:258:39 name="opcode"
+      body: if-stmt #644 8759:259:3-8843:260:1 guard
+        branch: if-branch #643 8759:259:3-8842:259:86
+          condition: binary #642 8832:259:76-8842:259:86 op=less op-span=8837:259:81-8838:259:82
+            left: name-ref #640 8832:259:76-8836:259:80 name="size"
+            right: literal #641 8839:259:83-8842:259:86 value=int:126
+          body: return-stmt #639 8759:259:3-8828:259:72
+            value: call #638 8766:259:10-8828:259:72 name="Bytes.concat" piped=false
+              arg: list-lit #637 8779:259:23-8827:259:71
+                element: name-ref #631 8780:259:24-8784:259:28 name="head"
+                element: field-access #635 8786:259:30-8817:259:61 name="unwrap!"
+                  target: call #634 8786:259:30-8809:259:53 name="Bytes.from_list" piped=false
+                    arg: list-lit #633 8802:259:46-8808:259:52
+                      element: name-ref #632 8803:259:47-8807:259:51 name="size"
+                element: name-ref #636 8819:259:63-8826:259:70 name="payload"
+      body: if-stmt #661 8846:261:3-8980:264:1
+        branch: if-branch #660 8846:261:3-8974:263:1
+          condition: binary #647 8849:261:6-8861:261:18 op=less op-span=8854:261:11-8855:261:12
+            left: name-ref #645 8849:261:6-8853:261:10 name="size"
+            right: literal #646 8856:261:13-8861:261:18 value=int:65536
+          body: return-stmt #659 8866:262:5-8974:263:1
+            value: call #658 8873:262:12-8973:262:112 name="Bytes.concat" piped=false
+              arg: list-lit #657 8886:262:25-8972:262:111
+                element: name-ref #648 8887:262:26-8891:262:30 name="head"
+                element: field-access #652 8893:262:32-8923:262:62 name="unwrap!"
+                  target: call #651 8893:262:32-8915:262:54 name="Bytes.from_list" piped=false
+                    arg: list-lit #650 8909:262:48-8914:262:53
+                      element: literal #649 8910:262:49-8913:262:52 value=int:126
+                element: call #655 8925:262:64-8962:262:101 name="@4::write_u16_be" piped=false
+                  arg: field-access #654 8945:262:84-8961:262:100 name="wrap_uint16"
+                    target: name-ref #653 8945:262:84-8949:262:88 name="size"
+                element: name-ref #656 8964:262:103-8971:262:110 name="payload"
+      body: return-stmt #672 8983:265:3-9071:265:91 implicit
+        value: call #671 8983:265:3-9071:265:91 name="Bytes.concat" piped=false
+          arg: list-lit #670 8996:265:16-9070:265:90
+            element: name-ref #662 8997:265:17-9001:265:21 name="head"
+            element: field-access #666 9003:265:23-9033:265:53 name="unwrap!"
+              target: call #665 9003:265:23-9025:265:45 name="Bytes.from_list" piped=false
+                arg: list-lit #664 9019:265:39-9024:265:44
+                  element: literal #663 9020:265:40-9023:265:43 value=int:127
+            element: call #668 9035:265:55-9060:265:80 name="@4::write_i64_be" piped=false
+              arg: name-ref #667 9055:265:75-9059:265:79 name="size"
+            element: name-ref #669 9062:265:82-9069:265:89 name="payload"
+    declaration: function-decl #682 9112:269:1-9176:270:1 name="@3::text_frame" doc="A text frame the server writes." expression
+      param: param #675 9127:269:16-9139:269:28 name="text"
+        type: type-ref #674 9133:269:22-9139:269:28 name="String"
+      result: type-ref #676 9144:269:33-9149:269:38 name="Bytes"
+      body: return-stmt #681 9152:269:41-9175:269:64 implicit
+        value: call #680 9152:269:41-9175:269:64 name="@3::frame" piped=false
+          arg: const-ref #677 9158:269:47-9162:269:51 name="@3::TEXT"
+          arg: field-access #679 9164:269:53-9174:269:63 name="bytes"
+            target: name-ref #678 9164:269:53-9168:269:57 name="text"
+    declaration: function-decl #690 9214:272:1-9275:273:1 name="@3::binary_frame" doc="A binary frame the server writes." expression
+      param: param #684 9231:272:18-9242:272:29 name="data"
+        type: type-ref #683 9237:272:24-9242:272:29 name="Bytes"
+      result: type-ref #685 9247:272:34-9252:272:39 name="Bytes"
+      body: return-stmt #689 9255:272:42-9274:272:61 implicit
+        value: call #688 9255:272:42-9274:272:61 name="@3::frame" piped=false
+          arg: const-ref #686 9261:272:48-9267:272:54 name="@3::BINARY"
+          arg: name-ref #687 9269:272:56-9273:272:60 name="data"
+    declaration: function-decl #783 9579:277:1-10078:295:1 name="@3::data_frame?" doc="True for the bytes of one whole text or binary frame as the server writes them: FIN set, no reserved bits, not\nmasked, the shortest length form, and exactly that many bytes of payload. It reads the head only, so it costs the\nsame for any size; the UTF-8 of a text payload is not checked again."
+      param: param #692 9595:277:17-9607:277:29 name="frame"
+        type: type-ref #691 9602:277:24-9607:277:29 name="Bytes"
+      result: type-ref #693 9612:277:34-9616:277:38 name="Bool"
+      body: if-stmt #717 9619:278:3-9713:279:1 guard
+        branch: if-branch #716 9619:278:3-9712:278:96
+          condition: binary #715 9635:278:19-9712:278:96 op=or op-span=9650:278:34-9652:278:36
+            left: binary #699 9635:278:19-9649:278:33 op=less op-span=9646:278:30-9647:278:31
+              left: field-access #697 9635:278:19-9645:278:29 name="size"
+                target: name-ref #696 9635:278:19-9640:278:24 name="frame"
+              right: literal #698 9648:278:32-9649:278:33 value=int:2
+            right: binary #714 9654:278:38-9711:278:95 op=and op-span=9680:278:64-9683:278:67
+              left: binary #706 9654:278:38-9679:278:63 op=not-equal op-span=9666:278:50-9668:278:52
+                left: method-call #702 9654:278:38-9665:278:49 name="at"
+                  target: name-ref #700 9654:278:38-9659:278:43 name="frame"
+                  arg: literal #701 9663:278:47-9664:278:48 value=int:0
+                right: binary #705 9669:278:53-9679:278:63 op=plus op-span=9673:278:57-9674:278:58
+                  left: literal #703 9669:278:53-9672:278:56 value=int:128
+                  right: const-ref #704 9675:278:59-9679:278:63 name="@3::TEXT"
+              right: binary #713 9684:278:68-9711:278:95 op=not-equal op-span=9696:278:80-9698:278:82
+                left: method-call #709 9684:278:68-9695:278:79 name="at"
+                  target: name-ref #707 9684:278:68-9689:278:73 name="frame"
+                  arg: literal #708 9693:278:77-9694:278:78 value=int:0
+                right: binary #712 9699:278:83-9711:278:95 op=plus op-span=9703:278:87-9704:278:88
+                  left: literal #710 9699:278:83-9702:278:86 value=int:128
+                  right: const-ref #711 9705:278:89-9711:278:95 name="@3::BINARY"
+          body: return-stmt #695 9619:278:3-9631:278:15
+            value: literal #694 9626:278:10-9631:278:15 value=bool:false
+      body: binding #721 9716:280:3-9737:281:1 name="length"
+        value: method-call #720 9725:280:12-9736:280:23 name="at"
+          target: name-ref #718 9725:280:12-9730:280:17 name="frame"
+          arg: literal #719 9734:280:21-9735:280:22 value=int:1
+      body: if-stmt #733 9739:281:3-9787:282:1 guard
+        branch: if-branch #732 9739:281:3-9786:281:50
+          condition: binary #731 9774:281:38-9786:281:50 op=less op-span=9781:281:45-9782:281:46
+            left: name-ref #729 9774:281:38-9780:281:44 name="length"
+            right: literal #730 9783:281:47-9786:281:50 value=int:126
+          body: return-stmt #728 9739:281:3-9770:281:34
+            value: binary #727 9746:281:10-9770:281:34 op=equal op-span=9761:281:25-9763:281:27
+              left: binary #725 9746:281:10-9760:281:24 op=minus op-span=9757:281:21-9758:281:22
+                left: field-access #723 9746:281:10-9756:281:20 name="size"
+                  target: name-ref #722 9746:281:10-9751:281:15 name="frame"
+                right: literal #724 9759:281:23-9760:281:24 value=int:2
+              right: name-ref #726 9764:281:28-9770:281:34 name="length"
+      body: if-stmt #757 9790:283:3-9932:287:1
+        branch: if-branch #756 9790:283:3-9926:286:1
+          condition: binary #736 9793:283:6-9806:283:19 op=equal op-span=9800:283:13-9802:283:15
+            left: name-ref #734 9793:283:6-9799:283:12 name="length"
+            right: literal #735 9803:283:16-9806:283:19 value=int:126
+          body: binding #744 9811:284:5-9876:285:1 name="size"
+            value: field-access #743 9818:284:12-9875:284:69 name="to_i"
+              target: method-call #742 9818:284:12-9870:284:64 name="unwrap_or"
+                target: call #739 9818:284:12-9846:284:40 name="@4::read_u16_be" piped=false
+                  arg: name-ref #737 9837:284:31-9842:284:36 name="frame"
+                  arg: literal #738 9844:284:38-9845:284:39 value=int:2
+                arg: field-access #741 9857:284:51-9869:284:63 name="to_uint16!"
+                  target: literal #740 9857:284:51-9858:284:52 value=int:0
+          body: return-stmt #755 9880:285:5-9926:286:1
+            value: binary #754 9887:285:12-9925:285:50 op=and op-span=9899:285:24-9902:285:27
+              left: binary #747 9887:285:12-9898:285:23 op=greater-equal op-span=9892:285:17-9894:285:19
+                left: name-ref #745 9887:285:12-9891:285:16 name="size"
+                right: literal #746 9895:285:20-9898:285:23 value=int:126
+              right: binary #753 9903:285:28-9925:285:50 op=equal op-span=9918:285:43-9920:285:45
+                left: binary #751 9903:285:28-9917:285:42 op=minus op-span=9914:285:39-9915:285:40
+                  left: field-access #749 9903:285:28-9913:285:38 name="size"
+                    target: name-ref #748 9903:285:28-9908:285:33 name="frame"
+                  right: literal #750 9916:285:41-9917:285:42 value=int:4
+                right: name-ref #752 9921:285:46-9925:285:50 name="size"
+      body: if-stmt #780 9935:288:3-10065:292:1
+        branch: if-branch #779 9935:288:3-10059:291:1
+          condition: binary #760 9938:288:6-9951:288:19 op=equal op-span=9945:288:13-9947:288:15
+            left: name-ref #758 9938:288:6-9944:288:12 name="length"
+            right: literal #759 9948:288:16-9951:288:19 value=int:127
+          body: binding #767 9956:289:5-10006:290:1 name="size"
+            value: method-call #766 9963:289:12-10005:289:54 name="unwrap_or"
+              target: call #763 9963:289:12-9991:289:40 name="@4::read_i64_be" piped=false
+                arg: name-ref #761 9982:289:31-9987:289:36 name="frame"
+                arg: literal #762 9989:289:38-9990:289:39 value=int:2
+              arg: unary #765 10002:289:51-10004:289:53 op=minus op-span=10002:289:51-10003:289:52
+                operand: literal #764 10003:289:52-10004:289:53 value=int:1
+          body: return-stmt #778 10010:290:5-10059:291:1
+            value: binary #777 10017:290:12-10058:290:53 op=and op-span=10031:290:26-10034:290:29
+              left: binary #770 10017:290:12-10030:290:25 op=greater-equal op-span=10022:290:17-10024:290:19
+                left: name-ref #768 10017:290:12-10021:290:16 name="size"
+                right: literal #769 10025:290:20-10030:290:25 value=int:65536
+              right: binary #776 10035:290:30-10058:290:53 op=equal op-span=10051:290:46-10053:290:48
+                left: binary #774 10035:290:30-10050:290:45 op=minus op-span=10046:290:41-10047:290:42
+                  left: field-access #772 10035:290:30-10045:290:40 name="size"
+                    target: name-ref #771 10035:290:30-10040:290:35 name="frame"
+                  right: literal #773 10048:290:43-10050:290:45 value=int:10
+                right: name-ref #775 10054:290:49-10058:290:53 name="size"
+      body: return-stmt #782 10068:293:3-10073:293:8 implicit
+        value: literal #781 10068:293:3-10073:293:8 value=bool:false
+    declaration: function-decl #791 10114:297:1-10171:298:1 name="@3::ping_frame" doc="A ping frame the server writes." expression
+      param: param #785 10129:297:16-10140:297:27 name="data"
+        type: type-ref #784 10135:297:22-10140:297:27 name="Bytes"
+      result: type-ref #786 10145:297:32-10150:297:37 name="Bytes"
+      body: return-stmt #790 10153:297:40-10170:297:57 implicit
+        value: call #789 10153:297:40-10170:297:57 name="@3::frame" piped=false
+          arg: const-ref #787 10159:297:46-10163:297:50 name="@3::PING"
+          arg: name-ref #788 10165:297:52-10169:297:56 name="data"
+    declaration: function-decl #799 10207:300:1-10264:301:1 name="@3::pong_frame" doc="A pong frame the server writes." expression
+      param: param #793 10222:300:16-10233:300:27 name="data"
+        type: type-ref #792 10228:300:22-10233:300:27 name="Bytes"
+      result: type-ref #794 10238:300:32-10243:300:37 name="Bytes"
+      body: return-stmt #798 10246:300:40-10263:300:57 implicit
+        value: call #797 10246:300:40-10263:300:57 name="@3::frame" piped=false
+          arg: const-ref #795 10252:300:46-10256:300:50 name="@3::PONG"
+          arg: name-ref #796 10258:300:52-10262:300:56 name="data"
+    declaration: function-decl #815 10360:303:1-10508:306:1 name="@3::close_frame" doc="A close frame; the reason is cut to what a control frame can hold, at a character boundary."
+      param: param #801 10376:303:17-10385:303:26 name="code"
+        type: type-ref #800 10382:303:23-10385:303:26 name="Int"
+      param: param #803 10387:303:28-10401:303:42 name="reason"
+        type: type-ref #802 10395:303:36-10401:303:42 name="String"
+      result: type-ref #804 10406:303:47-10411:303:52 name="Bytes"
+      body: return-stmt #814 10414:304:3-10503:304:92 implicit
+        value: call #813 10414:304:3-10503:304:92 name="@3::frame" piped=false
+          arg: const-ref #805 10420:304:9-10425:304:14 name="@3::CLOSE"
+          arg: call #812 10427:304:16-10502:304:91 name="Bytes.concat" piped=false
+            arg: list-lit #811 10440:304:29-10501:304:90
+              element: call #808 10441:304:30-10478:304:67 name="@4::write_u16_be" piped=false
+                arg: field-access #807 10461:304:50-10477:304:66 name="wrap_uint16"
+                  target: name-ref #806 10461:304:50-10465:304:54 name="code"
+              element: call #810 10480:304:69-10500:304:89 name="@3::short_reason" piped=false
+                arg: name-ref #809 10493:304:82-10499:304:88 name="reason"
+    declaration: function-decl #850 10608:308:1-10778:313:1 name="@3::valid_code?" doc="True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999."
+      param: param #817 10624:308:17-10633:308:26 name="code"
+        type: type-ref #816 10630:308:23-10633:308:26 name="Int"
+      result: type-ref #818 10638:308:31-10642:308:35 name="Bool"
+      body: if-stmt #829 10645:309:3-10690:310:1 guard
+        branch: if-branch #828 10645:309:3-10689:309:47
+          condition: binary #827 10660:309:18-10689:309:47 op=and op-span=10673:309:31-10676:309:34
+            left: binary #823 10660:309:18-10672:309:30 op=greater-equal op-span=10665:309:23-10667:309:25
+              left: name-ref #821 10660:309:18-10664:309:22 name="code"
+              right: literal #822 10668:309:26-10672:309:30 value=int:3000
+            right: binary #826 10677:309:35-10689:309:47 op=less-equal op-span=10682:309:40-10684:309:42
+              left: name-ref #824 10677:309:35-10681:309:39 name="code"
+              right: literal #825 10685:309:43-10689:309:47 value=int:4999
+          body: return-stmt #820 10645:309:3-10656:309:14
+            value: literal #819 10652:309:10-10656:309:14 value=bool:true
+      body: return-stmt #849 10693:311:3-10773:311:83 implicit
+        value: binary #848 10693:311:3-10773:311:83 op=and op-span=10757:311:67-10760:311:70
+          left: binary #844 10693:311:3-10756:311:66 op=and op-span=10740:311:50-10743:311:53
+            left: binary #840 10693:311:3-10739:311:49 op=and op-span=10723:311:33-10726:311:36
+              left: binary #836 10693:311:3-10722:311:32 op=and op-span=10706:311:16-10709:311:19
+                left: binary #832 10693:311:3-10705:311:15 op=greater-equal op-span=10698:311:8-10700:311:10
+                  left: name-ref #830 10693:311:3-10697:311:7 name="code"
+                  right: literal #831 10701:311:11-10705:311:15 value=int:1000
+                right: binary #835 10710:311:20-10722:311:32 op=less-equal op-span=10715:311:25-10717:311:27
+                  left: name-ref #833 10710:311:20-10714:311:24 name="code"
+                  right: literal #834 10718:311:28-10722:311:32 value=int:1014
+              right: binary #839 10727:311:37-10739:311:49 op=not-equal op-span=10732:311:42-10734:311:44
+                left: name-ref #837 10727:311:37-10731:311:41 name="code"
+                right: literal #838 10735:311:45-10739:311:49 value=int:1004
+            right: binary #843 10744:311:54-10756:311:66 op=not-equal op-span=10749:311:59-10751:311:61
+              left: name-ref #841 10744:311:54-10748:311:58 name="code"
+              right: literal #842 10752:311:62-10756:311:66 value=int:1005
+          right: binary #847 10761:311:71-10773:311:83 op=not-equal op-span=10766:311:76-10768:311:78
+            left: name-ref #845 10761:311:71-10765:311:75 name="code"
+            right: literal #846 10769:311:79-10773:311:83 value=int:1006
+    declaration: const-decl #852 10788:316:1-10834:317:1 name="@3::GUID"
+      value: literal #851 10795:316:8-10833:316:46 value=string:"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    declaration: const-decl #854 10834:317:1-10849:318:1 name="@3::KEY_BYTES"
+      value: literal #853 10846:317:13-10848:317:15 value=int:16
+    declaration: const-decl #856 10849:318:1-10864:319:1 name="@3::MASK_BYTES"
+      value: literal #855 10862:318:14-10863:318:15 value=int:4
+    declaration: const-decl #860 10963:320:1-11000:321:1 name="@3::NO_KEY"
+      value: field-access #859 10972:320:10-10999:320:37 name="unwrap!"
+        target: call #858 10972:320:10-10991:320:29 name="Bytes.from_list" piped=false
+          arg: list-lit #857 10988:320:26-10990:320:28
+    declaration: const-decl #862 11000:321:1-11018:322:1 name="@3::ACCEPT_BYTES"
+      value: literal #861 11015:321:16-11017:321:18 value=int:20
+    declaration: const-decl #865 11095:323:1-11195:324:1 name="@3::TOKEN_BYTES"
+      value: field-access #864 11109:323:15-11194:323:100 name="bytes"
+        target: literal #863 11109:323:15-11188:323:94 value=string:"!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    declaration: const-decl #867 11195:324:1-11215:325:1 name="@3::CONTROL_BYTES"
+      value: literal #866 11211:324:17-11214:324:20 value=int:125
+    declaration: const-decl #869 11215:325:1-11234:326:1 name="@3::REASON_BYTES"
+      value: literal #868 11230:325:16-11233:325:19 value=int:123
+    declaration: const-decl #871 11265:327:1-11282:328:1 name="@3::CONTINUATION"
+      value: literal #870 11280:327:16-11281:327:17 value=int:0
+    declaration: const-decl #873 11282:328:1-11291:329:1 name="@3::TEXT"
+      value: literal #872 11289:328:8-11290:328:9 value=int:1
+    declaration: const-decl #875 11291:329:1-11302:330:1 name="@3::BINARY"
+      value: literal #874 11300:329:10-11301:329:11 value=int:2
+    declaration: const-decl #877 11302:330:1-11312:331:1 name="@3::CLOSE"
+      value: literal #876 11310:330:9-11311:330:10 value=int:8
+    declaration: const-decl #879 11312:331:1-11321:332:1 name="@3::PING"
+      value: literal #878 11319:331:8-11320:331:9 value=int:9
+    declaration: const-decl #881 11321:332:1-11331:333:1 name="@3::PONG"
+      value: literal #880 11328:332:8-11330:332:10 value=int:10
+    declaration: function-decl #897 11332:334:1-11430:335:1 name="@3::known_opcode?" expression
+      param: param #883 11350:334:19-11361:334:30 name="opcode"
+        type: type-ref #882 11358:334:27-11361:334:30 name="Int"
+      result: type-ref #884 11366:334:35-11370:334:39 name="Bool"
+      body: return-stmt #896 11373:334:42-11429:334:98 implicit
+        value: binary #895 11373:334:42-11429:334:98 op=or op-span=11390:334:59-11392:334:61
+          left: binary #887 11373:334:42-11389:334:58 op=less-equal op-span=11380:334:49-11382:334:51
+            left: name-ref #885 11373:334:42-11379:334:48 name="opcode"
+            right: const-ref #886 11383:334:52-11389:334:58 name="@3::BINARY"
+          right: binary #894 11394:334:63-11428:334:97 op=and op-span=11410:334:79-11413:334:82
+            left: binary #890 11394:334:63-11409:334:78 op=greater-equal op-span=11401:334:70-11403:334:72
+              left: name-ref #888 11394:334:63-11400:334:69 name="opcode"
+              right: const-ref #889 11404:334:73-11409:334:78 name="@3::CLOSE"
+            right: binary #893 11414:334:83-11428:334:97 op=less-equal op-span=11421:334:90-11423:334:92
+              left: name-ref #891 11414:334:83-11420:334:89 name="opcode"
+              right: const-ref #892 11424:334:93-11428:334:97 name="@3::PONG"
+    declaration: function-decl #929 11545:337:1-11852:346:1 name="@3::check_control"
+      param: param #899 11563:337:19-11573:337:29 name="head"
+        type: type-ref #898 11569:337:25-11573:337:29 name="@3::Head"
+      result: type-ref #901 11578:337:34-11595:337:51 name="Optional"
+        arg: type-ref #900 11587:337:43-11594:337:50 name="@3::Problem"
+      body: if-stmt #913 11598:338:3-11705:339:1 guard
+        branch: if-branch #912 11598:338:3-11704:338:109
+          condition: unary #911 11692:338:97-11704:338:109 op=not op-span=11692:338:97-11695:338:100
+            operand: field-access #910 11696:338:101-11704:338:109 name="fin"
+              target: name-ref #909 11696:338:101-11700:338:105 name="head"
+          body: return-stmt #908 11598:338:3-11688:338:93
+            value: call #907 11605:338:10-11688:338:93 name="some" piped=false
+              arg: construct #906 11610:338:15-11687:338:92 type="@3::Problem"
+                arg: named-arg #903 11618:338:23-11638:338:43 name="code"
+                  value: const-ref #902 11624:338:29-11638:338:43 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #905 11640:338:45-11686:338:91 name="reason"
+                  value: literal #904 11648:338:53-11686:338:91 value=string:"a control frame cannot be fragmented"
+      body: if-stmt #926 11708:340:3-11840:343:1
+        branch: if-branch #925 11708:340:3-11834:342:1
+          condition: binary #917 11711:340:6-11738:340:33 op=greater op-span=11723:340:18-11724:340:19
+            left: field-access #915 11711:340:6-11722:340:17 name="length"
+              target: name-ref #914 11711:340:6-11715:340:10 name="head"
+            right: const-ref #916 11725:340:20-11738:340:33 name="@3::CONTROL_BYTES"
+          body: return-stmt #924 11743:341:5-11834:342:1
+            value: call #923 11750:341:12-11833:341:95 name="some" piped=false
+              arg: construct #922 11755:341:17-11832:341:94 type="@3::Problem"
+                arg: named-arg #919 11763:341:25-11783:341:45 name="code"
+                  value: const-ref #918 11769:341:31-11783:341:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #921 11785:341:47-11831:341:93 name="reason"
+                  value: literal #920 11793:341:55-11831:341:93 value=string:"a control frame is at most 125 bytes"
+      body: return-stmt #928 11843:344:3-11847:344:7 implicit
+        value: call #927 11843:344:3-11847:344:7 name="none" piped=false
+    declaration: function-decl #954 11853:347:1-12063:352:1 name="@3::finished"
+      param: param #931 11866:347:14-11876:347:24 name="text"
+        type: type-ref #930 11872:347:20-11876:347:24 name="Bool"
+      param: param #933 11878:347:26-11889:347:37 name="data"
+        type: type-ref #932 11884:347:32-11889:347:37 name="Bytes"
+      result: type-ref #934 11894:347:42-11899:347:47 name="@3::Taken"
+      body: if-stmt #948 11902:348:3-12016:349:1 guard
+        branch: if-branch #947 11902:348:3-12015:348:116
+          condition: binary #946 11991:348:92-12015:348:116 op=and op-span=11996:348:97-11999:348:100
+            left: name-ref #942 11991:348:92-11995:348:96 name="text"
+            right: unary #945 12000:348:101-12015:348:116 op=not op-span=12000:348:101-12003:348:104
+              operand: call #944 12004:348:105-12015:348:116 name="@3::utf8?" piped=false
+                arg: name-ref #943 12010:348:111-12014:348:115 name="data"
+          body: return-stmt #941 11902:348:3-11987:348:88
+            value: enum-constructor #940 11909:348:10-11987:348:88 enum="@3::Taken" variant="Broken"
+              arg: construct #939 11922:348:23-11986:348:87 type="@3::Problem"
+                arg: named-arg #936 11930:348:31-11950:348:51 name="code"
+                  value: const-ref #935 11936:348:37-11950:348:51 name="@3::CLOSE_BAD_DATA"
+                arg: named-arg #938 11952:348:53-11985:348:86 name="reason"
+                  value: literal #937 11960:348:61-11985:348:86 value=string:"text is not valid UTF-8"
+      body: return-stmt #953 12019:350:3-12058:350:42 implicit
+        value: enum-constructor #952 12019:350:3-12058:350:42 enum="@3::Taken" variant="Whole"
+          arg: name-ref #949 12031:350:15-12035:350:19 name="text"
+          arg: name-ref #950 12037:350:21-12041:350:25 name="data"
+          arg: call #951 12043:350:27-12057:350:41 name="@3::new_assembly" piped=false
+    declaration: function-decl #989 12133:354:1-12360:365:1 name="@3::short_reason"
+      param: param #956 12150:354:18-12164:354:32 name="reason"
+        type: type-ref #955 12158:354:26-12164:354:32 name="String"
+      result: type-ref #957 12169:354:37-12174:354:42 name="Bytes"
+      body: binding #960 12177:355:3-12197:356:1 name="data"
+        value: field-access #959 12184:355:10-12196:355:22 name="bytes"
+          target: name-ref #958 12184:355:10-12190:355:16 name="reason"
+      body: if-stmt #968 12199:356:3-12240:357:1 guard
+        branch: if-branch #967 12199:356:3-12239:356:43
+          condition: binary #966 12214:356:18-12239:356:43 op=less-equal op-span=12224:356:28-12226:356:30
+            left: field-access #964 12214:356:18-12223:356:27 name="size"
+              target: name-ref #963 12214:356:18-12218:356:22 name="data"
+            right: const-ref #965 12227:356:31-12239:356:43 name="@3::REASON_BYTES"
+          body: return-stmt #962 12199:356:3-12210:356:14
+            value: name-ref #961 12206:356:10-12210:356:14 name="data"
+      body: binding #970 12243:358:3-12263:359:1 name="size"
+        value: const-ref #969 12250:358:10-12262:358:22 name="@3::REASON_BYTES"
+      body: while-stmt #984 12265:359:3-12337:362:1
+        condition: binary #979 12271:359:9-12310:359:48 op=and op-span=12280:359:18-12283:359:21
+          left: binary #973 12271:359:9-12279:359:17 op=greater op-span=12276:359:14-12277:359:15
+            left: name-ref #971 12271:359:9-12275:359:13 name="size"
+            right: literal #972 12278:359:16-12279:359:17 value=int:0
+          right: unary #978 12284:359:22-12310:359:48 op=not op-span=12284:359:22-12287:359:25
+            operand: call #977 12288:359:26-12310:359:48 name="@3::utf8?" piped=false
+              arg: method-call #976 12294:359:32-12309:359:47 name="take"
+                target: name-ref #974 12294:359:32-12298:359:36 name="data"
+                arg: name-ref #975 12304:359:42-12308:359:46 name="size"
+        body: binding #983 12315:360:5-12331:361:1 name="size"
+          value: binary #982 12322:360:12-12330:360:20 op=minus op-span=12327:360:17-12328:360:18
+            left: name-ref #980 12322:360:12-12326:360:16 name="size"
+            right: literal #981 12329:360:19-12330:360:20 value=int:1
+      body: return-stmt #988 12340:363:3-12355:363:18 implicit
+        value: method-call #987 12340:363:3-12355:363:18 name="take"
+          target: name-ref #985 12340:363:3-12344:363:7 name="data"
+          arg: name-ref #986 12350:363:13-12354:363:17 name="size"
+    declaration: function-decl #1004 12361:366:1-12473:372:1 name="@3::utf8?"
+      param: param #991 12371:366:11-12382:366:22 name="data"
+        type: type-ref #990 12377:366:17-12382:366:22 name="Bytes"
+      result: type-ref #992 12387:366:27-12391:366:31 name="Bool"
+      body: case-stmt #1003 12394:367:3-12469:371:1
+        value: call #994 12399:367:8-12422:367:31 name="String.from_bytes" piped=false
+          arg: name-ref #993 12417:367:26-12421:367:30 name="data"
+        arm: case-arm #998 12427:368:5-12441:369:1
+          pattern: variant-pattern #995 12427:368:5-12432:368:10 enum="Result" variant="Ok" bindings=[-]
+          body: return-stmt #997 12436:368:14-12440:368:18 implicit
+            value: literal #996 12436:368:14-12440:368:18 value=bool:true
+        arm: case-arm #1002 12445:369:5-12463:370:1
+          pattern: variant-pattern #999 12445:369:5-12453:369:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #1001 12457:369:17-12462:369:22 implicit
+            value: literal #1000 12457:369:17-12462:369:22 value=bool:false
+    declaration: function-decl #1019 12474:373:1-12592:380:1 name="@3::token_byte?"
+      param: param #1006 12490:373:17-12499:373:26 name="byte"
+        type: type-ref #1005 12496:373:23-12499:373:26 name="Int"
+      result: type-ref #1007 12504:373:31-12508:373:35 name="Bool"
+      body: for-stmt #1016 12511:374:3-12579:377:1 variable="allowed"
+        iterable: const-ref #1008 12526:374:18-12537:374:29 name="@3::TOKEN_BYTES"
+        body: if-stmt #1015 12542:375:5-12573:376:1 guard
+          branch: if-branch #1014 12542:375:5-12572:375:35
+            condition: binary #1013 12557:375:20-12572:375:35 op=equal op-span=12565:375:28-12567:375:30
+              left: name-ref #1011 12557:375:20-12564:375:27 name="allowed"
+              right: name-ref #1012 12568:375:31-12572:375:35 name="byte"
+            body: return-stmt #1010 12542:375:5-12553:375:16
+              value: literal #1009 12549:375:12-12553:375:16 value=bool:true
+      body: return-stmt #1018 12582:378:3-12587:378:8 implicit
+        value: literal #1017 12582:378:3-12587:378:8 value=bool:false
   module "std/binary.agc"
     declaration: function-decl #16 966:12:1-1088:16:1 name="@4::read_u8" doc="Reads an unsigned 8-bit integer at `offset` as a `UInt8`. Returns an error when the bytes are outside `data`."
       param: param #1 978:12:13-989:12:24 name="data"

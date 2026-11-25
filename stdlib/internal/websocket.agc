@@ -32,8 +32,8 @@ struct Problem
 end
 
 ## The head of a frame. It is read in two steps: the first two bytes (head_of) and then the tail they announce
-## (tail_size, complete). `length` holds the 7-bit length until the tail completes it, and is -1 for a 64-bit length
-## that has its top bit set.
+## (tail_size, complete). `length` holds the 7-bit length until the tail completes it, and is negative for a 64-bit
+## length that has its top bit set.
 struct Head
   fin: Bool
   opcode: Int

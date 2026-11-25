@@ -44,6 +44,9 @@ RULES = {
     "unwrap_or types an integer literal default by the Result": (
         main("n: Result[UInt8] = 300.to_uint8", "a: UInt8 = n.unwrap_or(0)", "b: UInt8 = Result.unwrap_or(n, 7)",
              "puts(a + b)"), None, None),
+    "unwrap_or of an error call and a literal, and of an ok call under an expected type": (
+        main("a = Result.unwrap_or(error(\"bad\"), 7)", "b: UInt8 = Result.unwrap_or(ok(1), 0)", "puts(a + b.to_i)"),
+        None, None),
     "an integer literal default must fit the Result's type": (
         main("n: Result[UInt8] = 3.to_uint8", "puts(n.unwrap_or(256))"), "CHECK-INT-RANGE", "256"),
     "a literal above the type": (main("x: UInt8 = 256"), "CHECK-INT-RANGE", "256"),

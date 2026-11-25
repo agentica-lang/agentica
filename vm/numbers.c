@@ -470,8 +470,8 @@ static agc_value builtin_float_from_bits(agc_vm *vm, agc_value *args, uint32_t s
   return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
 }
 
-/* The Int forms above are the keys that bootstrap/stage0.agcb still calls; the catalog uses these two until a stage0
-   refresh no longer needs the old ones. */
+/* The catalog uses these two keys. The Int forms above are kept for the stage0 before #1977 (to reproduce its refresh);
+   remove them in the next PR. */
 static agc_value builtin_float_to_bits64(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   double x = agc_as_float(vm, args[0]);

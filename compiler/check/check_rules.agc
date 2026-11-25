@@ -9,6 +9,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
+import Flow from "check_flow"
 import Formats from "check_format"
 import ErrorArgs from "check_error"
 import {PROCESS_OPTIONS_HELP} from "check_help"
@@ -684,12 +685,17 @@ def check_result_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.
   end
 end
 
-# Result.unwrap_or: a default that is an integer literal takes the type of the Result's
-# value (`read_u16_be(...).unwrap_or(0)`
-# is a UInt16); any other default gives the type.
+# Result.unwrap_or: an integer literal default takes the type of the Result's value (`read_u16_be(...).unwrap_or(0)` is
+# a UInt16). The Result is checked first then, with the expected type when there is one. An `error` or `none` call
+# needs the type of the default, so it keeps the old order, as does any other default.
 def check_result_default(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  if Args.literal_tree?(site.args[1])
-    target = try Args.result_argument(cx, st, site, T.Type.Unknown)
+  if Args.literal_tree?(site.args[1]) and !Flow.error_call?(site.args[0])
+    context = T.Type.Unknown
+    if !T.unknown?(site.expected)
+      context = T.Type.Result(site.expected)
+    end
+
+    target = try Args.result_argument(cx, st, site, context)
     default = try State.expr(cx, target.st, site.args[1], T.item(target.type))
     return ok(State.Out(st: default.st, type: T.item(target.type)))
   end
