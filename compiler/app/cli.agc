@@ -817,7 +817,7 @@ end
 # `compile [FILE...]`: fills the bytecode cache for each file (with none, every main.agc under the working folder, as
 # `check` walks it, outside tests/ and fixtures/ folders) as a run with the same options would, and says of each
 # whether it was compiled or fresh (a JSON line each with `--json`). A file that fails is reported and the others still
-# compile; the status is the worst one.
+# compile; a folder that cannot be listed is reported the same way. The status is the worst one.
 def compile_ahead(session: Session, files: List[String]) -> Int
   options = session.options
   if options.no_cache or options.dump or options.dump_ir or files.any? do |file: String| file.start_with?("-") end
@@ -826,26 +826,31 @@ def compile_ahead(session: Session, files: List[String]) -> Int
 
   return ahead_each(session, files) if files.size > 0
 
-  no_main = Reply.failed(2, "agentica: no #{MAIN_FILE} under this folder\n")
-  case SymbolPaths.expand(session.settings.workspace, [], "", "")
-    SymbolPaths.Expanded.Refused(problem) ->
-      return emit(no_main) if problem.message.start_with?("no ")
-
-      emit(Reply.failed(2, "agentica: #{problem.message}\n"))
-    SymbolPaths.Expanded.Files(roots) ->
-      files = roots.map do |root: SymbolPaths.Root| root.typed end
-      mains = files.select(&entry_point?)
-      return emit(no_main) if mains.size == 0
-
-      ahead_each(session, mains)
+  listing = SymbolPaths.working_folder(session.settings.workspace)
+  files = listing.roots.map do |root: SymbolPaths.Root| root.typed end
+  mains = files.select(&entry_point?)
+  unreadable = listing.unreadable.select do |folder: String| !skipped?(folder) end
+  status = 0
+  for folder in unreadable
+    status = failed(session, QueryOptions.refusal("cannot read the folder #{folder}", "").with(file: folder))
   end
+
+  if mains.size == 0 and unreadable.size == 0
+    missing = QueryOptions.at_arguments("QUERY-USAGE", "no #{MAIN_FILE} under this folder", Diag.Help.NoHelp)
+    return failed(session, missing)
+  end
+
+  worst = ahead_each(session, mains)
+  return status if status > worst
+
+  worst
 end
 
 # A main.agc that is no test or fixture of the project.
-def entry_point?(file: String) -> Bool
-  parts = file.split("/")
-  Paths.last_part(file) == MAIN_FILE and !parts.any? do |part: String| SKIPPED_FOLDERS.include?(part) end
-end
+def entry_point?(file: String) -> Bool = Paths.last_part(file) == MAIN_FILE and !skipped?(file)
+
+# A path inside a tests/ or fixtures/ folder.
+def skipped?(path: String) -> Bool = path.split("/").any? do |part: String| SKIPPED_FOLDERS.include?(part) end
 
 def ahead_each(session: Session, files: List[String]) -> Int
   worst = 0
@@ -882,10 +887,17 @@ end
 def read(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
   source = rest[0]
   case Front.read_root(session.settings.workspace, source)
-    Front.Root.Unreadable(_) -> emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Front.Root.Unreadable(_) -> failed(session, Core.unreadable(source))
     Front.Root.Invalid(problem) -> reject(session, problem, source, 1)
     Front.Root.Readable -> linked(noticed(session, verb, source), verb, rest, plan)
   end
+end
+
+# A usage or file problem of status 2: the diagnostic in the form `--ai` or `--json` ask for, one plain line otherwise.
+def failed(session: Session, problem: Problems.Problem) -> Int
+  return reject(session, problem, problem.file, 2) if session.options.style != "plain"
+
+  emit(Reply.failed(2, "agentica: #{problem.message}\n"))
 end
 
 # `check`: say that the program checks, or reject its first problem. `check` accepts a library file: only what is built

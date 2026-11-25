@@ -26,6 +26,12 @@ enum Expanded
   Refused(Problems.Problem)
 end
 
+## The files under the working folder, and the folders that could not be listed.
+struct Listing
+  roots: List[Root]
+  unreadable: List[String]
+end
+
 ## The roots of `paths` (the folder `.` when there are none), in order and without repeats. `buffer` is the FILE of
 ## `--stdin` ("" without it): the buffer is a root of its own, and the first one, since it is the file being edited. A
 ## path that is neither a file nor a folder, a folder that cannot be listed and a folder with no `*.agc` file are
@@ -44,6 +50,13 @@ def expand(workspace: Workspace.Workspace, paths: List[String], buffer: String, 
   with_paths(workspace, roots, asked, usage)
 end
 
+## The files `compile` with no FILE starts from: the walk of the folder `.`, which goes on past a folder that cannot be
+## listed and names it in `unreadable`; no file at all is an empty list, not a refusal.
+def working_folder(workspace: Workspace.Workspace) -> Listing
+  walked = walk(workspace, DEFAULT_PATH)
+  Listing(roots: walked.files.sort.map do |file: String| root_of(workspace, file) end, unreadable: walked.unreadable)
+end
+
 ## The roots of the position form of `refs`: `file`, the file of the position, first, then the files of `paths`, which
 ## may be none (the folder `.` is not a default here: the file alone is linked).
 def expand_from(workspace: Workspace.Workspace, file: String, paths: List[String], usage: String) -> Expanded
@@ -60,6 +73,12 @@ DEFAULT_PATH = "."
 MANIFEST_FILE = "agentica.toml"
 DEPS_FOLDER = "deps"
 BUILD_FOLDER = "_build"
+
+# The files of a walk, and the folders it could not list.
+struct Walked
+  files: List[String]
+  unreadable: List[String]
+end
 
 # The files one argument names, or why it names none.
 enum Listed
@@ -86,13 +105,13 @@ end
 def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Listed
   if workspace.directory_exists.call(path)
     found = walk(workspace, path)
-    if !found.ok?
-      return Listed.Refused(QueryOptions.refusal("cannot read the folder #{found.message}", usage))
-    elsif found.unwrap!.size == 0
+    if found.unreadable.size > 0
+      return Listed.Refused(QueryOptions.refusal("cannot read the folder #{found.unreadable[0]}", usage))
+    elsif found.files.size == 0
       return Listed.Refused(QueryOptions.refusal("no .agc file under #{path}", usage))
     end
 
-    return Listed.Files(found.unwrap!.sort)
+    return Listed.Files(found.files.sort)
   elsif workspace.file_exists.call(path)
     return Listed.Files([path])
   end
@@ -100,17 +119,21 @@ def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Lis
   Listed.Refused(QueryOptions.refusal("cannot read #{path}", usage))
 end
 
-# Every `*.agc` file under `folder`, listed folder by folder with a worklist. The error is the folder that cannot be
-# listed.
-def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
+# Every `*.agc` file under `folder`, listed folder by folder with a worklist. A folder that cannot be listed is named
+# and skipped, and the walk goes on.
+def walk(workspace: Workspace.Workspace, folder: String) -> Walked
   files: List[String] = []
+  unreadable: List[String] = []
   pending = [folder]
   at = 0
   while at < pending.size
     here = pending[at]
     at += 1
     listed = workspace.list_folder.call(here)
-    return error(here) if !listed.ok?
+    if !listed.ok?
+      unreadable = unreadable.push(here)
+      next
+    end
 
     project = listed.unwrap!.any? do |entry| entry.name == MANIFEST_FILE end
     for entry in listed.unwrap!
@@ -137,7 +160,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
     end
   end
 
-  ok(files)
+  Walked(files: files, unreadable: unreadable)
 end
 
 # The path of `name` in `folder`; the working folder adds no "./" to what it holds.

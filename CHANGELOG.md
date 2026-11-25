@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `agentica --json compile` writes an unreadable file, an unreadable folder and a folder with no `main.agc` as JSON diagnostics, and with no FILE an unreadable folder no longer stops the other `main.agc` files from compiling (#1743).
 - **Breaking:** `Term` is a reserved type name (#994).
 - **Breaking:** `Terminal` is a reserved type name (#1862).
 
