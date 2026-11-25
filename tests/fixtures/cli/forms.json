@@ -43,7 +43,7 @@
  },
  "[[\"--ai\", \"check\", \"absent.agc\"], {}]": {
   "code": 2,
-  "stderr": "agentica: cannot read absent.agc\n",
+  "stderr": "check failed: 1 error\n\n[QUERY-USAGE]\n  message: cannot read absent.agc\n  at: absent.agc:1:1\n  source: \n",
   "stdout": "",
   "written": []
  },
@@ -277,7 +277,7 @@
  },
  "[[\"--json\", \"check\", \"absent.agc\"], {}]": {
   "code": 2,
-  "stderr": "agentica: cannot read absent.agc\n",
+  "stderr": "{\"code\":\"QUERY-USAGE\",\"message\":\"cannot read absent.agc\",\"file\":\"absent.agc\",\"range\":{\"start\":{\"line\":1,\"column\":1},\"end\":{\"line\":1,\"column\":1}}}\n",
   "stdout": "",
   "written": []
  },

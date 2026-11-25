@@ -101,6 +101,12 @@ def test_a_path_that_names_nothing_is_a_usage_error_and_checks_no_file(tmp_path)
     assert problem(nothing, "QUERY-USAGE", 2)["file"] == "<arguments>"
 
 
+def test_one_absent_file_is_a_json_diagnostic_under_json(tmp_path):
+    missing = check_json("absent.agc", cwd=tmp_path)
+    assert problem(missing, "QUERY-USAGE", 2)["file"] == "absent.agc"
+    assert check("absent.agc", cwd=tmp_path).code == 2
+
+
 def test_stdin_stays_a_one_file_form(tmp_path):
     lay_out(tmp_path, {"lib.agc": LIBRARY})
     buffer = run(cli() + ["--json", "check", "--stdin", "lib.agc"], env=vm_environment(), cwd=tmp_path,
