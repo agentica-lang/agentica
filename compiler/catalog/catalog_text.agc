@@ -301,6 +301,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.TaskSpawn -> "TaskSpawn"
     Model.Rule.TaskSpawnOwning -> "TaskSpawnOwning"
     Model.Rule.TaskTarget -> "TaskTarget"
+    Model.Rule.TermEncode -> "TermEncode"
     Model.Rule.TestEq -> "TestEq"
     Model.Rule.TestResult -> "TestResult"
     _ -> "?"

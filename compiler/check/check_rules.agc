@@ -297,6 +297,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.JsonSchema -> check_json_type(cx, st, site, false)
     Model.Rule.JsonEncode -> check_json_encode(cx, st, site, false)
     Model.Rule.JsonFrom -> check_json_encode(cx, st, site, true)
+    Model.Rule.TermEncode -> check_term_encode(cx, st, site)
     Model.Rule.CodecDecode -> check_codec_decode(cx, st, site)
     Model.Rule.CodecEncode -> check_codec_encode(cx, st, site)
     Model.Rule.CodecMembers -> check_codec_members(cx, st, site)
@@ -621,6 +622,38 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
   return ok(State.Out(st: out.st, type: T.Type.Json)) if from
 
   ok(State.Out(st: out.st, type: T.Type.String))
+end
+
+# Term.encode: any value that CBOR can hold (CheckTypes.term_encodable?). Its argument has a concrete type, so a type
+# with a type variable is refused, as the list of types that Term writes has no variable.
+def check_term_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  try CheckTypes.no_private_inside(cx, out.st, out.type, Ast.expr_span(site.args[0]))
+  if !CheckTypes.term_encodable?(cx, out.type)
+    return error(
+      State.fail_maybe(
+        cx,
+        out.st,
+        "CHECK-NOT-ENCODABLE",
+        "cannot Term.encode #{T.to_text(out.type)} or its nested types",
+        Ast.expr_span(site.args[0]),
+        term_refusal_help(cx, out.type),
+      ),
+    )
+  end
+
+  ok(State.Out(st: out.st, type: T.Type.Result(T.Type.Bytes)))
+end
+
+# The help of Term.encode when it refuses a type, or "".
+def term_refusal_help(cx: State.Cx, type: T.Type) -> String
+  if CheckTypes.term_optional_inside?(cx, type)
+    return "Term writes none and nil alike: an Optional of Nil or of an Optional cannot be told apart"
+  end
+
+  return "Term map keys are Int or String" if CheckTypes.term_key_inside?(cx, type)
+
+  ""
 end
 
 # CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JSON.Field that is not the direct type of a

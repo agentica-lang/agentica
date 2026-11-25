@@ -223,6 +223,8 @@ extern const agc_builtin agc_crypto_builtins[];
 extern const size_t agc_crypto_builtin_count;
 extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
+extern const agc_builtin agc_term_builtins[];
+extern const size_t agc_term_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
 /* The zlib stream of a Lazy step (vm/lazy.c drives it, vm/zlib.c owns it). kind is the step of __lazy_zlib: 0

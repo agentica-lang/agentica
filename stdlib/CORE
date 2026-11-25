@@ -54,6 +54,7 @@ catalog/builtins_string.agc
 catalog/builtins_system.agc
 catalog/builtins_task.agc
 catalog/builtins_tcp.agc
+catalog/builtins_term.agc
 catalog/builtins_test.agc
 catalog/builtins_time.agc
 catalog/builtins_tls.agc

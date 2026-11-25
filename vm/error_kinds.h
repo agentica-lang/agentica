@@ -65,6 +65,7 @@ typedef enum {
   AGC_KIND_DENIED_NET,
   AGC_KIND_DENIED_RUN,
   AGC_KIND_SYSTEM_SIGNAL,
+  AGC_KIND_TERM_ENCODE,
   AGC_KIND_COUNT
 } agc_error_kind;
 

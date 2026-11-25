@@ -70,4 +70,15 @@ Float.from_bits(bits: UInt64) -> Float                   # any UInt64; any NaN p
   so decode complete sequences only. `s.bytes` encodes text for
   `File.write_bytes`, `TCP.send_bytes` and the like.
 
+## Term (CBOR)
+
+`Term.encode(value) -> Result[Bytes]` writes a value as deterministic CBOR (RFC
+8949): numbers (the sized types too), `String`, `Bytes`, `Bool`, `nil`, `List`,
+`Map` with `Int` or `String` keys, structs (a map of the field names, in order),
+user enums (`[tag, [payloads]]`) and `Optional` (null or the value). A `Set`,
+`Result`, `Json`, `JSON.Field`, `Time` date, handle or type variable is
+`CHECK-NOT-ENCODABLE`. Past 10,000 levels, 4,000,000 values or 64 MiB it
+returns `error("path: reason")`. `Term` is a reserved name. There is no decode
+yet.
+
 Hashes, MACs, ciphers, `Base64` and hex: `crypto.md`.

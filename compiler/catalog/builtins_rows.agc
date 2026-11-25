@@ -44,6 +44,7 @@ import {ROWS as STRING_ROWS} from "builtins_string"
 import {ROWS as SYSTEM_ROWS} from "builtins_system"
 import {ROWS as TASK_ROWS} from "builtins_task"
 import {ROWS as TCP_ROWS} from "builtins_tcp"
+import {ROWS as TERM_ROWS} from "builtins_term"
 import {ROWS as TEST_ROWS} from "builtins_test"
 import {ROWS as TIME_ROWS} from "builtins_time"
 import {ROWS as TLS_ROWS} from "builtins_tls"
@@ -91,6 +92,7 @@ BUILTIN_ROWS: List[Model.Builtin] = (
     .concat(SYSTEM_ROWS)
     .concat(TASK_ROWS)
     .concat(TCP_ROWS)
+    .concat(TERM_ROWS)
     .concat(TEST_ROWS)
     .concat(TIME_ROWS)
     .concat(TLS_ROWS)

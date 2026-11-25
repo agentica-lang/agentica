@@ -9,7 +9,7 @@
 import AgenticaVersion from "agentica_version"
 
 ## One bound of a requirement: `>=`, `>`, `<=`, `<` or `==`, and the full version it compares with.
-struct Term
+struct Bound
   op: String
   bound: AgenticaVersion.Version
 end
@@ -17,7 +17,7 @@ end
 ## A requirement as it was written, and the bounds it means (`~>` is two of them).
 struct Requirement
   text: String
-  terms: List[Term]
+  terms: List[Bound]
 end
 
 ## The requirement of the text, or why the text is not one.
@@ -28,7 +28,7 @@ def parse(text: String) -> Result[Requirement]
   words = text.split(",")
   return error("a requirement has at most #{MAX_TERMS} terms") if words.size > MAX_TERMS
 
-  terms: List[Term] = []
+  terms: List[Bound] = []
   for word in words
     found = try term_of(word.strip)
     terms = terms.concat(found)
@@ -61,11 +61,11 @@ end
 def satisfied?(requirement: Requirement, version: AgenticaVersion.Version) -> Bool
   return false if version.pre.size > 0 and !prerelease?(requirement)
 
-  requirement.terms.all? do |term: Term| holds?(term, version) end
+  requirement.terms.all? do |term: Bound| holds?(term, version) end
 end
 
 ## Whether a term names a pre-release, which lets a pre-release tag in.
-def prerelease?(requirement: Requirement) -> Bool = requirement.terms.any? do |term: Term| term.bound.pre.size > 0 end
+def prerelease?(requirement: Requirement) -> Bool = requirement.terms.any? do |term: Bound| term.bound.pre.size > 0 end
 
 ## The text before the version in the tags of a folder of a repository: `NAME-` for a `subdir` whose last folder is
 ## NAME, and "" for the repository itself, whose tags are `X.Y.Z` and `vX.Y.Z`.
@@ -152,14 +152,14 @@ MAX_TERMS = 8
 OPERATORS = ["~>", ">=", "<=", "==", ">", "<"]
 
 # Whether every term of `others` has a term in `terms` with the same operator and version.
-def covers?(terms: List[Term], others: List[Term]) -> Bool
-  others.all? do |other: Term|
-    terms.any? do |term: Term| term.op == other.op and AgenticaVersion.compare(term.bound, other.bound) == 0 end
+def covers?(terms: List[Bound], others: List[Bound]) -> Bool
+  others.all? do |other: Bound|
+    terms.any? do |term: Bound| term.op == other.op and AgenticaVersion.compare(term.bound, other.bound) == 0 end
   end
 end
 
 # One written term as the bounds it means: `~>` gives a lower and an upper one, the others one.
-def term_of(word: String) -> Result[List[Term]]
+def term_of(word: String) -> Result[List[Bound]]
   op = "=="
   rest = word
   for candidate in OPERATORS
@@ -193,9 +193,9 @@ def term_of(word: String) -> Result[List[Term]]
   return error("#{word} is not a term: #{parsed.message}") if !parsed.ok?
 
   bound = parsed.unwrap!
-  return ok([Term(op: op, bound: bound)]) if op != "~>"
+  return ok([Bound(op: op, bound: bound)]) if op != "~>"
 
-  ok([Term(op: ">=", bound: bound), Term(op: "<", bound: upper(bound, parts))])
+  ok([Bound(op: ">=", bound: bound), Bound(op: "<", bound: upper(bound, parts))])
 end
 
 # The first version that `~>` leaves out: the next major for `~> X` and `~> X.Y`, the next minor for `~> X.Y.Z`.
@@ -225,7 +225,7 @@ def bump(digits: String) -> String
   "1#{letters.join("")}"
 end
 
-def holds?(term: Term, version: AgenticaVersion.Version) -> Bool
+def holds?(term: Bound, version: AgenticaVersion.Version) -> Bool
   order = AgenticaVersion.compare(version, term.bound)
   case term.op
     ">=" -> order >= 0
