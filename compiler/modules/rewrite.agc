@@ -471,20 +471,28 @@ def safe_family_failure(cx: Resolve.Context, dot: Source.Span) -> String
   Failure.fail_at(site, "CHECK-SAFE-NAV-RECEIVER", message, Failure.hint("write . for a module function"))
 end
 
+# The type name written at the start of `node`, as the receiver of a member: the linked name, with an id past the
+# ids of
+# the program.
+def type_receiver(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
+  linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
+  start = node.span.start
+  size = written.length
+  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
+  ok(
+    Ast.Expr.TypeName(
+      Ast.TypeName(id: cx.ids + node.id, name: linked, args: [], span: Source.Span(start: start, stop: stop)),
+    ),
+  )
+end
+
 # Type.members, Type.codec and Type.values, written without parentheses and not piped, on a type of this file or one
 # it imports by name is a field access on the type name, as for a type behind an alias (`Alias.Type.members`), which
 # has no parenthesized form either. The checker decides whether the type is a struct (or, for codec, can be decoded;
 # for values, an enum). The type name takes an id past the ids of the program, like the receiver of a constant.
 def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member: String) -> Result[Ast.Expr]
-  linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
-  start = node.span.start
-  size = written.length
-  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
-  receiver = Ast.Expr.TypeName(
-    Ast.TypeName(id: cx.ids + node.id, name: linked, args: [], span: Source.Span(start: start, stop: stop)),
-  )
-
-  name_span = member_span(cx, node, size, member)
+  receiver = try type_receiver(cx, node, written)
+  name_span = member_span(cx, node, written.length, member)
   ok(
     Ast.Expr.FieldAccess(
       Ast.FieldAccess(id: node.id, target: receiver, name: member, name_span: name_span, span: node.span),
@@ -495,14 +503,7 @@ end
 # Type.parse(text), not piped, on a type of this file or one it imports by name is a method call on the type name, as
 # `Alias.Type.parse(text)` is. The checker decides whether the type is an enum that has values.
 def rewrite_parse(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
-  linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
-  start = node.span.start
-  size = written.length
-  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
-  receiver = Ast.Expr.TypeName(
-    Ast.TypeName(id: cx.ids + node.id, name: linked, args: [], span: Source.Span(start: start, stop: stop)),
-  )
-
+  receiver = try type_receiver(cx, node, written)
   args = try rewrite_exprs(cx, node.args)
   named = try rewrite_named(cx, node.named)
   ok(
@@ -511,7 +512,7 @@ def rewrite_parse(cx: Resolve.Context, node: Ast.Call, written: String) -> Resul
         id: node.id,
         target: receiver,
         name: "parse",
-        name_span: member_span(cx, node, size, "parse"),
+        name_span: member_span(cx, node, written.length, "parse"),
         args: args,
         span: node.span,
         named: named,
@@ -688,7 +689,8 @@ end
 # parser reads Family.Member.fn(args) as a method call on that name, which is the call of the builtin
 # Family.Member.fn. A name that is no member of the family counts too, so the call reports it
 # (Resolve.member_function). So does a type of the family before any method but codec and members (File.Info.size):
-# the unknown function File.Info.size, as for any other Type.fn.
+# the unknown function File.Info.size, as for any other Type.fn. An enum of the family with no payloads also keeps
+# values and parse (System.Signal.values), which the checker reads.
 def family_member(cx: Resolve.Context, target: Ast.Expr, method: String) -> String
   case target
     Ast.Expr.TypeName(node) ->
@@ -706,9 +708,12 @@ def family_member(cx: Resolve.Context, target: Ast.Expr, method: String) -> Stri
 end
 
 # True when Family.Member.method is the call of a builtin function: Member is a group of functions, or a type before
-# any method but codec and members.
+# any method but codec, members, and values and parse of an enum with no payloads.
 def called_member?(family: String, member: String, method: String) -> Bool
-  !Builtins.member_type?(family, member) or (!TYPE_MEMBERS.include?(method) and method != "parse")
+  return true if !Builtins.member_type?(family, member)
+  return false if method == "codec" or method == "members"
+
+  !((method == "values" or method == "parse") and Builtins.plain_enum?("#{family}.#{member}"))
 end
 
 # Family.Member.fn(args), or Family.Member.fn with no parentheses: the call of the builtin Family.Member.fn, with the

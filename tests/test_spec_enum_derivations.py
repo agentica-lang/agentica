@@ -45,6 +45,8 @@ VALID = [
     '  puts(Color.parse("Red").unwrap!.name.size)',
     '  maybe: Optional[Color] = some(Color.Red)\n  puts(maybe&.name)',
     "  puts(Color.values.map do |color| color.name end)",
+    '  puts(Color.parse(text: "Red"))',
+    '  puts(System.Signal.values.size)\n  puts(System.Signal.parse("Hup"))',
 ]
 
 
@@ -69,6 +71,11 @@ REJECTED = [
     ("  puts(Color.parse())", "CHECK-ARITY", "Color.parse()"),
     ('  puts(Color.parse("Red", "Green"))', "CHECK-ARITY", 'Color.parse("Red", "Green")'),
     ("  puts(Color.parse(1))", "CHECK-TYPE-MISMATCH", "1"),
+    ('  puts(Color.parse(name: "Red"))', "CHECK-UNKNOWN-ARGUMENT", 'name: "Red"'),
+    ('  puts(Color.parse("Red", text: "Red"))', "CHECK-ARITY", 'Color.parse("Red", text: "Red")'),
+    # A builtin enum with a payload has no values; the written form of parse is in the help.
+    ("  puts(JSON.Node.values)", "CHECK-UNKNOWN-NAME", "JSON.Node.values"),
+    ('  puts(System.Signal.parse(1))', "CHECK-TYPE-MISMATCH", "1"),
     # name is for an enum value, takes nothing, and is no field.
     ("  puts(Color.Red.name(1))", "CHECK-ARITY", "Color.Red.name(1)"),
     ("  puts(Color.Red.nme)", "CHECK-UNKNOWN-METHOD", "Color.Red.nme"),

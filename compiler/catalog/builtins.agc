@@ -116,6 +116,18 @@ end
 ## Whether a builtin record, enum or opaque type has this name (HttpWire.Request, LogRegistry.Level, HttpWire.Client).
 def type_named?(name: String) -> Bool = RECORDS.has_key?(name) or ENUMS.has_key?(name) or OPAQUE_TYPES.include?(name)
 
+## Whether a builtin enum has no type parameters and no payload on any variant (System.Signal), so that `Type.values`
+## and `Type.parse` take it.
+def plain_enum?(name: String) -> Bool
+  found = ENUMS.get(name)
+  return false if found.none?
+
+  (
+    found.unwrap!.parameters.size == 0 and
+    found.unwrap!.variants.all? do |variant: Model.Variant| variant.payload.size == 0 end
+  )
+end
+
 ## The enum and the variant of a default written "Enum.Variant": the variant is after the last dot, so the enum may
 ## be a member of a family (LogRegistry.Level.Info).
 def default_variant(name: String) -> List[String]

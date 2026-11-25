@@ -144,7 +144,8 @@ Change style only in code you touch. Restyle untouched code separately.
 - Do not write a `case` that maps each variant to its name, a parser from a
   name to a variant, or a `following_*` chain that lists the variants: use
   `value.name`, `Type.parse(text)` and `Type.values`, which a new variant
-  updates by itself.
+  updates by itself. Not in `compiler/` until `bootstrap/stage0.agcb` is
+  refreshed, since stage0 does not know them.
 - Use nested patterns when payload shape decides; add guards only for
   conditions patterns can't express.
 

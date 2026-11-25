@@ -1396,7 +1396,7 @@ def lower_resolved(
     State.Resolved.Codec(name, fields) -> Data.lower_codec(cx, fx, name, fields, span, want)
     State.Resolved.Values(name, variants) -> Data.lower_values(cx, fx, name, variants, span, want)
     State.Resolved.VariantName -> lower_variant_name(cx, fx, receiver, span, want)
-    State.Resolved.Parse(name, first) -> lower_parse(cx, fx, name, first, args, span, want)
+    State.Resolved.Parse(name, first) -> lower_parse(cx, fx, name, first, args.concat(named_values(named)), span, want)
     State.Resolved.FieldCall -> error(Lowering.internal(cx, "a field call is lowered with its method call", span))
     State.Resolved.Call(name, type) ->
       literal = literal_text(receiver)
@@ -1470,6 +1470,9 @@ def lower_parse(
   spans = [span, span, span, Ast.expr_span(args[0])]
   ok(window_result(Lowering.emit_builtin(text.fx, base, ENUM_PARSE, 3, spans), saved, base, want, span))
 end
+
+# The values of the named arguments, in the order written.
+def named_values(named: List[Ast.NamedArg]) -> List[Ast.Expr] = named.map do |arg: Ast.NamedArg| arg.value end
 
 # The result of a builtin called in a window of registers that starts at base: in want when the caller gave a register,
 # else in base.

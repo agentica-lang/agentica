@@ -30,6 +30,15 @@ def main() -> Void
     ok(color) -> puts(label(color))
     error(e) -> puts(e.message)
   end
+  puts(Color.parse(text: "Red").unwrap!.name)
+  case Color.parse("none")
+    ok(_) -> puts("found")
+    error(e) -> puts(e.kind)
+  end
+
+  puts(System.Signal.values.size)
+  puts(System.Signal.parse("Hup").unwrap!.name)
+  puts(System.Signal.parse("Nope").message)
 
   every = Color.values.all? do |color: Color| Color.parse(color.name).unwrap! == color end
   puts(every)

@@ -226,14 +226,22 @@ def check_values(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: A
 end
 
 # Type.parse(text): the variant of the enum that has that name, as a Result of the enum; the error lists the valid
-# names. Only an enum that has values can be parsed, and the call takes one String.
+# names. Only an enum that has values can be parsed, and the call takes one String, positional or as `text:`.
 def check_parse(cx: State.Cx, st: State.St, node: Ast.MethodCall, type_name: Ast.TypeName) -> Result[State.Out]
   name = try plain_enum(cx, st, node.span, type_name, "parse")
-  if node.args.size + node.named.size != 1 or node.named.size > 0
-    return error(State.fail(cx, st, "CHECK-ARITY", "parse takes one argument, the name", node.span))
+  if node.args.size + node.named.size != 1
+    return error(State.fail(cx, st, "CHECK-ARITY", "parse takes one argument, text", node.span))
   end
 
-  given = try State.expr(cx, st, node.args[0], T.Type.String)
+  argument = node.args.concat(node.named.map do |arg: Ast.NamedArg| arg.value end)[0]
+  if node.named.size > 0 and node.named[0].name != "text"
+    message = "parse has no parameter \"#{node.named[0].name}\""
+    return error(
+      State.fail_help(cx, st, "CHECK-UNKNOWN-ARGUMENT", message, node.named[0].span, "the parameter is text"),
+    )
+  end
+
+  given = try State.expr(cx, st, argument, T.Type.String)
   first = cx.enums[name].variants[0].name
   resolved = State.record_resolved(given.st, node.id, State.Resolved.Parse(name, first))
   ok(State.Out(st: resolved, type: T.Type.Result(T.Type.Enum(name, []))))

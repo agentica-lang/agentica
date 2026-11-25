@@ -475,31 +475,40 @@ static agc_value builtin_enum_name(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(variant_of(vm, agc_as_enum(vm, args[0])->variant, span)->name);
 }
 
-static bool same_text(const agc_string *a, const agc_string *b) {
-  return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
-}
-
 static char *put(char *at, const char *data, size_t bytes) {
   memcpy(at, data, bytes);
   return at + bytes;
 }
 
+/* How many names the error of Enum.parse lists; a wider enum ends the list with "...", as the "expected one of" error of
+   JSON.decode does (MAX_LISTED_VARIANTS in vm/json_typed.c). */
+#define MAX_LISTED_NAMES 20
+
 /* The error of Enum.parse: `unknown name "x" for Color; valid names: Red, Green`. Only the variants without a payload
    are names. */
 static agc_value enum_parse_error(agc_vm *vm, const agc_enum_def *d, const agc_string *shown, const agc_string *text) {
   static const char head[] = "unknown name ", middle[] = " for ", tail[] = "; valid names: ", comma[] = ", ";
+  static const char more[] = ", ...";
   const agc_program *p = vm->rt->program;
+  const agc_variant_def *listed[MAX_LISTED_NAMES];
+  size_t shown_count = 0;
+  bool truncated = false;
+  for (uint32_t k = d->first; k < d->first + d->count; k++) {
+    if (p->variants[k].arity != 0) continue;
+    if (shown_count == MAX_LISTED_NAMES) {
+      truncated = true;
+      break;
+    }
+    listed[shown_count++] = &p->variants[k];
+  }
   size_t chars, form = agc_write_form(text, NULL, &chars);
-  size_t fixed = sizeof head - 1 + sizeof middle - 1 + sizeof tail - 1;
+  size_t fixed = sizeof head - 1 + sizeof middle - 1 + sizeof tail - 1 + (truncated ? sizeof more - 1 : 0);
   size_t bytes = agc_size_add(agc_size_add(fixed, form), shown->bytes);
   size_t total = agc_size_add(agc_size_add(fixed, chars), shown->chars);
-  size_t listed = 0;
-  for (uint32_t k = d->first; k < d->first + d->count; k++) {
-    const agc_string *name = p->variants[k].name;
-    if (p->variants[k].arity != 0) continue;
-    size_t gap = listed++ ? sizeof comma - 1 : 0;
-    bytes = agc_size_add(bytes, agc_size_add(name->bytes, gap));
-    total = agc_size_add(total, agc_size_add(name->chars, gap));
+  for (size_t k = 0; k < shown_count; k++) {
+    size_t gap = k ? sizeof comma - 1 : 0;
+    bytes = agc_size_add(bytes, agc_size_add(listed[k]->name->bytes, gap));
+    total = agc_size_add(total, agc_size_add(listed[k]->name->chars, gap));
   }
   agc_string *message = agc_new_string(bytes, total);
   char *at = put(message->data, head, sizeof head - 1);
@@ -507,18 +516,16 @@ static agc_value enum_parse_error(agc_vm *vm, const agc_enum_def *d, const agc_s
   at = put(at, middle, sizeof middle - 1);
   at = put(at, shown->data, shown->bytes);
   at = put(at, tail, sizeof tail - 1);
-  listed = 0;
-  for (uint32_t k = d->first; k < d->first + d->count; k++) {
-    const agc_variant_def *v = &p->variants[k];
-    if (v->arity != 0) continue;
-    if (listed++) at = put(at, comma, sizeof comma - 1);
-    at = put(at, v->name->data, v->name->bytes);
+  for (size_t k = 0; k < shown_count; k++) {
+    if (k) at = put(at, comma, sizeof comma - 1);
+    at = put(at, listed[k]->name->data, listed[k]->name->bytes);
   }
+  if (truncated) put(at, more, sizeof more - 1);
   return agc_error_string(vm, AGC_KIND_ARGUMENT, message);
 }
 
 /* Enum.parse(first, shown, text): ok(the variant of that name) of the enum that variant `first` belongs to, else an
-   error that lists the names. `shown` is the name of the enum for the message. The front end writes it for
+   error that lists the first MAX_LISTED_NAMES names. `shown` is the name of the enum for the message. The front end writes it for
    `Color.parse(text)`, for an enum whose variants have no payload; a variant with one is never a name here. */
 static agc_value builtin_enum_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t first = agc_as_int(vm, args[0]);
@@ -529,7 +536,8 @@ static agc_value builtin_enum_parse(agc_vm *vm, agc_value *args, uint32_t span) 
   const agc_enum_def *d = &p->enums[variant_of(vm, (uint32_t)first, span)->owner];
   for (uint32_t k = d->first; k < d->first + d->count; k++) {
     const agc_variant_def *v = &p->variants[k];
-    if (v->arity == 0 && v->shared && same_text(v->name, text)) return agc_result_value(true, agc_enum_value(v->shared));
+    if (v->arity == 0 && v->shared && agc_same_string(vm, v->name, text))
+      return agc_result_value(true, agc_enum_value(v->shared));
   }
   return enum_parse_error(vm, d, shown, text);
 }
@@ -665,8 +673,6 @@ const agc_builtin agc_core_builtins[] = {
   {"Error.is_a?", 2, builtin_error_is_a, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Optional.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
   {"Value.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
-  {"Enum.name", 1, builtin_enum_name, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Enum.parse", 3, builtin_enum_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE, false, false, false, false},
   {"List.filter", 2, NULL, AGC_NATIVE_FILTER, AGC_COST_NONE, false, false, false, false},
   {"List.reduce", 3, NULL, AGC_NATIVE_REDUCE, AGC_COST_NONE, false, false, false, false},
@@ -684,6 +690,8 @@ const agc_builtin agc_core_builtins[] = {
   {"Int.times", 2, NULL, AGC_NATIVE_TIMES, AGC_COST_NONE, false, false, false, false},
   {"Int.upto", 3, NULL, AGC_NATIVE_UPTO, AGC_COST_NONE, false, false, false, false},
   {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO, AGC_COST_NONE, false, false, false, false},
+  {"Enum.name", 1, builtin_enum_name, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Enum.parse", 3, builtin_enum_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
 };
 
 const size_t agc_core_builtin_count = sizeof agc_core_builtins / sizeof agc_core_builtins[0];

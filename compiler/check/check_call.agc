@@ -626,11 +626,35 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
     return "import HTTP from \"std/http\""
   end
 
+  derived = enum_derivation_help(cx, name)
+  return derived if derived != ""
+
   # A method of another language called as a function (String.trim(s)) gets the help of the method.
   method_help = cx.help.kind_methods.get(name)
   return method_help.unwrap! if method_help.some?
 
   Help.near(name, cx.functions.keys, CALLABLE_NAMES)
+end
+
+# The help of Color.parse or Color.values written as another form than `Color.parse(text)` and `Color.values`: a pipe,
+# a reference or parentheses.
+def enum_derivation_help(cx: State.Cx, name: String) -> String
+  parts = name.split(".")
+  return "" if parts.size < 2
+
+  member = parts[parts.size - 1]
+  type = parts.take(parts.size - 1).join(".")
+  return "" if !cx.enums.has_key?(type)
+
+  shape = cx.enums[type]
+  carrying = shape.variants.any? do |variant: Model.Variant| variant.payload.size > 0 end
+  return "" if shape.parameters.size > 0 or carrying
+
+  shown = T.display_name(type)
+  return "write #{shown}.parse(text), called with parentheses and not piped" if member == "parse"
+  return "write #{shown}.values, without parentheses" if member == "values"
+
+  ""
 end
 
 def unknown_enum_help(name: String) -> String

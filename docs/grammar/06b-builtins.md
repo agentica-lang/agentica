@@ -8,7 +8,9 @@ is `String.strip(s)`, and `n.to_s` is `Int.to_s(n)`. The methods of a codec are
 also functions, `Codec.decode(c, s)`, as `String.upcase` is. Without
 parentheses, `receiver.name` on a non-struct value is a method without arguments
 (`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have
-no methods, except a record of a builtin family: a builtin
+no methods, except `name` on an enum value (its bare variant name,
+"Enums and pattern matching" in 06-semantics) and a record of a builtin family:
+a builtin
 `Family.Record.name` whose first parameter is that record is its method
 (`t.to_i` is `Time.DateTime.to_i(t)`), and `.name` on it is a field when the
 record has one and the method otherwise. `iso8601` is the one name with both

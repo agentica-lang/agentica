@@ -564,14 +564,20 @@ lists them or maps them to their names:
   takes no arguments. `Type.parse(value.name)` gives back a value of an enum
   that has values.
 
-`Type` is an enum you declare, one you import by name or through an alias
-(`Models.Color.values`). `values` is written without parentheses, as `members`
-is, and `parse` takes parentheses and is not piped (`x |> Color.parse()` is
-`CHECK-UNKNOWN-NAME`). Any other type name is an error: a struct, a resource,
-a generic enum or an enum with a payload variant is `CHECK-UNKNOWN-METHOD`, an
-alias is `CHECK-UNKNOWN-TYPE`, `parse` with another number of arguments is
-`CHECK-ARITY`, and one that is not a `String` is `CHECK-TYPE-MISMATCH`. Each
-`Type.values` builds its list again, so hoist it out of a hot loop.
+`Type` is an enum you declare, one you import by name or through an import
+alias (`Models.Color.values`), or a builtin enum with no payloads
+(`System.Signal.values`). `values` is written without parentheses, as `members`
+is, and `parse` takes parentheses and is not piped (`x |> Color.parse()`,
+`Color.parse` and `Color.values()` are `CHECK-UNKNOWN-NAME`, with the written
+form in `help`). The one parameter of `parse` is called `text`, so
+`Color.parse(text: "Red")` is the same call, and another name is
+`CHECK-UNKNOWN-ARGUMENT`. Any other type name is an error: a struct, a
+resource, a generic enum or an enum with a payload variant is
+`CHECK-UNKNOWN-METHOD`, a type alias is `CHECK-UNKNOWN-TYPE`, `parse` with
+another number of arguments is `CHECK-ARITY`, and one that is not a `String`
+is `CHECK-TYPE-MISMATCH`. The error of an unknown name has the kind `argument`
+and lists at most 20 names, then `...`. Each `Type.values` builds its list
+again, so hoist it out of a hot loop.
 
 ### Structs and lists
 
