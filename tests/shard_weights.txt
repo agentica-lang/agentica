@@ -87,6 +87,7 @@ tests/test_spec_regex_literal.py 1 0 0 0
 tests/test_spec_string_repeat.py 1 0 0 0
 tests/test_spec_style.py 5 0 0 0
 tests/test_spec_symbol.py 4 0 0 0
+tests/test_spec_term.py 1 0 0 0
 tests/test_spec_type_at.py 16 0 0 0
 tests/test_std_analysis.py 40 39 65 0
 tests/test_std_archive.py 3 0 0 0
@@ -101,6 +102,8 @@ tests/test_std_utc.py 1 0 0 0
 tests/test_stdlib_prelude.py 4 0 0 0
 tests/test_style_core_purity.py 6 0 0 0
 tests/test_temp_roots.py 7 0 0 0
+tests/test_term_encode.py 5 1 0 0
+tests/test_term_peer.py 1 0 0 0
 tests/test_timeout_guard.py 5 0 0 0
 tests/test_unit_test.py 7 33 0 0
 tests/test_vm_ats.py 2 4 0 0

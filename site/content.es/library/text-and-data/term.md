@@ -2,7 +2,7 @@
 title: Term (CBOR)
 weight: 15
 description: Escribe un valor de Agentica como CBOR y lo lee de vuelta en una estructura o un enum, una forma binaria compacta que conserva claves Int, los bits exactos de un Float, nil, Bytes y enums.
-source_hash: "66d50ae2bb85"
+source_hash: "73a2f8f4eb3f"
 ---
 
 `Term.encode` escribe un valor como bytes [CBOR](https://www.rfc-editor.org/rfc/rfc8949), la forma binaria de un valor. JSON sirve para otros programas; CBOR conserva lo que JSON pierde o deforma: un `Map` con claves `Int`, los bits exactos de un `Float` (infinitos incluidos), `nil` como valor propio, `Bytes` y un enum como un arreglo simple. También es más pequeño. Usos típicos son un caché en disco y los mensajes entre programas de Agentica. `Term.decode` lee los bytes de vuelta en el tipo que nombras: el tipo es el esquema, así que nunca se construye nada fuera de él.
@@ -28,7 +28,7 @@ def main() -> Void
 end
 ```
 
-```text
+```output
 a26468697473a2020501076573636f7265fb3ff8000000000000
 {2: 5, 1: 7}
 ```
@@ -66,7 +66,7 @@ La forma es determinista (RFC 8949 sección 4.2): la cabecera más corta de cada
 - **Valores:** como máximo 4,000,000 valores en total. La clave de un `Map` cuenta como un valor y el nombre de un campo no.
 - **Tamaño:** como máximo 64 MiB de salida.
 
-El mensaje es `ruta: motivo`, con la ruta de los errores de `JSON.decode`: la raíz es `$`, un campo es `by_name`, un índice `[3]`, una clave `Int` `[3]`, una clave `String` `["k"]` (cortada a 64 bytes, con `...` después del corte), y un payload de un enum `values[0]`:
+El mensaje es `path: reason`, con la ruta de los errores de `JSON.decode`: la raíz es `$`, un campo es `by_name`, un índice `[3]`, una clave `Int` `[3]`, una clave `String` `["k"]` (cortada a 64 bytes, con `...` después del corte), y un payload de un enum `values[0]`:
 
 ```text
 items[0].values[0][3999996]: more than 4000000 values
