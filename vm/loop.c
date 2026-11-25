@@ -72,6 +72,8 @@ typedef struct {
   atomic_uint subscribed, pending, ignored;
 #if defined(_WIN32)
   HANDLE driver;
+  /* The loop of the run has its Winch handle (watch_winch), so Winch can be subscribed to. */
+  atomic_bool winch;
 #else
   pid_t driver;
   uv_async_t *wake;
@@ -1402,6 +1404,7 @@ static void reopen_start(agc_loop *loop) {
     sigemptyset(&stop_open);
     for (size_t k = 0; k < STOP_SIGNALS; k++)
       if (!sigismember(&now, stop_signals[k])) sigaddset(&stop_open, stop_signals[k]);
+    if (!sigismember(&now, SIGWINCH)) sigaddset(&stop_open, SIGWINCH);
     stop_open_known = true;
   }
   if (!loop->reopen_init && uv_prepare_init(&loop->uv, &loop->reopen) == 0) {
@@ -1426,6 +1429,17 @@ static void reopen_start(agc_loop *loop) { (void)loop; }
 static void reopen_end(agc_loop *loop) { (void)loop; }
 #endif
 
+/* The action of the stop signals (and of a subscribed SIGWINCH): the handler, with the stop signals blocked while it
+   runs. */
+static struct sigaction stop_action(void) {
+  struct sigaction act;
+  memset(&act, 0, sizeof act);
+  act.sa_handler = stop_requested;
+  sigemptyset(&act.sa_mask);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  return act;
+}
+
 void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   agc_loop *loop = new_loop(vm);
   if (loop && uv_async_init(&loop->uv, &loop->wake, stop_woken) == 0) {
@@ -1446,11 +1460,7 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
     uv_timer_start(&loop->parent_check, stop_parent_check, 250, 250);
   }
 #endif
-  struct sigaction act;
-  memset(&act, 0, sizeof act);
-  act.sa_handler = stop_requested;
-  sigemptyset(&act.sa_mask);
-  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  struct sigaction act = stop_action();
   unsigned ignored = 0;
   for (size_t k = 0; k < STOP_SIGNALS; k++) {
     struct sigaction now;
@@ -1506,15 +1516,20 @@ static void restart_subscribed(unsigned mask) {
   }
 }
 
-/* SIGWINCH has the handler of the stop signals only while it is subscribed, and its default action (nothing) else. */
+/* SIGWINCH has the handler of the stop signals only while it is subscribed; the action it had before (the default,
+   nothing, unless an embedder set one) is kept at the subscribe and put back after. Under rt->sync, as its caller. */
 static void watch_winch(bool on) {
-  struct sigaction act;
-  memset(&act, 0, sizeof act);
-  act.sa_handler = on ? stop_requested : SIG_DFL;
-  sigemptyset(&act.sa_mask);
-  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  static struct sigaction before;
+  if (!on) {
+    (void)sigaction(SIGWINCH, &before, NULL);
+    return;
+  }
+  struct sigaction act = stop_action();
   act.sa_flags = SA_RESTART;
-  (void)sigaction(SIGWINCH, &act, NULL);
+  if (sigaction(SIGWINCH, &act, &before) != 0) {
+    memset(&before, 0, sizeof before);
+    before.sa_handler = SIG_DFL;
+  }
 }
 
 /* Under rt->sync (the subscribe and the close of a signal channel), or on the one thread of the end of the run. A
@@ -1569,6 +1584,47 @@ static void stop_received(uv_signal_t *handle, int sig) {
     agc_exit_now((unsigned)(128 + sig));
 }
 
+/* Only Winch can be subscribed to on Windows (System.subscribe refuses the rest): Ctrl-C, Ctrl-Break and the console
+   close keep the stop path. The numbers are Linux's, so 128 + System.signal_number gives the same exit codes
+   everywhere. */
+static const int signal_numbers[AGC_SIGNAL_COUNT] = {15, 2, 1, 10, 12, 28, 3, 9};
+
+#define WINCH_BIT (1u << AGC_SIGNAL_WINCH)
+
+/* libuv raises SIGWINCH on Windows when it sees the console resized (a thread of its own watches the console). */
+static void winch_received(uv_signal_t *handle, int sig) {
+  (void)handle;
+  (void)sig;
+  if (atomic_load(&stop_status()->subscribed) & WINCH_BIT) atomic_fetch_or(&stop_status()->pending, WINCH_BIT);
+}
+
+/* The Winch handle runs for the whole run but keeps the loop alive only while Winch is subscribed. A loop that has no
+   handle (its init failed) leaves `winch` false, and System.subscribe refuses Winch. */
+static void watch_winch(agc_loop *loop) {
+  if (uv_signal_init(&loop->uv, &loop->winch) != 0) return;
+  if (uv_signal_start(&loop->winch, winch_received, SIGWINCH) != 0) {
+    uv_close((uv_handle_t *)&loop->winch, NULL);
+    return;
+  }
+  uv_unref((uv_handle_t *)&loop->winch);
+  loop->winch_init = true;
+  atomic_store(&stop_status()->winch, true);
+}
+
+static void keep_winch(void *data) {
+  agc_loop *loop = data;
+  if (!loop->winch_init) return;
+  if (atomic_load(&stop_status()->subscribed) & WINCH_BIT)
+    uv_ref((uv_handle_t *)&loop->winch);
+  else
+    uv_unref((uv_handle_t *)&loop->winch);
+}
+
+void agc_io_signals_set(agc_vm *vm, unsigned mask) {
+  atomic_store(&stop_status()->subscribed, mask);
+  if (vm->rt->loop) call_on(vm->rt->loop, keep_winch, vm->rt->loop);
+}
+
 void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   agc_loop *loop = new_loop(vm);
   if (!loop) return;
@@ -1590,6 +1646,7 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
     loop->stop_grace.data = loop;
     loop->stop_grace_init = true;
   }
+  watch_winch(loop);
   if (driver > 0) {
     loop->driver = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)driver);
     if (!loop->driver) atomic_store(&stop_status()->signal, SIGTERM);
@@ -1612,46 +1669,9 @@ void agc_io_children_stopped(void) {
 /* Windows has no signal mask: a console control event is handled where libuv delivers it. */
 void agc_io_thread_signals(void) {}
 
-/* Only Winch can be subscribed to on Windows (System.subscribe refuses the rest): Ctrl-C, Ctrl-Break and the console
-   close keep the stop path. The numbers are Linux's, so 128 + System.signal_number gives the same exit codes
-   everywhere. */
-static const int signal_numbers[AGC_SIGNAL_COUNT] = {15, 2, 1, 10, 12, 28, 3, 9};
-
-#define WINCH_BIT (1u << AGC_SIGNAL_WINCH)
-
-/* libuv raises SIGWINCH on Windows when it sees the console resized (a thread of its own watches the console). */
-static void winch_received(uv_signal_t *handle, int sig) {
-  (void)handle;
-  (void)sig;
-  if (atomic_load(&stop_status()->subscribed) & WINCH_BIT) atomic_fetch_or(&stop_status()->pending, WINCH_BIT);
-}
-
-/* On the loop's thread: the handle is active, so it keeps the loop alive, only while Winch is subscribed. */
-static void watch_winch(void *data) {
-  agc_loop *loop = data;
-  bool on = atomic_load(&stop_status()->subscribed) & WINCH_BIT;
-  if (on && !loop->winch_init) {
-    if (uv_signal_init(&loop->uv, &loop->winch) != 0) return;
-    loop->winch_init = true;
-    if (uv_signal_start(&loop->winch, winch_received, SIGWINCH) != 0) {
-      uv_close((uv_handle_t *)&loop->winch, NULL);
-      loop->winch_init = false;
-    }
-  } else if (!on && loop->winch_init) {
-    uv_signal_stop(&loop->winch);
-    uv_close((uv_handle_t *)&loop->winch, NULL);
-    loop->winch_init = false;
-  }
-}
-
-void agc_io_signals_set(agc_vm *vm, unsigned mask) {
-  atomic_store(&stop_status()->subscribed, mask);
-  if (vm->rt->loop) call_on(vm->rt->loop, watch_winch, vm->rt->loop);
-}
-
 void agc_io_signals_stop(unsigned index) { (void)index; }
 
-unsigned agc_io_signals_supported(void) { return WINCH_BIT; }
+unsigned agc_io_signals_supported(void) { return atomic_load(&stop_status()->winch) ? WINCH_BIT : 0; }
 
 int agc_io_signal_number(unsigned index) { return index < AGC_SIGNAL_COUNT ? signal_numbers[index] : 0; }
 #endif
@@ -2532,6 +2552,7 @@ static void unwatch_stop(agc_loop *loop) {
   }
   loop->stop_signal_count = 0;
   if (loop->winch_init) {
+    atomic_store(&stop_status()->winch, false);
     uv_signal_stop(&loop->winch);
     uv_close((uv_handle_t *)&loop->winch, NULL);
     loop->winch_init = false;

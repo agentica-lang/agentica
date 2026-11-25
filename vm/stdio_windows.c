@@ -51,13 +51,14 @@ typedef struct {
 
 typedef BOOL(WINAPI *compare_handles_fn)(HANDLE first, HANDLE second);
 
-/* The console modes before Terminal.raw, kept for the whole process: the input console's, and the output console's
-   when stdout is one. `saved` is set (release) after the modes are written; only Terminal.raw writes them, under
-   rt->sync, and agc_tty_restore (the exit) reads them. */
+/* The console modes before the first Terminal.raw, kept for the whole process: the input console's, and the output
+   console's when stdout is one. `kept` is set (release) once, after the modes are written, and they never change
+   again; `on` says raw mode is on, which the exit's agc_tty_restore and the console reader read. Only Terminal.raw
+   writes them, under rt->sync. */
 typedef struct {
   HANDLE in, out;
   DWORD in_mode, out_mode;
-  atomic_bool saved;
+  atomic_bool kept, on;
 } tty_state;
 
 struct agc_stdio {
@@ -301,40 +302,55 @@ static void tty_set(const tty_state *tty) {
   if (tty->out) SetConsoleMode(tty->out, tty->out_mode);
 }
 
+/* The errno of a failed console call. */
+static int tty_errno(void) {
+  switch (GetLastError()) {
+    case ERROR_INVALID_HANDLE: return EBADF;
+    case ERROR_ACCESS_DENIED: return EACCES;
+    case ERROR_INVALID_PARAMETER: return EINVAL;
+    default: return EIO;
+  }
+}
+
 /* Raw: VT sequences in, no line editing, no echo and no Ctrl+C event (ENABLE_PROCESSED_INPUT off, so Ctrl+C is the
-   byte 3), and VT sequences out. */
+   byte 3), and VT sequences out. A failed output step puts the input mode back. */
 int agc_tty_raw(bool on) {
   tty_state *tty = tty_status();
   if (!on) {
-    if (!atomic_load_explicit(&tty->saved, memory_order_acquire)) return 0;
+    if (!atomic_load_explicit(&tty->on, memory_order_acquire)) return 0;
     tty_set(tty);
-    atomic_store_explicit(&tty->saved, false, memory_order_release);
+    atomic_store_explicit(&tty->on, false, memory_order_release);
     return 0;
   }
   HANDLE in = std_handle(0), out = std_handle(1);
   DWORD in_mode, out_mode;
   if (!in || in == INVALID_HANDLE_VALUE || !GetConsoleMode(in, &in_mode)) return ENOTTY;
   if (!out || out == INVALID_HANDLE_VALUE || !GetConsoleMode(out, &out_mode)) out = NULL;
-  if (!atomic_load_explicit(&tty->saved, memory_order_acquire)) {
+  if (!atomic_load_explicit(&tty->kept, memory_order_acquire)) {
     tty->in = in;
     tty->out = out;
     tty->in_mode = in_mode;
     tty->out_mode = out_mode;
-    atomic_store_explicit(&tty->saved, true, memory_order_release);
+    atomic_store_explicit(&tty->kept, true, memory_order_release);
   }
   DWORD raw_in = (in_mode & ~(DWORD)(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT)) |
                  ENABLE_VIRTUAL_TERMINAL_INPUT;
-  if (!SetConsoleMode(in, raw_in)) return EIO;
-  if (out && !SetConsoleMode(out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) return EIO;
+  if (!SetConsoleMode(in, raw_in)) return tty_errno();
+  if (out && !SetConsoleMode(out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+    int err = tty_errno();
+    SetConsoleMode(in, in_mode);
+    return err;
+  }
+  atomic_store_explicit(&tty->on, true, memory_order_release);
   return 0;
 }
 
 void agc_tty_restore(void) {
   tty_state *tty = tty_status();
-  if (atomic_load_explicit(&tty->saved, memory_order_acquire)) tty_set(tty);
+  if (atomic_load_explicit(&tty->on, memory_order_acquire)) tty_set(tty);
 }
 
-static bool tty_raw_on(void) { return atomic_load_explicit(&tty_status()->saved, memory_order_acquire); }
+static bool tty_raw_on(void) { return atomic_load_explicit(&tty_status()->on, memory_order_acquire); }
 
 /* Standard output's console, else standard error's: the rows and columns of its window, as Ruby's IO#winsize. */
 int agc_tty_size(int64_t *rows, int64_t *cols) {

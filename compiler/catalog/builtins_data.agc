@@ -242,13 +242,13 @@ RECORDS: List[Model.Record] = [
       Model.Named(name: "alpn", type: Types.Type.List(Types.Type.String), default: Model.Default.EmptyList),
     ],
   ),
-  # The dates and times of the Time family. Only their builtins build them (SEALED_RECORDS), and vm/dates.c makes them
-  # by name with these fields in this order: keep them in step.
   # vm/terminal.c builds it with these fields in this order (Terminal.size): keep them in step.
   Model.Record(
     name: "Terminal.Size",
     fields: [Model.Named(name: "rows", type: Types.Type.Int), Model.Named(name: "cols", type: Types.Type.Int)],
   ),
+  # The dates and times of the Time family. Only their builtins build them (SEALED_RECORDS), and vm/dates.c makes them
+  # by name with these fields in this order: keep them in step.
   Model.Record(
     name: "Time.Date",
     fields: [

@@ -2,10 +2,10 @@
 title: Terminal
 weight: 10
 description: Si un flujo es una terminal, el modo raw, el tamaño de la terminal y sus cambios de tamaño.
-source_hash: "200807a8f3f5"
+source_hash: "27fb6e7ecadb"
 ---
 
-Un programa de pantalla completa (un editor, una TUI) lee las teclas de una en una y dibuja con secuencias de escape VT. `Terminal` le da lo que necesita del sistema, igual en Linux, macOS y Windows 10 o posterior. Las teclas se siguen leyendo con [`IO.read_bytes`](/library/io-and-system/io/) en la entrada estándar: llegan como bytes, y el programa (o su biblioteca) analiza las secuencias de escape de las teclas, del ratón y del texto pegado.
+Un programa de pantalla completa (un editor, una TUI) lee las teclas de una en una y dibuja con secuencias de escape VT. `Terminal` le da lo que necesita del sistema, igual en Linux, macOS y Windows 10 o posterior. Las teclas se siguen leyendo con [`IO.read_bytes`](/library/io-and-system/io/) en la entrada estándar: llegan como bytes, y el programa (o su biblioteca) analiza las secuencias de escape de las teclas, del ratón y del texto pegado. El ejemplo espera una tecla, así que muestra un cambio de tamaño después de la siguiente tecla.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -56,7 +56,7 @@ Terminal.raw(on: Bool = true) -> Result[Void]
 Pone la terminal de la entrada estándar en modo raw, como hace `IO#raw` de Ruby: lo que se escribe no se muestra, cada tecla llega enseguida (sin edición de línea, sin esperar a Enter) y las teclas que envían señales no las envían: Ctrl-C llega como el byte 3 y Ctrl-Z como 26. La salida sigue igual: `"\n"` empieza una línea nueva en la primera columna. `Terminal.raw(on: false)` devuelve el modo que la terminal tenía antes del primer `Terminal.raw`.
 
 - En Windows apaga la entrada por líneas, el eco y el evento Ctrl-C de la consola, y enciende la entrada VT (las teclas llegan como las mismas secuencias de escape que en Linux y macOS) y la salida VT.
-- La VM devuelve el primer modo cuando el programa termina: al terminar con normalidad, con `System.exit`, con un error en tiempo de ejecución y con una señal de parada como `Term`, así que un fallo no deja el shell en modo raw. Un `kill -9` no se puede capturar: ejecuta entonces `stty sane`.
+- La VM devuelve el primer modo cuando el programa termina: al terminar con normalidad, con `System.exit`, con un error en tiempo de ejecución, con una señal de parada como `Term` y al salir por falta de memoria, así que un fallo del programa no deja el shell en modo raw. Un `kill -9` y un fallo de la propia VM (`SIGSEGV`, `SIGBUS`) no se capturan: ejecuta entonces `stty sane`.
 - Cuando la entrada estándar no es una terminal devuelve un error con la clase `io.failed` y el número de error del sistema como código. `Terminal.raw(on: false)` cuando el modo raw no está activo devuelve `ok`.
 - El modo pertenece a la terminal, no a una tarea: una llamada vale para todas las tareas.
 

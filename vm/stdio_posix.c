@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #ifdef __APPLE__
 #include <poll.h>
 #endif
@@ -231,19 +230,24 @@ agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
   return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FAILED;
 }
 
-/* The mode of the terminal of stdin before Terminal.raw, kept for the whole process. `saved` is set (release) after
-   the mode is written, so agc_tty_restore, which a signal or the exit may run on any thread, reads a whole mode. Only
-   Terminal.raw writes them, under rt->sync. */
+/* The mode of the terminal of stdin before the first Terminal.raw, kept for the whole process. `kept` is set (release)
+   once, after the mode is written, and the mode never changes again; `on` says raw mode is on, which agc_tty_restore
+   (a signal or the exit, on any thread) reads. Only Terminal.raw writes them, under rt->sync. */
 static struct termios *tty_before(void) {
   static struct termios before;
   return &before;
 }
 
-_Static_assert(ATOMIC_BOOL_LOCK_FREE == 2, "the saved mode is read at a signal");
+_Static_assert(ATOMIC_BOOL_LOCK_FREE == 2, "the raw flag is read at a signal");
 
-static atomic_bool *tty_saved(void) {
-  static atomic_bool saved;
-  return &saved;
+static atomic_bool *tty_kept(void) {
+  static atomic_bool kept;
+  return &kept;
+}
+
+static atomic_bool *tty_on(void) {
+  static atomic_bool on;
+  return &on;
 }
 
 static int tty_set(const struct termios *mode) {
@@ -257,16 +261,16 @@ bool agc_tty_is(int fd) { return isatty(fd) == 1; }
 /* As Ruby's IO#raw (io/console), but output processing (OPOST) stays on, as on Windows: "\n" still starts a line. */
 int agc_tty_raw(bool on) {
   if (!on) {
-    if (!atomic_load_explicit(tty_saved(), memory_order_acquire)) return 0;
+    if (!atomic_load_explicit(tty_on(), memory_order_acquire)) return 0;
     int err = tty_set(tty_before());
-    if (!err) atomic_store_explicit(tty_saved(), false, memory_order_release);
+    if (!err) atomic_store_explicit(tty_on(), false, memory_order_release);
     return err;
   }
   struct termios mode;
   if (tcgetattr(STDIN_FILENO, &mode) != 0) return errno;
-  if (!atomic_load_explicit(tty_saved(), memory_order_acquire)) {
+  if (!atomic_load_explicit(tty_kept(), memory_order_acquire)) {
     *tty_before() = mode;
-    atomic_store_explicit(tty_saved(), true, memory_order_release);
+    atomic_store_explicit(tty_kept(), true, memory_order_release);
   }
   mode.c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY | IMAXBEL);
   mode.c_lflag &= ~(tcflag_t)(ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG | IEXTEN);
@@ -274,12 +278,14 @@ int agc_tty_raw(bool on) {
   mode.c_cflag |= CS8;
   mode.c_cc[VMIN] = 1;
   mode.c_cc[VTIME] = 0;
-  return tty_set(&mode);
+  int err = tty_set(&mode);
+  if (!err) atomic_store_explicit(tty_on(), true, memory_order_release);
+  return err;
 }
 
-/* Async-signal-safe: tcsetattr is, and the saved mode is only read. */
+/* Async-signal-safe: tcsetattr is, and the kept mode is only read. */
 void agc_tty_restore(void) {
-  if (atomic_load_explicit(tty_saved(), memory_order_acquire)) (void)tty_set(tty_before());
+  if (atomic_load_explicit(tty_on(), memory_order_acquire)) (void)tty_set(tty_before());
 }
 
 /* Standard output's terminal, else standard error's. */

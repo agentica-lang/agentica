@@ -325,8 +325,11 @@ section says how the scheduler and the loop keep them.
   keeps the terminal's mode (termios of stdin; the console modes on Windows)
   for the process, and `agc_tty_restore` sets it back from every way the
   process ends: `agc_launch_exit` (a normal end, `System.exit`, a runtime
-  error, a stop signal), `agc_io_die_by` (a second signal) and, on Windows,
-  `agc_exit_now`. It is async-signal-safe, as `tcsetattr` is.
+  error, a stop signal), `agc_io_die_by` (a second signal), the exits with 70
+  (`agc_out_of_memory`, `agc_heap_limit_reached`, a GC abort,
+  `agc_thread_start_failed`), `agc_internal_abort` and, on Windows,
+  `agc_exit_now`. It is async-signal-safe, as `tcsetattr` is. A crash of the
+  VM itself (`SIGSEGV`, `SIGBUS`) has no handler and leaves the mode.
 - **Per-handle lock.** A `File.Handle` has a `holder` (the job in flight, or a
   socket's direct send or receive, §10.3.1), a `next_owner` task, and a FIFO of
   waiting tasks, all in GC memory. Every handle builtin checks its arguments and

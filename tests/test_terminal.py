@@ -55,6 +55,14 @@ def main() -> Void
       Terminal.raw().unwrap!
       show("raw")
       puts([1][streams.size])
+    "heap" ->
+      Terminal.raw().unwrap!
+      show("raw")
+      grown = ["x"]
+      while grown.size > 0
+        grown = grown + grown
+      end
+
     "signal" ->
       Terminal.raw().unwrap!
       show("raw")
@@ -89,7 +97,7 @@ def test_without_a_terminal_every_call_says_so(program):
 class Pty:
     """The VM on a new pty that is its controlling terminal, so a resize sends it SIGWINCH."""
 
-    def __init__(self, program, mode, rows=33, cols=77):
+    def __init__(self, program, mode, rows=33, cols=77, flags=()):
         import fcntl
         import pty
         import termios
@@ -103,7 +111,7 @@ class Pty:
             os.setsid()
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
-        self.process = subprocess.Popen([*vm_command(), "--", str(program), mode], stdin=self.slave,
+        self.process = subprocess.Popen([*vm_command(), *flags, "--", str(program), mode], stdin=self.slave,
                                         stdout=self.slave, stderr=self.slave, env=vm_environment(),
                                         preexec_fn=controlling)
 
@@ -184,6 +192,14 @@ def test_a_crash_gives_the_mode_back(program, ptys):
 
 
 @host_only(WINDOWS, POSIX)
+def test_the_heap_limit_gives_the_mode_back(program, ptys):
+    pty = ptys(program, "heap", flags=("--max-heap", "16M"))
+    pty.read_until(b"raw\r\n")
+    assert pty.wait() == 70
+    assert pty.mode() == pty.before
+
+
+@host_only(WINDOWS, POSIX)
 def test_a_stop_signal_gives_the_mode_back(program, ptys):
     pty = ptys(program, "signal")
     pty.read_until(b"raw\r\n")
@@ -253,3 +269,31 @@ def test_console_modes_are_set_and_given_back(tmp_path):
     assert cooked[1:] == first[1:] and last[1:] == first[1:], shown
     assert ended == ["exit", "1"], shown
     assert in_mode & ENABLE_LINE_INPUT and out_mode
+
+
+RESIZED = """\
+def main() -> Void
+  resized = System.subscribe([System.Signal.Winch]).unwrap!
+  File.write_text(System.args()[0], "ready").unwrap!
+  signal = resized.recv(10000).unwrap!
+  size = Terminal.size().unwrap!
+  puts("#{signal} #{size.rows}x#{size.cols}")
+end
+"""
+
+
+@host_only(not WINDOWS, CONSOLE_ONLY)
+def test_a_console_resize_is_a_winch_value(tmp_path):
+    bytecode = compile_text(RESIZED, "resized", tmp_path)
+    ready = tmp_path / "ready"
+
+    def resize_when_ready(type_text):
+        deadline = time.monotonic() + WAIT_SECONDS
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        type_text.resize(90, 25)
+
+    command = [*vm_command(), "--", str(bytecode), str(ready)]
+    code, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=resize_when_ready)
+    assert code == 0, shown
+    assert "System.Signal.Winch 25x90" in ESCAPES.sub("", shown), shown

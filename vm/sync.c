@@ -112,6 +112,7 @@ static _Noreturn void misuse(const agc_lock *l, const char *what) {
 
 /* One write of the whole line, so that it is not interleaved with another thread's output. */
 _Noreturn void agc_internal_abort(const char *detail) {
+  agc_tty_restore();
   static const char prefix[] = "agentica: internal error: ";
   char line[256];
   size_t n = sizeof prefix - 1, len = strlen(detail);
@@ -247,6 +248,7 @@ int agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg) 
 /* Pieces of one line, put together with memcpy: no stdio, so a signal handler may call it with ERR 0 (uv_strerror,
    which formats a code it does not know into a buffer, is then not called). */
 _Noreturn void agc_thread_start_failed(const char *what, int err, const char *fix) {
+  agc_tty_restore();
   const char *parts[] = {"agentica: cannot start ",
                          what,
                          err ? " (" : "",
