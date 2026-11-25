@@ -317,9 +317,10 @@ def of_block(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Matc
   uses: List[Reference] = []
   if blocks.size > 0
     declared = Sites.declared_names(linked.modules)
-    key = Sites.named(Linker.block_name(linked.modules, blocks[0])).key
+    keys = [Sites.named(Linker.block_name(linked.modules, blocks[0])).key, Sites.block(blocks[0].key).key]
     for module in linked.modules
-      uses = uses.concat(used(module, [], key)).concat(used(module, [], Sites.block(blocks[0].key).key))
+      listed = Sites.import_sites(module).filter do |site: Sites.Site| keys.include?(site.target.key) end
+      uses = uses.concat(listed.map do |site: Sites.Site| reference(module, site) end)
       for site in Sites.of_module(module, checked, declared, "")
         case qualifier(module.text, site, blocks[0].prefix)
           some(span) ->
@@ -364,10 +365,11 @@ end
 def used(module: Linker.LinkedModule, sites: List[Sites.Site], key: String) -> List[Reference]
   found = sites.filter do |site: Sites.Site| site.target.key == key and site.kind != "definition" end
   listed = Sites.import_sites(module).filter do |site: Sites.Site| site.target.key == key end
-  found = found.concat(listed)
-  found.map do |site: Sites.Site|
-    Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
-  end
+  found.concat(listed).map do |site: Sites.Site| reference(module, site) end
+end
+
+def reference(module: Linker.LinkedModule, site: Sites.Site) -> Reference
+  Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
 end
 
 # The answer for `target`; its definition is `given`, or is looked up in the modules.

@@ -866,13 +866,31 @@ def test_a_module_block_is_used_where_its_name_is_written_in_front_of_one_of_its
                                ("through.agc", *where(AGENTS_THROUGH, "Counter.start"), "qualifier", "main"),
                                ("user.agc", *where(AGENTS_USER, "Counter.start"), "qualifier", "main")]
     assert end(by_name["references"][0]["span"]) == where(AGENTS, "Counter.start(1)", 7)
-    assert end(by_name["references"][3]["span"]) == where(AGENTS_NAMED, "Counter as C", 7)
+    imported = [found for found in by_name["references"] if found["kind"] == "import"]
+    assert [end(found["span"]) for found in imported] == [where(AGENTS_NAMED, "Counter as C", 7)]
     # Asked from the name of the import list or of the re-export, the answer is the same.
     for file, source, needle, inside in (("named.agc", AGENTS_NAMED, "Counter as C", 1),
-                                         ("named.agc", AGENTS_NAMED, "as C", 3), ("facade.agc", AGENTS_FACADE, "Counter", 1)):
+                                         ("named.agc", AGENTS_NAMED, "as C", 3),
+                                         ("facade.agc", AGENTS_FACADE, "Counter", 1)):
         assert as_set(told(spot(file, source, needle, inside), ".", cwd=tmp_path)) == as_set(by_name), needle
     text = ask("Counter", "agents.agc", cwd=tmp_path, style="--ai")
     assert text.stdout.split("\n")[0] == "agents.agc:%d:%d definition module Counter" % where(AGENTS, "Counter\n")
+
+
+def test_a_block_imported_by_name_is_the_original_block_and_a_sibling_block_has_no_import_row(tmp_path):
+    write_agents(tmp_path, more=True)
+    via = 'import {Counter as K} from "facade"\n\ndef main() -> Void\n  puts(K.start(1).count)\nend\n'
+    (tmp_path / "via.agc").write_text(via, encoding="utf-8")
+    report = told("Counter", ".", cwd=tmp_path)
+    assert ("via.agc", *where(via, "Counter as K"), "import", None) in places(report)
+    lib = "module One\n  def start() -> Int = 1\nend\n\nmodule Two\n  def start() -> Int = 2\nend\n"
+    use = 'import {One as O} from "lib"\n\ndef main() -> Void\n  puts(O.start())\nend\n'
+    (tmp_path / "lib.agc").write_text(lib, encoding="utf-8")
+    (tmp_path / "use.agc").write_text(use, encoding="utf-8")
+    one = told("One", ".", cwd=tmp_path)
+    assert [place[3] for place in places(one) if place[0] == "use.agc"] == ["import", "qualifier"]
+    two = told("Two", ".", cwd=tmp_path)
+    assert [place for place in places(two) if place[0] == "use.agc"] == []
 
 
 def test_two_blocks_that_declare_one_name_keep_their_uses_apart(tmp_path):
