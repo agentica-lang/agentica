@@ -9,8 +9,8 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
-from tests.test_spec_type_at import (AGENTS, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS, NAMED_LIB, NAMED_USE,
-                                     TWINS, write_agents)
+from tests.test_spec_type_at import (AGENTS, AGENTS_FACADE, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS,
+                                     NAMED_LIB, NAMED_USE, TWINS, write_agents)
 
 MODELS = """LIMIT = 10
 
@@ -856,13 +856,21 @@ def test_a_module_block_is_used_where_its_name_is_written_in_front_of_one_of_its
     by_position = told(spot("agents.agc", AGENTS, "Counter\n"), ".", cwd=tmp_path)
     assert as_set(by_position) == as_set(by_name)
     assert by_name["definition"] == symbol_match("Counter", ".", cwd=tmp_path)
-    # Its file, an alias import, a name import (`C`) and a re-export; the import lists and the re-export are not uses.
+    # Its file, an alias import, a name import (`C`) and a re-export; the name of the import list (not its alias) and of
+    # the re-export are references of their own kinds.
     assert places(by_name) == [("agents.agc", *where(AGENTS, "Counter.start(1)"), "qualifier", "peek"),
                                ("agents.agc", *where(AGENTS, "Counter.start(cap"), "qualifier", "main"),
+                               ("facade.agc", *where(AGENTS_FACADE, "Counter"), "export", None),
+                               ("named.agc", *where(AGENTS_NAMED, "Counter as C"), "import", None),
                                ("named.agc", *where(AGENTS_NAMED, "C.start"), "qualifier", "main"),
                                ("through.agc", *where(AGENTS_THROUGH, "Counter.start"), "qualifier", "main"),
                                ("user.agc", *where(AGENTS_USER, "Counter.start"), "qualifier", "main")]
     assert end(by_name["references"][0]["span"]) == where(AGENTS, "Counter.start(1)", 7)
+    assert end(by_name["references"][3]["span"]) == where(AGENTS_NAMED, "Counter as C", 7)
+    # Asked from the name of the import list or of the re-export, the answer is the same.
+    for file, source, needle, inside in (("named.agc", AGENTS_NAMED, "Counter as C", 1),
+                                         ("named.agc", AGENTS_NAMED, "as C", 3), ("facade.agc", AGENTS_FACADE, "Counter", 1)):
+        assert as_set(told(spot(file, source, needle, inside), ".", cwd=tmp_path)) == as_set(by_name), needle
     text = ask("Counter", "agents.agc", cwd=tmp_path, style="--ai")
     assert text.stdout.split("\n")[0] == "agents.agc:%d:%d definition module Counter" % where(AGENTS, "Counter\n")
 

@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `agentica lint` suggests one layer (`LINT-NESTED-WRAPPER`) for a `Result[Result[T]]` or an `Optional[Optional[T]]` that a signature, a struct field or a type alias writes (#1822).
+- `agentica refs` of a module block also reports its name in an import list (kind `import`) and in a re-export (kind `export`) (#1997).
 - `agentica refs` also reports a name in an import list (kind `import`) and in a re-export (kind `export`), so a rename built on it reaches them (#1750).
 - `Terminal.tty?`, `Terminal.raw` and `Terminal.size`, and `System.Signal.Winch` for a resize, on Linux, macOS and Windows: what a full-screen program needs; the VM gives the terminal's mode back at exit (#1862).
 - `Term.decode(bytes, Type)` reads what `Term.encode` writes back into a struct or enum: heads, lengths, floats, text and limits are checked, an error has the path of the first bad value, and `JSON.Field` is a plain enum in the bytes (#994).
