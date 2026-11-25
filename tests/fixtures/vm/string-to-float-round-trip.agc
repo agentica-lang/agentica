@@ -17,7 +17,7 @@ def main() -> Void
     -4503599627370497, 9218868437227405312, -4503599627370496, 9221120237041090560, 4906019910204099648,
     4607182418800017408, 4591870180066957722, 118622047889322841]
   for bits in fixed
-    puts("#{Float.from_bits(bits)} #{round_trips?(Float.from_bits(bits))}")
+    puts("#{Float.from_bits(bits.wrap_uint64)} #{round_trips?(Float.from_bits(bits.wrap_uint64))}")
   end
   seed = 12345
   failures = 0
@@ -30,7 +30,7 @@ def main() -> Void
     if count % 2 == 1
       bits = 0 - bits - 1
     end
-    if !round_trips?(Float.from_bits(bits))
+    if !round_trips?(Float.from_bits(bits.wrap_uint64))
       failures += 1
     end
     count += 1

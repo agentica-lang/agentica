@@ -10,6 +10,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import BuiltinRef from "builtin_ref"
 import {REFS_MODULE} from "builtin_ref"
+import Args from "check_args"
 import Calls from "check_call"
 import Help from "check_help"
 import {ERROR_TEXT_HELP} from "check_help"
@@ -79,8 +80,6 @@ NUMBER_OPERATORS = Set.new([
   "equal",
   "not-equal",
 ])
-
-ARITHMETIC_OPERATORS = Set.new(["plus", "minus", "multiply", "divide", "modulo"])
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
@@ -759,13 +758,13 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -
   end
 
   inner = T.Type.Unknown
-  if node.op == "minus" and !integer_literal?(node.operand)
+  if node.op == "minus" and !Args.integer_literal?(node.operand)
     # -(1 + 2) and -1.5: the tree under the minus takes the sized type too.
     inner = fitting(node.operand, target)
   end
 
   operand = try unary_operand(cx, st, node, inner)
-  if node.op == "minus" and T.sized_int?(target) and integer_literal?(node.operand)
+  if node.op == "minus" and T.sized_int?(target) and Args.integer_literal?(node.operand)
     # A minus before an integer literal is part of it: -128 is an Int8.
     return negative_literal(cx, operand.st, node, target)
   end
@@ -805,19 +804,6 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -
   end
 
   ok(State.Out(st: operand.st, type: T.Type.Bool))
-end
-
-def integer_literal?(node: Ast.Expr) -> Bool
-  case node
-    Ast.Expr.Literal(found) ->
-      case found.value
-        Ast.LitValue.Whole(_) -> true
-        Ast.LitValue.Huge(_) -> true
-        _ -> false
-      end
-
-    _ -> false
-  end
 end
 
 # CHECK-FLOAT-RANGE at a minus and the float literal after it, in Float32 when that is the target, else in Float.
@@ -906,7 +892,7 @@ def void_negation_help(node: Ast.Unary) -> String
 end
 
 def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
-  return literal_sides(cx, st, node, expected) if NUMBER_OPERATORS.include?(node.op) and literal_tree?(node.left)
+  return literal_sides(cx, st, node, expected) if NUMBER_OPERATORS.include?(node.op) and Args.literal_tree?(node.left)
 
   left = try State.expr(cx, st, node.left, T.Type.Unknown)
   if node.op == "dot-dot" or node.op == "dot-dot-dot"
@@ -935,9 +921,9 @@ end
 # right too, an arithmetic operator gives both sides the narrow type expected of it: `x: UInt8 = 1 + 2`. Else the right
 # side is checked first, and a narrow type of it is the type of the left side: `255 == a`.
 def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
-  if literal_tree?(node.right)
+  if Args.literal_tree?(node.right)
     wanted = T.Type.Unknown
-    if ARITHMETIC_OPERATORS.include?(node.op)
+    if Args.ARITHMETIC_OPERATORS.include?(node.op)
       wanted = narrow_target(expected)
     end
 
@@ -951,34 +937,13 @@ def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type
   ok(Sides(st: left.st, left: left.type, right: right.type))
 end
 
-# True for a tree of integer literals or one of float literals: `1`, `-5`, `(1 + 2) * 3`, `1.5 * 2.0`. It takes the
-# sized type that its other side or its context gives it (fitting).
-def literal_tree?(node: Ast.Expr) -> Bool = number_tree?(node, false) or number_tree?(node, true)
-
 # `type` when it is a sized type that the literals of node take: a sized integer type for a tree of integer literals,
 # Float32 for one of float literals. Else Unknown, and a literal keeps its own type.
 def fitting(node: Ast.Expr, type: T.Type) -> T.Type
-  return type if T.sized_int?(type) and number_tree?(node, false)
-  return type if T.is?(type, "Float32") and number_tree?(node, true)
+  return type if T.sized_int?(type) and Args.number_tree?(node, false)
+  return type if T.is?(type, "Float32") and Args.number_tree?(node, true)
 
   T.Type.Unknown
-end
-
-# True for a number literal, float when real and integer otherwise, a minus before one, or an arithmetic operator on
-# two such trees.
-def number_tree?(node: Ast.Expr, real: Bool) -> Bool
-  case node
-    Ast.Expr.Literal(found) ->
-      case found.value
-        Ast.LitValue.Real(_, _) -> real
-        _ -> !real and integer_literal?(node)
-      end
-
-    Ast.Expr.Unary(found) -> found.op == "minus" and number_tree?(found.operand, real)
-    Ast.Expr.Binary(found) ->
-      ARITHMETIC_OPERATORS.include?(found.op) and number_tree?(found.left, real) and number_tree?(found.right, real)
-    _ -> false
-  end
 end
 
 # The ids of the method calls and field accesses along the target chain of an expression.
@@ -1094,6 +1059,10 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
       "make both sides one type: x.#{to_int(narrow)} gives the Int of a #{name}, " +
       "n.to_#{name.downcase}! the #{name} of an Int"
     )
+  elsif T.is?(sides.left, "Float32") and converts_to_float32?(sides.right)
+    return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.right)}"
+  elsif T.is?(sides.right, "Float32") and converts_to_float32?(sides.left)
+    return "make both sides one type: x.to_float32 gives the Float32 of a #{T.tag(sides.left)}"
   elsif either_string and either_error
     return ERROR_TEXT_HELP
   elsif either_float and (T.is?(sides.left, "Float32") or T.is?(sides.right, "Float32"))
@@ -1116,6 +1085,9 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
 
   ""
 end
+
+# True for Int and the narrow integer types, which have to_float32; UInt64 has not.
+def converts_to_float32?(type: T.Type) -> Bool = T.is?(type, "Int") or (T.sized_int?(type) and !T.uint64?(type))
 
 def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   if CheckTypes.number?(sides.left) and CheckTypes.number?(sides.right)

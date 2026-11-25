@@ -44,10 +44,9 @@ in a PR that rewrites the goldens.
 - The `Int` bit builtins work on the 64-bit two's complement form. `shift_left`
   wraps, `shift_right` is arithmetic, `shift_right_unsigned` is logical, and a
   count of 64 or more shifts every bit out (`shift_right` gives 0 or -1). A
-  negative count is `RUNTIME-INVALID-COUNT` at the count. `Float.to_bits` and
-  `Float.to_bits32` give the IEEE 754 bits with the canonical NaN
-  (`0x7FF8000000000000`, `0x7FC00000`); `Float.from_bits32` outside `0 ..
-  4294967295` is `RUNTIME-INVALID-NUMBER`.
+  negative count is `RUNTIME-INVALID-COUNT` at the count. `Float.to_bits` (a
+  `UInt64`) and `Float32.to_bits` give the IEEE 754 bits with the canonical NaN
+  (`0x7FF8000000000000`, `0x7FC00000`).
 - `String.to_int` accepts `^[+-]?[0-9]+$` (ASCII digits only) and fails with an
   error value past 64 bits. `String.to_float` accepts
   `^[+-]?[0-9]+(\.[0-9]+)?$`. Text without a dot is an integer that is rounded

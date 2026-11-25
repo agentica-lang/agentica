@@ -1,8 +1,6 @@
 import Binary from "std/binary"
 
-def scale() -> Int
-  return 1
-end
+def scale() -> Int = 1
 
 # 64 KiB of bytes from a linear congruential generator, so the data is the same on every run.
 def block() -> Bytes
@@ -36,7 +34,7 @@ def binary_sum(data: Bytes, size: Int) -> Int
   total = 0
   at = 0
   while at < size
-    total = (total + Binary.read_u32_le(data, at).unwrap!) % 1000000007
+    total = (total + Binary.read_u32_le(data, at).unwrap!.to_i) % 1000000007
     at += 4
   end
   total

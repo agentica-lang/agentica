@@ -214,12 +214,11 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   and `shift_right_unsigned` give 0, `shift_right` gives 0 or -1), a negative
   count is `RUNTIME-INVALID-COUNT` at argument 1 (`span + 2`). `Float.to_bits`
   and `from_bits` return the canonical NaN `0x7FF8000000000000` for any NaN;
-  `to_bits32` decides the binary32 overflow before the `(float)` cast and gives
-  `0x7FC00000` for NaN. The vectors of `bits-vectors.agc` are the file
-  `tests/fixtures/vm/bits-vectors.stdin`, which `python3
-  tests/fixtures/bits-vectors.py` writes (standard library only). CI does not
-  run the script: run it by hand and commit both files when the vectors change.
-  `std-binary-vectors` works the same way with `std-binary-vectors.py`.
+  `Float32.to_bits` gives `0x7FC00000` for NaN. The vectors of
+  `bits-vectors.agc` are the file `tests/fixtures/vm/bits-vectors.stdin`, which
+  `python3 tests/fixtures/bits-vectors.py` writes (standard library only). CI
+  does not run the script: run it by hand and commit both files when the vectors
+  change. `std-binary-vectors` works the same way with `std-binary-vectors.py`.
 - `std/binary` (`stdlib/binary.agc`) is Agentica on the bit builtins, with no
   C. A reader checks `window` (offset range, no overflow for any offset); its
   only error is the offset. A writer packs a masked `List[Int]` with one

@@ -119,6 +119,14 @@ def captured_help(name: String, capture: State.Capture) -> String
   )
 end
 
+## True for a call of `error` or `none`, which take their type from the context.
+def error_call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(node) -> node.name == "error" or node.name == "none"
+    _ -> false
+  end
+end
+
 private
 
 # Whether the block is the one that holds a template.
@@ -241,12 +249,5 @@ def if_returns_error?(node: Ast.IfStmt) -> Bool
   case node.else_body
     some(body) -> error_returns?(body)
     none -> false
-  end
-end
-
-def error_call?(expr: Ast.Expr) -> Bool
-  case expr
-    Ast.Expr.Call(node) -> node.name == "error" or node.name == "none"
-    _ -> false
   end
 end

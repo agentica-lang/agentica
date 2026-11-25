@@ -191,13 +191,14 @@ end
 ## True for a Float halfway between two Float32s: the texts on either side of it, which it stands for, give two.
 def float32_halfway?(x: Float) -> Bool
   magnitude = x.abs
-  bits = Float.to_bits32(magnitude)
-  near = Float.from_bits32(bits)
+  rounded = magnitude.to_float32
+  near = rounded.to_f
   return false if near == magnitude
 
-  other = Float.from_bits32(bits + 1)
+  bits = rounded.to_bits
+  other = Float32.from_bits(bits + 1).to_f
   if near > magnitude
-    other = Float.from_bits32(bits - 1)
+    other = Float32.from_bits(bits - 1).to_f
   end
 
   (near + other) / 2.0 == magnitude
@@ -206,7 +207,7 @@ end
 ## The bits of the Float32 that a float literal gives, its value and its text, or none when its Float is halfway
 ## between two Float32s and the text is not that Float exactly (or that cannot be told in 62 bits).
 def float32_bits(x: Float, text: String) -> Optional[Int]
-  return some(Float.to_bits32(x)) if !float32_halfway?(x) or exact_text?(x.abs, text)
+  return some(x.to_float32.to_bits.to_i) if !float32_halfway?(x) or exact_text?(x.abs, text)
 
   none
 end
@@ -693,7 +694,7 @@ end
 
 # True when the digits of TEXT times 10^q are X > 0 (M * 2^k, M odd) exactly, compared in 62 bits; false past them.
 def exact_text?(x: Float, text: String) -> Bool
-  bits = Float.to_bits(x)
+  bits = Float.to_bits(x).to_i!
   m = bits.bit_and(0xFFFFFFFFFFFFF).bit_or(0x10000000000000)
   k = bits.shift_right(52) - 1075
   while m % 2 == 0

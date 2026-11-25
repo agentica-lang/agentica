@@ -35,7 +35,7 @@ def float_bits(x):
     # The sign of a NaN carries no meaning in TOML, and std/toml reads every NaN as one value.
     if math.isnan(x):
         x = math.nan
-    return struct.unpack("<q", struct.pack("<d", x))[0]
+    return struct.unpack("<Q", struct.pack("<d", x))[0]
 
 
 DATE_TIME = re.compile(

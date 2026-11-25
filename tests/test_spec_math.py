@@ -49,7 +49,7 @@ INPUTS = [
 
 
 def bits(x: float) -> int:
-    return struct.unpack(">q", struct.pack(">d", x))[0]
+    return struct.unpack(">Q", struct.pack(">d", x))[0]
 
 
 def ruby(name: str, x: float) -> float | None:
@@ -68,10 +68,10 @@ def ruby(name: str, x: float) -> float | None:
 
 def same(got: int, want: float) -> bool:
     if math.isnan(want):
-        return math.isnan(struct.unpack(">d", struct.pack(">q", got))[0])
+        return math.isnan(struct.unpack(">d", struct.pack(">Q", got))[0])
     if want == 0 or math.isinf(want):
         return got == bits(want)
-    return (got < 0) == (want < 0) and abs(got - bits(want)) <= 1
+    return (got >> 63) == (bits(want) >> 63) and abs(got - bits(want)) <= 1
 
 
 def test_math_functions_match_python(tmp_path):
@@ -89,7 +89,7 @@ def test_math_functions_match_python(tmp_path):
 
 @pytest.mark.parametrize("name", ["log", "log10"])
 @pytest.mark.parametrize(
-    "argument", ["0.0 - 2.0", "Float.from_bits(-4503599627370496)", "Float.from_bits(-9223372036854775807)"]
+    "argument", ["0.0 - 2.0", "Float.from_bits(18442240474082181120)", "Float.from_bits(9223372036854775809)"]
 )
 def test_math_log_below_zero_is_a_domain_error(tmp_path, name, argument):
     # The patterns are -inf and the negative Float nearest zero, -5e-324.

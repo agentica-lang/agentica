@@ -6,10 +6,7 @@ end
 def bits_digest(xs: List[Float]) -> Int
   acc = 0
   for x in xs
-    b = Float.to_bits(x) % 1000003
-    if b < 0
-      b = b + 1000003
-    end
+    b = (Float.to_bits(x) % 1000003).to_i!
     acc = (acc * 31 + b) % 1000003
   end
   return acc
@@ -35,7 +32,7 @@ def show_ints(name: String, xs: List[Int]) -> Void
   puts("#{name} size #{xs.size} digest #{int_digest(xs)}")
 end
 
-def float_bits(xs: List[Float]) -> List[Int]
+def float_bits(xs: List[Float]) -> List[UInt64]
   return xs.map do |x| Float.to_bits(x) end
 end
 
@@ -68,8 +65,8 @@ def main() -> Void
 
   nan = Float.from_bits(9221120237041090560)
   infinity = Float.from_bits(9218868437227405312)
-  neg_infinity = Float.from_bits(0 - 4503599627370496)
-  negzero = Float.from_bits(0 - 9223372036854775807 - 1)
+  neg_infinity = Float.from_bits(18442240474082181120)
+  negzero = Float.from_bits(9223372036854775808)
   tiny = Float.from_bits(1)
   biggest = Float.from_bits(9218868437227405311)
   specials = [negzero, 0.0, nan, infinity, neg_infinity, tiny, biggest, 1.5, 0.0 - 2.25]

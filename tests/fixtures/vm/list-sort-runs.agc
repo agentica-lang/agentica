@@ -47,7 +47,7 @@ def main() -> Void
   puts(halves.sort)
   puts(halves.reverse.sort.reverse.take(5))
   nan = Float.from_bits(9221120237041090560)
-  negzero = Float.from_bits(0 - 9223372036854775807 - 1)
+  negzero = Float.from_bits(9223372036854775808)
   mixed = [3.5, nan, negzero, 0.0, -1.0, nan, 0.0, negzero, 2.0]
   puts(mixed.sort)
   puts(mixed.sort_by do |f| f end)

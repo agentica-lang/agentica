@@ -8,8 +8,14 @@ def report(line: String, got: String, want: String) -> Int
   return 1
 end
 
+def uint64_of(text: String) -> UInt64
+  text.bytes.to_a.reduce(0.to_uint64!) do |acc: UInt64, digit: Int|
+    acc * 10 + (digit - 48).to_uint64!
+  end
+end
+
 def float_of(field: String) -> Float
-  return Float.from_bits(field.to_i!)
+  return Float.from_bits(uint64_of(field))
 end
 
 def bits_of(x: Float) -> String

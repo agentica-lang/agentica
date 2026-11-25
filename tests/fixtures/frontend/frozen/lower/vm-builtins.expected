@@ -71,12 +71,10 @@ Float.abs
 Float.ceil
 Float.clamp
 Float.floor
-Float.from_bits
-Float.from_bits32
+Float.from_bits64
 Float.from_int
 Float.round
-Float.to_bits
-Float.to_bits32
+Float.to_bits64
 Float.to_float32
 Float.to_int
 Float.to_int!

@@ -48,22 +48,12 @@ ROWS: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.from_bits",
-    parameters: [Model.Named(name: "bits", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "bits", type: Types.Type.UInt64)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
-    implementation: "Float.from_bits",
+    implementation: "Float.from_bits64",
     effects: [],
-    description: "Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Float.from_bits32",
-    parameters: [Model.Named(name: "bits", type: Types.Type.Int)],
-    result: Types.Type.Float,
-    rule: Model.Rule.Plain,
-    implementation: "Float.from_bits32",
-    effects: [],
-    description: "Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt.",
+    description: "Read the 64 bits of a UInt64 as a binary64 Float; any NaN pattern gives NaN.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -79,24 +69,11 @@ ROWS: List[Model.Builtin] = [
   Model.Builtin(
     name: "Float.to_bits",
     parameters: [Model.Named(name: "float", type: Types.Type.Float)],
-    result: Types.Type.Int,
+    result: Types.Type.UInt64,
     rule: Model.Rule.Plain,
-    implementation: "Float.to_bits",
+    implementation: "Float.to_bits64",
     effects: [],
-    description: "The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Float.to_bits32",
-    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
-    result: Types.Type.Int,
-    rule: Model.Rule.Plain,
-    implementation: "Float.to_bits32",
-    effects: [],
-    description: (
-      "Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives " +
-      "2143289344."
-    ),
+    description: "The 64 IEEE 754 binary64 bits as a UInt64; every NaN gives the canonical 9221120237041090560.",
     alternatives: [],
   ),
   Model.Builtin(

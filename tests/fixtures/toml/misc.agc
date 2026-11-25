@@ -76,7 +76,7 @@ def quoting_case() -> Void
   root = root.put("plain-key_1", Toml.Value.Int(4))
   root = root.put("s", Toml.Value.Str(weird))
   root = root.put("inf", Toml.Value.Float(Float.from_bits(9218868437227405312)))
-  root = root.put("neg", Toml.Value.Float(Float.from_bits(-4503599627370496)))
+  root = root.put("neg", Toml.Value.Float(-Float.from_bits(9218868437227405312)))
   root = root.put("nothing", Toml.Value.Float(Float.from_bits(9221120237041090560)))
   inner: Map[String, Toml.Value] = {"k": Toml.Value.Str("v")}
   root = root.put("[quoted.tbl]", table(inner))

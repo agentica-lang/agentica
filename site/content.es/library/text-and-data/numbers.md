@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, Float32, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "a651ca665089"
+source_hash: "cfcb2e4d9b31"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -503,13 +503,13 @@ end
 ## Float.to_bits y Float.from_bits {#floatto_bits-and-floatfrom_bits}
 
 ```signature
-Float.to_bits(float: Float) -> Int
-Float.from_bits(bits: Int) -> Float
+Float.to_bits(float: Float) -> UInt64
+Float.from_bits(bits: UInt64) -> Float
 ```
 
-`to_bits` da los bits IEEE 754 binary64 de `float` como un `Int` en complemento a dos (`1.0` es `4607182418800017408`, `-0.0` es `-9223372036854775808`). Todo NaN da el NaN silencioso `9221120237041090560`. `x.to_bits < 0` comprueba el bit de signo de cada valor salvo NaN (para NaN, comprueba con `x != x`), y `to_bits` distingue `-0.0` de `0.0`.
+`to_bits` da los bits IEEE 754 binary64 de `float` como un `UInt64` (`1.0` es `4607182418800017408`, `-0.0` es `9223372036854775808`). Todo NaN da el NaN silencioso `9221120237041090560`. `x.to_bits >= 9223372036854775808` comprueba el bit de signo de cada valor salvo NaN (para NaN, comprueba con `x != x`), y `to_bits` distingue `-0.0` de `0.0`.
 
-`from_bits` lee los 64 bits de cualquier `Int` como binary64; los subnormales, los infinitos y `-0.0` vuelven exactos, y cualquier patrón NaN da NaN. Así que `Float.to_bits(Float.from_bits(n)) == n` para todo `n`, salvo los patrones NaN distintos del NaN silencioso.
+`from_bits` lee los 64 bits de cualquier `UInt64` como binary64; los subnormales, los infinitos y `-0.0` vuelven exactos, y cualquier patrón NaN da NaN. Así que `Float.to_bits(Float.from_bits(n)) == n` para todo `n`, salvo los patrones NaN distintos del NaN silencioso.
 
 ```agentica
 def main() -> Void
@@ -525,47 +525,12 @@ end
 
 ```output
 4607182418800017408
--4611686018427387904
+13835058055282163712
 true
--9223372036854775808
+9223372036854775808
 1.0
 true
 true
-```
-
-## Float.to_bits32 y Float.from_bits32 {#floatto_bits32-and-floatfrom_bits32}
-
-```signature
-Float.to_bits32(float: Float) -> Int
-Float.from_bits32(bits: Int) -> Float
-```
-
-`to_bits32` redondea `float` a binary32, al más cercano con empates hacia el número par, y da sus 32 bits como un `Int` de 0 a 4294967295. Una magnitud de `2^128 - 2^103` o más se vuelve infinito con el mismo signo. Una muy pequeña se redondea a un subnormal o a cero y conserva su signo. Todo NaN da `2143289344`.
-
-`from_bits32` lee 32 bits como binary32 y los amplía a un `Float`, lo que siempre es exacto. Un `Int` fuera de `0 .. 4294967295` es `RUNTIME-INVALID-NUMBER` en el argumento. Así que `Float.to_bits32(Float.from_bits32(n)) == n` para todo `n`, salvo los patrones NaN distintos de `2143289344`.
-
-```agentica
-def main() -> Void
-  puts(Float.to_bits32(1.0))
-  puts(Float.to_bits32(0.1))
-  puts(Float.from_bits32(1036831949))
-  puts(Float.from_bits32(1065353216))
-  puts(Float.to_bits32(Float.from_bits32(2143289345)))
-end
-```
-
-```output
-1065353216
-1036831949
-0.10000000149011612
-1.0
-2143289344
-```
-
-```agentica {expect="RUNTIME-INVALID-NUMBER"}
-def main() -> Void
-  puts(Float.from_bits32(4294967296))
-end
 ```
 
 ## Float32 {#float32}

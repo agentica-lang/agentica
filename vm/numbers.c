@@ -470,6 +470,21 @@ static agc_value builtin_float_from_bits(agc_vm *vm, agc_value *args, uint32_t s
   return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
 }
 
+/* The catalog uses these two keys. The Int forms above, and `Float.to_bits32` and `Float.from_bits32` below (no catalog
+   row has them), are kept for the stage0 before #1977 and the front end that built the stage0 of #1977 (to reproduce its
+   refresh); remove them in the next PR. */
+static agc_value builtin_float_to_bits64(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  double x = agc_as_float(vm, args[0]);
+  return agc_uint64(isnan(x) ? AGC_CANONICAL_NAN64 : float64_to_bits(x));
+}
+
+static agc_value builtin_float_from_bits64(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  double x = float64_from_bits(agc_as_uint64(vm, args[0]));
+  return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
+}
+
 static agc_value builtin_float_to_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   double x = agc_as_float(vm, args[0]);
@@ -596,6 +611,8 @@ const agc_builtin agc_number_builtins[] = {
   {"Int.shift_right_unsigned", 2, builtin_int_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.to_bits", 1, builtin_float_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits", 1, builtin_float_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float.to_bits64", 1, builtin_float_to_bits64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Float.from_bits64", 1, builtin_float_from_bits64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

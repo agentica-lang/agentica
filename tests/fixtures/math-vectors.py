@@ -64,7 +64,7 @@ FLOAT_BOUNDS = [(0.0, 1.0), (-1.0, 1.0), (-0.0, 0.0), (2.0, 2.0), (-math.inf, ma
 def bits(x: float) -> int:
     if math.isnan(x):
         return CANONICAL_NAN64
-    return struct.unpack(">q", struct.pack(">d", x))[0]
+    return struct.unpack(">Q", struct.pack(">d", x))[0]
 
 
 def fits(n: int) -> bool:

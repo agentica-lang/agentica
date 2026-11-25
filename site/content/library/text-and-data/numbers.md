@@ -502,13 +502,13 @@ end
 ## Float.to_bits and Float.from_bits
 
 ```signature
-Float.to_bits(float: Float) -> Int
-Float.from_bits(bits: Int) -> Float
+Float.to_bits(float: Float) -> UInt64
+Float.from_bits(bits: UInt64) -> Float
 ```
 
-`to_bits` gives the IEEE 754 binary64 bits of `float` as a two's complement `Int` (`1.0` is `4607182418800017408`, `-0.0` is `-9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits < 0` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
+`to_bits` gives the IEEE 754 binary64 bits of `float` as a `UInt64` (`1.0` is `4607182418800017408`, `-0.0` is `9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits >= 9223372036854775808` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
 
-`from_bits` reads the 64 bits of any `Int` as a binary64; subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
+`from_bits` reads the 64 bits of any `UInt64` as a binary64; subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
 
 ```agentica
 def main() -> Void
@@ -524,47 +524,12 @@ end
 
 ```output
 4607182418800017408
--4611686018427387904
+13835058055282163712
 true
--9223372036854775808
+9223372036854775808
 1.0
 true
 true
-```
-
-## Float.to_bits32 and Float.from_bits32
-
-```signature
-Float.to_bits32(float: Float) -> Int
-Float.from_bits32(bits: Int) -> Float
-```
-
-`to_bits32` rounds `float` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295. A magnitude of `2^128 - 2^103` or more becomes infinity with the same sign. A very small one rounds to a subnormal or to zero and keeps its sign. Every NaN gives `2143289344`.
-
-`from_bits32` reads 32 bits as a binary32 and widens it to a `Float`, which is always exact. An `Int` outside `0 .. 4294967295` is `RUNTIME-INVALID-NUMBER` at the argument. So `Float.to_bits32(Float.from_bits32(n)) == n` for every `n` except NaN patterns other than `2143289344`.
-
-```agentica
-def main() -> Void
-  puts(Float.to_bits32(1.0))
-  puts(Float.to_bits32(0.1))
-  puts(Float.from_bits32(1036831949))
-  puts(Float.from_bits32(1065353216))
-  puts(Float.to_bits32(Float.from_bits32(2143289345)))
-end
-```
-
-```output
-1065353216
-1036831949
-0.10000000149011612
-1.0
-2143289344
-```
-
-```agentica {expect="RUNTIME-INVALID-NUMBER"}
-def main() -> Void
-  puts(Float.from_bits32(4294967296))
-end
 ```
 
 ## Float32

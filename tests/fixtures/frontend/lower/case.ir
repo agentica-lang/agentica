@@ -165,7 +165,7 @@ fn3 "flag" params=3 captures=0 slots=4 @ 0:35:1-51:1
     call-builtin r3 "puts" 1 @ 0:42:12-42:34 0:42:17-42:33
     jump L4 @ 0:41:3-46:1
   L5:
-    const r3 float:bits:-4620693217682128896 @ 0:43:5-43:9
+    const r3 float:bits:13826050856027422720 @ 0:43:5-43:9
     same r3 r1 r3 @ 0:43:5-43:9
     jump-if-false r3 L6 @ 0:43:5-43:9
     step @ 0:43:13-44:1

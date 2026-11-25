@@ -342,9 +342,9 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
   labels
 end
 
-# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes, 9 Float32) and its
-# value. A Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as
-# UTF-8. A Float32 is its decimal text, written the same way.
+# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes, 8 UInt64, 9
+# Float32) and its value. A Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to
+# check them as UTF-8. A Float32 is its decimal text, written the same way.
 def constant_bytes(imm: Ir.Imm) -> List[Int]
   case imm
     Ir.Imm.Void -> [0]

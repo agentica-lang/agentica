@@ -36,6 +36,23 @@ RULES = {
         main("a: UInt8 = 7", "n: Int = a.to_i", "b: Result[UInt8] = n.to_uint8", "c: UInt8 = n.to_uint8!",
              "puts(a == c)", "puts(b.ok?)"), None, None),
     "two values of a narrow type compare with ==": (main("a: UInt8 = 1", "b: UInt8 = 2", "puts(a == b)"), None, None),
+    "the bit patterns of a Float are a UInt64": (
+        main("bits: UInt64 = Float.to_bits(-0.0)", "x: Float = Float.from_bits(bits)", "puts(x)"), None, None),
+    "Float.from_bits takes no Int": (
+        main("n = 1", "puts(Float.from_bits(n))"), "CHECK-TYPE-MISMATCH", "n"),
+    "a negative literal is no bit pattern": (main("puts(Float.from_bits(-1))"), "CHECK-INT-RANGE", "-1"),
+    "unwrap_or types an integer literal default by the Result": (
+        main("n: Result[UInt8] = 300.to_uint8", "a: UInt8 = n.unwrap_or(0)", "b: UInt8 = Result.unwrap_or(n, 7)",
+             "puts(a + b)"), None, None),
+    "unwrap_or of an error call and a literal, and of an ok call under an expected type": (
+        main("a = Result.unwrap_or(error(\"bad\"), 7)", "b: UInt8 = Result.unwrap_or(ok(1), 0)", "puts(a + b.to_i)"),
+        None, None),
+    "a float literal default must fit the Float32 of the Result": (
+        main("n: Result[Float32] = ok(1.5)", "puts(n.unwrap_or(1e40))"), "CHECK-FLOAT-RANGE", "1e40"),
+    "an integer literal default must fit the Result's type": (
+        main("n: Result[UInt8] = 3.to_uint8", "puts(n.unwrap_or(256))"), "CHECK-INT-RANGE", "256"),
+    "a Float32 and a sized integer do not mix": (
+        main("u: UInt64 = 1", "f: Float32 = 1.5", "puts(u + f)"), "CHECK-TYPE-MISMATCH", None),
     "a literal above the type": (main("x: UInt8 = 256"), "CHECK-INT-RANGE", "256"),
     "a negative literal for an unsigned type": (main("x: UInt8 = -1"), "CHECK-INT-RANGE", "-1"),
     "a literal below a signed type": (main("x: Int8 = -129"), "CHECK-INT-RANGE", "-129"),

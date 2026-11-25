@@ -24,7 +24,7 @@ fn0 "main" params=0 captures=0 slots=3 entry @ 0:10:1-14:1
     const r1 " " @ 0:11:8-11:85
     concat r0 r0 r1 @ 0:11:8-11:85
     step @ 0:11:38-11:46
-    const r1 float:bits:-4620693217682128896 @ 0:11:38-11:46
+    const r1 float:bits:13826050856027422720 @ 0:11:38-11:46
     to-text r1 r1 @ 0:11:8-11:85
     concat r0 r0 r1 @ 0:11:8-11:85
     const r1 " " @ 0:11:8-11:85
