@@ -2,7 +2,7 @@
 title: TCP, TLS y HTTP
 weight: 4
 description: Búsquedas DNS, sockets TCP y TLS, y el cliente y el servidor HTTP/1.1 de std/http.
-source_hash: "98be03d83fd2"
+source_hash: "9af1f25b0881"
 ---
 
 Las funciones de red devuelven un `Result` y reciben los tiempos de espera en milisegundos.
@@ -379,7 +379,7 @@ HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], op
 - `HTTP.Response` tiene `status`, `headers` (nombres en minúsculas) y `body`, que es `Bytes`. `post` envía un cuerpo `Bytes`, como hace `Net::HTTP.post(uri, data, header)` de Ruby, y `request` acepta cualquier método. Envía texto como `"text".bytes`, y ningún cuerpo como `"".bytes`. El cuerpo tiene como máximo `max_body_bytes`, y `headers` vale `[]` de forma predeterminada.
 - Para una sola solicitud usa `get_response` y `post_response`, como `Net::HTTP.get_response` y `Net::HTTP.post` de Ruby: cada una crea un cliente con `options`, hace la llamada y cierra el cliente y su conexión antes de devolver, así que no necesita `client` ni `close_client`. Para muchas solicitudes usa un único `HTTP.client()` con `get`, `post` y `request`, que reutiliza conexiones; llamar a `get_response` en un bucle abre una conexión cada vez, y sobre HTTPS además crea un contexto TLS nuevo y carga el paquete de CA cada vez.
 - Cuando se cancela una tarea mientras una de estas llamadas espera su respuesta, la conexión de la llamada se cierra, en texto plano o TLS: el servidor ve el cierre, y la conexión del cliente no vuelve al pool.
-- Las URL empiezan con `http://` o `https://`. Un host entre corchetes (`http://[::1]:8080/`) debe parecer una dirección IPv6; si no, el resultado es un error.
+- Las URL empiezan con `http://` o `https://`. Un host entre corchetes (`http://[::1]:8080/`) debe parecer una dirección IPv6; si no, el resultado es un error. El cliente no comprueba la longitud de la línea de solicitud (método, destino y versión): un destino largo se envía tal cual, y un servidor con un límite menor, como `HTTP.serve` (8192 bytes), puede rechazarlo.
 - El cliente añade `Host` y `Content-Length`; una solicitud no puede ponerlas, ni `Transfer-Encoding` ni `Connection`.
 
 ```agentica {mode="check"}
@@ -779,7 +779,7 @@ Las solicitudes mal formadas nunca llegan a la aplicación: el servidor responde
 | 400 | mal formada |
 | 413 | un cuerpo por encima de `max_body_bytes` |
 | 417 | un `Expect` distinto de `100-continue` |
-| 431 | cabeceras demasiado largas o demasiadas |
+| 431 | una línea de solicitud de más de 8192 bytes (método, destino y versión), o cabeceras demasiado largas o demasiadas |
 | 501 | `CONNECT`, o un `Upgrade` distinto de un handshake de WebSocket |
 | 505 | distinto de `HTTP/1.1` |
 
