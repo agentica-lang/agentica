@@ -2,7 +2,7 @@
 title: Test
 weight: 1
 description: Pruebas unitarias al estilo de ExUnit, con aserciones que devuelven un Result.
-source_hash: "746587ec3d15"
+source_hash: "b238ece601bd"
 ---
 
 `Test` es un módulo integrado para pruebas unitarias; no necesita importación. Un archivo de prueba es un programa cuyo `main` llama a `Test.run` con una lista de pruebas. Cada prueba devuelve `Result[Void]`, y también cada aserción, así que `try` detiene una prueba en su primera aserción fallida. Agentica no tiene excepciones.
@@ -69,7 +69,7 @@ Con `agentica test`, el ejecutor de pruebas habla con el archivo por un canal pr
 
 - Nombra el archivo `*_test.agc`. `agentica test` encuentra esos archivos en `test/` de forma predeterminada e imprime una línea por prueba: `PASS file / name`, o `FAIL file / name` con el diagnóstico y la salida de la prueba debajo.
 - Cada prueba se ejecuta en su propia tarea, así que un fallo solo hace fallar esa prueba. Cada prueba tiene 30 segundos (`RUNTIME-TEST-TIMEOUT`), y `main` tiene 30 segundos para llegar a `Test.run` (un error de archivo con el mismo código). Una prueba que termina, alcanza su límite de pasos o agota su tiempo de espera termina la ejecución del archivo, y las pruebas posteriores quedan como `NOT RUN`.
-- Un archivo se ejecuta con `--max-steps` de 1.000.000 por el número de pruebas que ejecuta, más uno, compartido por todas sus pruebas, así que `--only` lo reduce; `System.Profile.steps` mide una prueba.
+- Un archivo se ejecuta con `--max-steps` de 1.000.000 por el número de pruebas que ejecuta, más uno, compartido por todas sus pruebas, así que `--only` lo reduce; `System.Profile.steps` mide una prueba. `agentica test --max-steps N` cambia el 1.000.000 por `N` (un entero positivo), y `--max-steps unlimited` quita el límite; un escenario de un archivo `.feature` recibe lo mismo por cada uno de sus pasos, más uno, con o sin `--isolate`.
 - Un archivo que termina, falla o nunca llama a `Test.run` es un error de archivo que muestra lo que imprimió.
 - Una prueba que agota el tiempo conserva la salida que imprimió, hasta 1 MiB. Una prueba que imprime más de 1 MiB falla de inmediato con `RUNTIME-BDD-OUTPUT-LIMIT`, incluso si nunca termina, y no muestra salida.
 - Ejecutado como programa normal, el archivo imprime `run this file with agentica test` en stderr y termina con código 2.

@@ -2,7 +2,7 @@
 title: Primeros pasos
 weight: 1
 description: Instala Agentica, ejecuta tu primer programa y compruébalo.
-source_hash: "be7c0a017b5e"
+source_hash: "316291d5aca8"
 ---
 
 ## Instalar {#install}

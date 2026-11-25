@@ -2,7 +2,7 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float, Float32, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "7b1b62f2bcdc"
+source_hash: "85c1ef01237b"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.

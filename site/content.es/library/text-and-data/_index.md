@@ -2,7 +2,7 @@
 title: Texto y datos
 weight: 2
 description: Trabaja con texto y números, busca y reemplaza texto con expresiones regulares, lee y escribe JSON y TOML, codifica URL, escapa HTML y gestiona cookies, halla el tipo de medio de un archivo, lee la hora Unix como fecha UTC y como texto RFC 3339, empaqueta números en bytes, calcula hashes y firma bytes, y genera bytes aleatorios seguros.
-source_hash: "1658f0a865ee"
+source_hash: "c01abdbab5d3"
 ---
 
 - Usa [String](/library/text-and-data/string/) para cortar, buscar, cambiar y convertir texto, y para convertirlo en números.
