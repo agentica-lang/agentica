@@ -298,6 +298,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.JsonEncode -> check_json_encode(cx, st, site, false)
     Model.Rule.JsonFrom -> check_json_encode(cx, st, site, true)
     Model.Rule.TermEncode -> check_term_encode(cx, st, site)
+    Model.Rule.TermDecode -> check_term_decode(cx, st, site)
     Model.Rule.CodecDecode -> check_codec_decode(cx, st, site)
     Model.Rule.CodecEncode -> check_codec_encode(cx, st, site)
     Model.Rule.CodecMembers -> check_codec_members(cx, st, site)
@@ -645,6 +646,52 @@ def check_term_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
   ok(State.Out(st: out.st, type: T.Type.Result(T.Type.Bytes)))
 end
 
+# Term.decode(data, Type): data is Bytes and the type argument the name of a struct or enum that Term can build
+# (CheckTypes.term_decodable?). A List, a Map or a generic instance is no target, a struct that holds one is. The
+# lowering names the target by the type the checker recorded.
+def check_term_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  source = try State.expr(cx, st, site.args[0], T.Type.Bytes)
+  if !T.same?(source.type, T.Type.Bytes)
+    return error(State.mismatch(cx, source.st, T.Type.Bytes, source.type, Ast.expr_span(site.args[0])))
+  end
+
+  type = try term_target(cx, source.st, site.args[1])
+  ok(State.Out(st: State.record_type(source.st, Ast.expr_id(site.args[1]), type), type: T.Type.Result(type)))
+end
+
+# The struct or enum that the type argument of Term.decode names.
+def term_target(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
+  case target
+    Ast.Expr.TypeName(node) ->
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
+      type = try CheckTypes.resolve_type(cx, st, ref, false)
+      named = T.is?(type, "Struct") or T.is?(type, "Enum")
+      if !named or T.args(type).size != 0
+        message = "Term type argument requires the name of a struct or enum, not a List, a Map or a generic type"
+        return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, node.span))
+      end
+
+      try CheckTypes.no_private_inside(cx, st, type, node.span)
+      if !CheckTypes.term_decodable?(cx, type)
+        return error(
+          State.fail_maybe(
+            cx,
+            st,
+            "CHECK-NOT-DECODABLE",
+            "cannot Term.decode into #{T.to_text(type)} or its nested types",
+            node.span,
+            term_refusal_help(cx, type),
+          ),
+        )
+      end
+
+      ok(type)
+    _ ->
+      message = "Term type argument requires the name of a struct or enum"
+      error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
+  end
+end
+
 # The help of Term.encode when it refuses a type, or "".
 def term_refusal_help(cx: State.Cx, type: T.Type) -> String
   if CheckTypes.term_optional_inside?(cx, type)
@@ -652,6 +699,10 @@ def term_refusal_help(cx: State.Cx, type: T.Type) -> String
   end
 
   return "Term map keys are Int or String" if CheckTypes.term_key_inside?(cx, type)
+
+  if CheckTypes.term_generic_enum_inside?(cx, type)
+    return "Term.decode does not build an instance of a generic enum yet; use a struct or a plain enum"
+  end
 
   ""
 end

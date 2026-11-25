@@ -10,7 +10,7 @@ source_hash: "1658f0a865ee"
 - Usa [Int y Float](/library/text-and-data/numbers/) para convertir entre `Int`, `Float` y `String`, para redondear, acotar y sacar raíces cuadradas, y para trabajar con bits.
 - Usa [JSON](/library/text-and-data/json/) para mover datos hacia dentro y hacia fuera de los programas, con una forma conocida (estructuras) o sin ella.
 - Usa [Datos binarios](/library/text-and-data/binary/) (`std/binary`) para leer y escribir números en un `Bytes`, y para enmarcar mensajes.
-- Usa [Term](/library/text-and-data/term/) (`Term.encode`) para escribir un valor como CBOR, una forma binaria compacta que conserva claves `Int`, los bits exactos de un `Float`, `nil` y `Bytes`.
+- Usa [Term](/library/text-and-data/term/) (`Term.encode`, `Term.decode`) para escribir un valor como CBOR y leerlo de vuelta, una forma binaria compacta que conserva claves `Int`, los bits exactos de un `Float`, `nil` y `Bytes`.
 - Usa [TOML](/library/text-and-data/toml/) (`std/toml`) para leer y escribir documentos TOML 1.0, como los archivos de configuración.
 - Usa [HTML](/library/text-and-data/html/) (`std/html`) para escapar y desescapar texto HTML.
 - Usa [Plantillas EAG](/library/text-and-data/eag/) (`<<~EAG` y `std/eag`) para crear texto a partir de una plantilla con etiquetas ERB.

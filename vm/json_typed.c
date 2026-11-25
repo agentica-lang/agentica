@@ -346,6 +346,8 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
     double x;
     int64_t least, greatest;
     agc_charge(vm, 1);
+    if (kind == AGC_TYPE_BYTES || kind == AGC_TYPE_NIL || kind == AGC_TYPE_INT_MAP)
+      return decode_error(vm, stack, depth, "a type that JSON can hold"); /* the checker keeps these out */
     const agc_json *j = kind == ABSENT_FIELD || kind == DEFAULT_FIELD ? NULL : agc_as_json(vm, item);
     if (kind == DEFAULT_FIELD) {
       v = item;
@@ -492,7 +494,8 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
   }
   if (t->kind == AGC_TYPE_FLOAT || t->kind == AGC_TYPE_FLOAT32) return typed("number");
   if (t->kind == AGC_TYPE_BOOL) return typed("boolean");
-  if (t->kind == AGC_TYPE_STRING) return typed("string");
+  if (t->kind == AGC_TYPE_STRING || t->kind == AGC_TYPE_BYTES) return typed("string");
+  if (t->kind == AGC_TYPE_NIL) return typed("null");
   if (t->kind == AGC_TYPE_STRUCT) return reference(p->structs[t->arg].json_name);
   if (t->kind == AGC_TYPE_ENUM) return reference(p->enums[t->arg].json_name);
   if (t->kind == AGC_TYPE_INSTANCE) return reference(p->instances[t->arg].json_name);

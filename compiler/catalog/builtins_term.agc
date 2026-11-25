@@ -15,4 +15,20 @@ ROWS: List[Model.Builtin] = [
     ),
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "Term.decode",
+    parameters: [
+      Model.Named(name: "data", type: Types.Type.Bytes),
+      Model.Named(name: "type", type: Types.Type.Var("T")),
+    ],
+    result: Types.Type.Result(Types.Type.Var("T")),
+    rule: Model.Rule.TermDecode,
+    implementation: "Term.decode",
+    effects: [],
+    description: (
+      "Decode CBOR (RFC 8949) written by Term.encode into a named struct or enum; " +
+      "invalid data returns an error; VM only."
+    ),
+    alternatives: [],
+  ),
 ]

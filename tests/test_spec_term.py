@@ -1,4 +1,5 @@
-"""Term.encode through the product CLI: which types it writes, and the rules and diagnostic codes that refuse the rest.
+"""Term.encode and Term.decode through the product CLI: which types they take, and the rules and diagnostic codes that
+refuse the rest.
 
 A rule case is `(program, code, covered text)`: the code of the diagnostic and the source text its range covers.
 A program that must check clean has no code.
@@ -52,6 +53,22 @@ end
 # A struct of another module with a private field: a Term writes every field, so only its module may encode it.
 LIB = "struct Conn\n  id: Int\n\n  private\n\n  secret: String\nend\n\ndef open(id: Int) -> Conn = Conn(id: id, secret: \"s\")\n"
 MODULE = 'import L from "lib"\n\n' + main("c = L.open(1)", "puts(Term.encode(c))")
+DECODE_MODULE = 'import L from "lib"\n\n' + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, L.Conn))")
+
+DECODE_SHAPES = """struct Tree
+  children: List[Tree]
+  size: Optional[Int]
+  at: Map[Int, Tree]
+end
+
+struct Holder
+  field: JSON.Field[Box[Int]]
+  data: Bytes
+  nothing: Nil
+  shape: Shape
+end
+
+"""
 
 RULES = {
     "a struct of every kind of field": (
@@ -82,8 +99,10 @@ RULES = {
     "a type variable is refused": (
         "def dump[T](value: T) -> Result[Bytes] = Term.encode(value)\n\n" + main("puts(dump(1))"),
         "CHECK-NOT-ENCODABLE", "value"),
-    "a JSON.Field is refused for now": (
-        "struct P\n  age: JSON.Field[Int]\nend\n\n" + main("puts(Term.encode(P(age: JSON.Field.Absent)))"),
+    "a JSON.Field is a plain enum": (
+        "struct P\n  age: JSON.Field[Int]\nend\n\n" + main("puts(Term.encode(P(age: JSON.Field.Absent)))"), None, None),
+    "a JSON.Field of a type that is refused": (
+        "struct P\n  age: JSON.Field[Set[Int]]\nend\n\n" + main("puts(Term.encode(P(age: JSON.Field.Absent)))"),
         "CHECK-NOT-ENCODABLE", "P(age: JSON.Field.Absent)"),
     "a recursive type is written": (
         "struct Tree\n  children: List[Tree]\nend\n\n" + main("puts(Term.encode(Tree(children: [])).unwrap!.size)"),
@@ -104,6 +123,43 @@ RULES = {
         GENERIC + main("x: Maybe[Optional[Int]] = Maybe.Nothing", "puts(Term.encode(x))"), "CHECK-NOT-ENCODABLE", "x"),
     "a generic struct that a Nil argument makes refuse an Optional nested in a list": (
         GENERIC + main("x: Box[Nil] = Box(value: none)", "puts(Term.encode([x]))"), "CHECK-NOT-ENCODABLE", "[x]"),
+    "Term.decode builds a struct, an enum and what they hold": (
+        SHAPES + DECODE_SHAPES + main(
+            "bytes = Term.encode(1).unwrap!", "r: Result[Entry] = Term.decode(bytes, Entry)",
+            "s: Result[Shape] = Term.decode(bytes, Shape)", "t: Result[Tree] = Term.decode(bytes, Tree)",
+            "u: Result[Holder] = Term.decode(bytes, Holder)", "puts(r.ok? and s.ok? and t.ok? and u.ok?)"),
+        None, None),
+    "Term.decode needs Bytes": (
+        SHAPES + main('puts(Term.decode("a", Entry))'), "CHECK-TYPE-MISMATCH", '"a"'),
+    "Term.decode needs a name": (
+        SHAPES + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, 5))"), "CHECK-TYPE-MISMATCH", "5"),
+    "a List is no target of Term.decode": (
+        main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, List[Int]))"), "CHECK-TYPE-MISMATCH",
+        "List[Int]"),
+    "a generic instance is no target of Term.decode": (
+        SHAPES + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, Box[Int]))"), "CHECK-TYPE-MISMATCH",
+        "Box[Int]"),
+    "Term.decode refuses a type that Term.encode refuses": (
+        "struct Held\n  items: Set[Int]\nend\n\n" + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, Held))"),
+        "CHECK-NOT-DECODABLE", "Held"),
+    "Term.decode refuses a Map key that is not Int or String": (
+        "struct H\n  m: Map[UInt8, Int]\nend\n\n" + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, H))"),
+        "CHECK-NOT-DECODABLE", "H"),
+    "Term.decode refuses an Optional of an Optional": (
+        "struct H\n  x: Optional[Optional[Int]]\nend\n\n" + main("bytes = Term.encode(1).unwrap!",
+                                                                 "puts(Term.decode(bytes, H))"),
+        "CHECK-NOT-DECODABLE", "H"),
+    "Term.decode does not build an instance of a generic enum": (
+        GENERIC + "struct H\n  x: Maybe[Int]\nend\n\n" + main("bytes = Term.encode(1).unwrap!", "puts(Term.decode(bytes, H))"),
+        "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Bytes field, which only Term holds": (
+        "struct H\n  raw: Bytes\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Nil field, which only Term holds": (
+        "struct H\n  nothing: Nil\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
+    "JSON.decode refuses a Map with Int keys, which only Term holds": (
+        "struct H\n  m: Map[Int, Int]\nend\n\n" + main('puts(JSON.decode("{}", H))'), "CHECK-NOT-DECODABLE", "H"),
+    "Term.decode takes two arguments": (main("puts(Term.decode(Term.encode(1).unwrap!))"), "CHECK-ARITY",
+                                        "Term.decode(Term.encode(1).unwrap!)"),
     "Term.encode takes one argument": (main("puts(Term.encode(1, 2))"), "CHECK-ARITY", "Term.encode(1, 2)"),
     "Term cannot name a struct": ("struct Term\n  n: Int\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME",
                                   "struct Term\n  n: Int\nend\n"),
@@ -115,15 +171,20 @@ RULES = {
 @pytest.fixture(scope="module")
 def batch(tmp_path_factory):
     """The programs of the table, and the module case, checked by one `check` call."""
-    programs = [rule[0] for rule in RULES.values()] + [{"lib.agc": LIB, "main.agc": MODULE}]
+    programs = [rule[0] for rule in RULES.values()]
+    programs += [{"lib.agc": LIB, "main.agc": MODULE}, {"lib.agc": LIB, "main.agc": DECODE_MODULE}]
     return check_many(programs, tmp_path_factory.mktemp("term"))
 
 
 @pytest.mark.parametrize("name", list(RULES))
-def test_term_encode_rules(batch, name):
+def test_term_rules(batch, name):
     program, code, text = RULES[name]
     assert_rule(batch(program), program, code, text)
 
 
 def test_term_encode_refuses_the_private_field_of_another_module(batch):
     assert_rule(batch({"lib.agc": LIB, "main.agc": MODULE}), MODULE, "CHECK-PRIVATE-FIELD", "c")
+
+
+def test_term_decode_refuses_the_private_field_of_another_module(batch):
+    assert_rule(batch({"lib.agc": LIB, "main.agc": DECODE_MODULE}), DECODE_MODULE, "CHECK-PRIVATE-FIELD", "L.Conn")

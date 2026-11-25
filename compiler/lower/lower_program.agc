@@ -157,9 +157,8 @@ private
 # (check_types.agc).
 MAX_INSTANCE_DEPTH = 32
 
-# The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
-# HttpWire.Request.body).
-UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
+# The field types that keep a builtin record from the decoders: an enum, a channel and an opaque handle.
+UNDECODABLE = Set.new(["Enum", "Channel", "Opaque"])
 
 # What user_decodable finds: the field or payload types of the structs, enums and struct instances JSON.decode can
 # build, by name (an instance by its json_list_name), and the type of each instance that was looked at.
@@ -562,19 +561,26 @@ def optional_in?(type: Types.Type) -> Bool
   end
 end
 
-# The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JSON.Field of a JSON type other than
-# an Optional, or a JSON type. JSON.Field is only allowed here, as the direct type of the field.
+# True for the key type of a Map that the table holds: String for JSON and Term, and Int for Term alone.
+def map_key?(ref: Ast.TypeRef) -> Bool
+  ref.args.size == 0 and (ref.name == "String" or ref.name == "Int" or ref.name == "Int64")
+end
+
+def map_key(ref: Ast.TypeRef) -> Types.Type
+  return Types.Type.String if ref.name == "String"
+
+  Types.Type.Int
+end
+
+# The type of a struct field as the decoders build it, or `none` when they cannot: a JSON type or one that only Term
+# holds (Bytes, Nil, a Map from Int). JSON.Field is a field type of JSON.decode, and for Term a plain enum anywhere.
 # substitutions gives the type of each parameter of a generic struct.
 def field_type(
   ref: Ast.TypeRef,
   kinds: Map[String, String],
   substitutions: Map[String, Types.Type],
 ) -> Optional[Types.Type]
-  if ref.name != "JSON.Field" or ref.args.size != 1
-    return json_field_inner(ref, kinds, substitutions)
-  elsif ref.args[0].name == "Optional"
-    return none
-  end
+  return json_field_inner(ref, kinds, substitutions) if ref.name != "JSON.Field" or ref.args.size != 1
 
   value = json_field_inner(ref.args[0], kinds, substitutions)
   case value
@@ -605,6 +611,12 @@ def json_field_inner(
     return some(Types.Type.Bool)
   elsif args.size == 0 and ref.name == "String"
     return some(Types.Type.String)
+  elsif args.size == 0 and ref.name == "Bytes"
+    return some(Types.Type.Bytes)
+  elsif args.size == 0 and ref.name == "Nil"
+    return some(Types.Type.Nil)
+  elsif ref.name == "JSON.Field" and args.size == 1
+    return field_type(ref, kinds, substitutions)
   elsif ref.name == "List" and args.size == 1
     item = json_field_inner(args[0], kinds, substitutions)
     case item
@@ -617,10 +629,10 @@ def json_field_inner(
       some(type) -> return some(Types.Type.Optional(type))
       none -> return none
     end
-  elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0
+  elsif ref.name == "Map" and args.size == 2 and map_key?(args[0])
     value = json_field_inner(args[1], kinds, substitutions)
     case value
-      some(type) -> return some(Types.Type.Map(Types.Type.String, type))
+      some(type) -> return some(Types.Type.Map(map_key(args[0]), type))
       none -> return none
     end
   elsif args.size == 0 and kinds.get(ref.name, "") == "Struct"

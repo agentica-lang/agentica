@@ -10,9 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TERM_MAX_DEPTH 10000
-#define TERM_MAX_ITEMS 4000000
-#define TERM_MAX_BYTES ((size_t)64 << 20)
+#define TERM_MAX_DEPTH AGC_TERM_MAX_DEPTH
+#define TERM_MAX_ITEMS AGC_TERM_MAX_ITEMS
+#define TERM_MAX_BYTES AGC_TERM_MAX_BYTES
 
 typedef enum { FRAME_LIST, FRAME_MAP, FRAME_STRUCT, FRAME_ENUM } frame_kind;
 
@@ -91,43 +91,30 @@ static bool put_float(term_buffer *b, double x, bool wide) {
   return put(b, out, 5);
 }
 
-static void put_text(term_buffer *b, const char *text, size_t n) {
-  reserve(b, n);
-  memcpy(b->data + b->len, text, n);
-  b->len += n;
-}
-
 /* The path keeps at most this many bytes of a String key, so a huge key does not become a huge message. */
 #define PATH_KEY_BYTES 64
 
-/* A String key between double quotes, with the escapes of JSON, cut at PATH_KEY_BYTES bytes (on a character) with
-   "..." after the cut. */
-static void put_quoted(term_buffer *b, const agc_string *key) {
-  size_t n = key->bytes;
+void agc_term_path_key(agc_json_buffer *b, const uint8_t *key, size_t bytes) {
+  size_t n = bytes;
   if (n > PATH_KEY_BYTES) {
     n = PATH_KEY_BYTES;
-    while (n > 0 && ((unsigned char)key->data[n] & 0xC0) == 0x80) n--;
+    while (n > 0 && (key[n] & 0xC0) == 0x80) n--;
   }
-  put_text(b, "\"", 1);
+  agc_json_put(b, "\"", 1);
   for (size_t k = 0; k < n; k++) {
-    unsigned char c = (unsigned char)key->data[k];
     char escape[8];
-    if (c == '"' || c == '\\') {
+    if (key[k] == '"' || key[k] == '\\') {
       escape[0] = '\\';
-      escape[1] = (char)c;
-      put_text(b, escape, 2);
-    } else if (c < 0x20) {
-      put_text(b, escape, (size_t)snprintf(escape, sizeof escape, "\\u%04x", c));
+      escape[1] = (char)key[k];
+      agc_json_put(b, escape, 2);
+    } else if (key[k] < 0x20) {
+      agc_json_put(b, escape, (size_t)snprintf(escape, sizeof escape, "\\u%04x", key[k]));
     } else {
-      put_text(b, (const char *)&c, 1);
+      agc_json_put(b, (const char *)&key[k], 1);
     }
   }
-  if (n < key->bytes) put_text(b, "...", 3);
-  put_text(b, "\"", 1);
-}
-
-static agc_string *text_string(const term_buffer *b) {
-  return agc_make_string((const char *)b->data, b->len, agc_utf8_count(b->data, b->len));
+  if (n < bytes) agc_json_put(b, "...", 3);
+  agc_json_put(b, "\"", 1);
 }
 
 /* The error "path: reason" for the value being written, which is the last child that each open frame took: the keys,
@@ -136,38 +123,40 @@ static agc_string *text_string(const term_buffer *b) {
 static agc_value limit_error(agc_vm *vm, const term_buffer *written, const term_frame *stack, size_t depth,
                              const char *reason) {
   agc_charge_bytes(vm, written->len);
-  term_buffer b = {0};
+  agc_json_buffer b = {agc_alloc_atomic(64), 0, 64};
   for (size_t i = 0; i < depth; i++) {
     const term_frame *f = &stack[i];
     size_t child = f->next - 1;
     size_t entry = child / 2;
     char text[48];
     if (f->kind == FRAME_LIST) {
-      put_text(&b, text, (size_t)snprintf(text, sizeof text, "[%zu]", child));
+      agc_json_put(&b, text, (size_t)snprintf(text, sizeof text, "[%zu]", child));
     } else if (f->kind == FRAME_MAP) {
       agc_value key = f->keys[entry];
       if (agc_is(key, AGC_T_INT)) {
-        put_text(&b, text, (size_t)snprintf(text, sizeof text, "[%" PRId64 "]", key.as.i));
+        agc_json_put(&b, text, (size_t)snprintf(text, sizeof text, "[%" PRId64 "]", key.as.i));
       } else if (agc_is(key, AGC_T_STRING)) {
-        put_text(&b, "[", 1);
-        put_quoted(&b, agc_as_string(vm, key));
-        put_text(&b, "]", 1);
+        const agc_string *name = agc_as_string(vm, key);
+        agc_json_put(&b, "[", 1);
+        agc_term_path_key(&b, (const uint8_t *)name->data, name->bytes);
+        agc_json_put(&b, "]", 1);
       } else {
-        put_text(&b, "[?]", 3);
+        agc_json_put(&b, "[?]", 3);
       }
     } else if (f->kind == FRAME_STRUCT) {
       const agc_string *name = agc_struct_def_of(vm, agc_as_struct(vm, f->value))->fields[entry];
-      if (b.len) put_text(&b, ".", 1);
-      put_text(&b, name->data, name->bytes);
+      if (b.len) agc_json_put(&b, ".", 1);
+      agc_json_put(&b, name->data, name->bytes);
     } else {
-      put_text(&b, text, (size_t)snprintf(text, sizeof text, "%svalues[%zu]", b.len ? "." : "", child));
+      agc_json_put(&b, text, (size_t)snprintf(text, sizeof text, "%svalues[%zu]", b.len ? "." : "", child));
     }
   }
-  if (!b.len) put_text(&b, "$", 1);
-  put_text(&b, ": ", 2);
-  put_text(&b, reason, strlen(reason));
+  if (!b.len) agc_json_put(&b, "$", 1);
+  agc_json_put(&b, ": ", 2);
+  agc_json_put(&b, reason, strlen(reason));
   agc_charge_bytes(vm, b.len);
-  return agc_error_string(vm, AGC_KIND_TERM_ENCODE, text_string(&b));
+  agc_string *message = agc_make_string(b.data, b.len, agc_utf8_count((const uint8_t *)b.data, b.len));
+  return agc_error_string(vm, AGC_KIND_TERM_ENCODE, message);
 }
 
 /* The next child of the frame: a list item, an enum payload, or the key or the value of a Map entry or struct field. */
@@ -280,8 +269,18 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
   }
 }
 
+/* Term.decode(data, Type): the type is the struct or enum that the checker named, found as JSON.decode finds its own. */
+static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint32_t kind;
+  uint32_t type = agc_decode_target(vm, args[1], span + 2, &kind);
+  size_t len;
+  const uint8_t *data = agc_bytes_data(vm, args[0], &len);
+  return agc_term_decode(vm, data, len, kind, type);
+}
+
 const agc_builtin agc_term_builtins[] = {
   {"Term.encode", 1, builtin_encode, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Term.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
 };
 
 const size_t agc_term_builtin_count = sizeof agc_term_builtins / sizeof agc_term_builtins[0];

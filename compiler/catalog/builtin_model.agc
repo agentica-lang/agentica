@@ -85,6 +85,7 @@ enum Rule
   TaskSpawn
   TaskSpawnOwning
   TaskTarget
+  TermDecode
   TermEncode
   TestEq
   TestResult

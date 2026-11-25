@@ -75,10 +75,18 @@ Float.from_bits(bits: UInt64) -> Float                   # any UInt64; any NaN p
 `Term.encode(value) -> Result[Bytes]` writes a value as deterministic CBOR (RFC
 8949): numbers (the sized types too), `String`, `Bytes`, `Bool`, `nil`, `List`,
 `Map` with `Int` or `String` keys, structs (a map of the field names, in order),
-user enums (`[tag, [payloads]]`) and `Optional` (null or the value). A `Set`,
-`Result`, `Json`, `JSON.Field`, `Time` date, handle or type variable is
+user enums and `JSON.Field` (`[tag, [payloads]]`) and `Optional` (null or the
+value). A `Set`, `Result`, `Json`, `Time` date, handle or type variable is
 `CHECK-NOT-ENCODABLE`. Past 10,000 levels, 4,000,000 values or 64 MiB it
-returns `error("path: reason")`. `Term` is a reserved name. There is no decode
-yet.
+returns `error("path: reason")`. `Term` is a reserved name.
+
+`Term.decode(bytes, Name) -> Result[T]` builds the struct or enum `Name` (a bare
+name: no `List`, `Map` or generic instance; a generic enum is
+`CHECK-NOT-DECODABLE`) from bytes that `Term.encode` writes: it refuses other
+heads, tags, floats of another width, bad UTF-8, a repeated key and bytes after
+the value, with the same limits and `error("path: reason")` (kind
+`term.decode`). Struct keys may come in any order and unknown keys are ignored,
+but a missing field is an error, so adding a field breaks old data: keep a
+version field and the old struct beside the new one.
 
 Hashes, MACs, ciphers, `Base64` and hex: `crypto.md`.

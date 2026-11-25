@@ -537,7 +537,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_FLOAT32) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_INT_MAP) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (agc_type_scalar(t->kind)) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -773,7 +773,7 @@ static bool default_fits(const agc_program *p, uint32_t t, const agc_field_defau
              (type->kind == AGC_TYPE_STRING && agc_is(c, AGC_T_STRING));
     }
     case AGC_DEFAULT_LIST: return type->kind == AGC_TYPE_LIST;
-    case AGC_DEFAULT_MAP: return type->kind == AGC_TYPE_MAP;
+    case AGC_DEFAULT_MAP: return type->kind == AGC_TYPE_MAP || type->kind == AGC_TYPE_INT_MAP;
     default: return type->kind == AGC_TYPE_ENUM && p->variants[d->number].owner == type->arg;
   }
 }

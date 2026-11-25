@@ -524,6 +524,7 @@ ERROR_KINDS: List[String] = [
   "denied.run",
   "system.signal",
   "term.encode",
+  "term.decode",
   "archive.format",
   "archive.not_found",
   "archive.timeout",

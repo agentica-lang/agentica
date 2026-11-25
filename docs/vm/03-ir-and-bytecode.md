@@ -428,10 +428,14 @@ header and the entry.
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
     Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JSON.Field, 8
     Optional, 9 Enum, 10 struct instance, 11 to 17 Int8, Int16, Int32, UInt8,
-    UInt16, UInt32 and UInt64, 18 Float32) and, for 4 to 10, a `u32` operand:
+    UInt16, UInt32 and UInt64, 18 Float32, 19 Bytes, 20 Nil, 21 Map with Int
+    keys) and, for 4 to 10 and 21, a `u32` operand:
     the item, value, `JSON.Field` or `Optional` payload type index (smaller
     than the entry's own), the struct index, the enum index or the index of a
-    record of the Struct instances section. A file with a kind 7 entry has
+    record of the Struct instances section. Kinds 19 to 21 are for
+    `Term.decode` alone: `JSON.decode` fails on them (`RUNTIME` error result),
+    and `JSON.schema` writes a string, null and an object for them. A field
+    default `{}` fits a Map with Int keys. A file with a kind 7 entry has
     the `JSON.Field` enum (by that name; Absent, Null, Value, with arities 0, 0
     and 1) in its Enums section, at most once; an enum named `JsonField` is a
     plain enum; one with a kind 8 entry has the `Optional` enum

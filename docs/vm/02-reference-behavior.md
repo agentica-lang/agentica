@@ -411,10 +411,11 @@ Every failure is an error value. The checks run in this order:
   the buffer range first (`RUNTIME-INVALID-COUNT`), then the timeout, then the
   path.
 
-### 2.9 Term.encode
+### 2.9 Term.encode and Term.decode
 
-The user-facing rules (the types it writes, the form of each, the limits) are in
-`site/content/library/text-and-data/term.md`. The VM side (`vm/term.c`):
+The user-facing rules (the types they take, the form of each, the limits) are in
+`site/content/library/text-and-data/term.md`. The VM side of `Term.encode`
+(`vm/term.c`):
 
 - `Term.encode(v)` walks the value of its argument with one explicit frame
   stack, never C recursion, and writes CBOR (RFC 8949) from the tags and
@@ -437,3 +438,31 @@ The user-facing rules (the types it writes, the form of each, the limits) are in
   child that each open frame took, so it needs no state beyond the frames.
 - The row is plain: no lock, no cost rule; the bytes written are charged once
   at the end (`agc_charge_bytes`).
+
+`Term.decode(bytes, Type)` (`vm/term_decode.c`) builds the struct or enum that
+the checker named, found as `JSON.decode` finds its target (`agc_decode_target`,
+the type table of 4.6 of `03-ir-and-bytecode.md`: the field types of the struct,
+the payload types of the enum, the instances of generic structs). The checker
+admits only the types that `Term.encode` writes, and it refuses a generic enum
+as `JSON.decode` does.
+
+- It reads with one explicit frame stack and a value stack for the children of
+  Lists and Maps (so memory follows the values read, never a length in the
+  input), and it fails with a `Result` error of kind `term.decode`, the message
+  `path: reason` with the path of the open frames, as `Term.encode` writes it.
+  Each head must be the shortest, every length is definite and checked
+  against the bytes left, a float has the width of its type (`Float` 8, `Float32`
+  4), a NaN is the canonical one, a text is valid UTF-8, a tag and the other
+  simple values are refused, and bytes after the value are an error.
+- A struct is a map whose keys are read in any order; a key that names no field
+  is read and ignored (with the same checks, but the keys of a map inside it are
+  not checked for repeats), a key named twice and a field not named are errors. An enum is `[tag, [payloads]]`; a `JSON.Field` is the
+  enum of its three variants; an `Optional` is `null` or the value and no level.
+  A Map with Int keys is the kind 21 of the type table.
+- The limits are those of `Term.encode`, counted the same way (levels: the open
+  frames but an `Optional`; values: each item read, a Map key included, a field
+  name and an enum tag excluded), plus 64 MiB for the whole input, refused
+  before anything is read. Nesting past 10,000 levels includes the levels of an
+  ignored value, counted as CBOR containers.
+- Cost: the input bytes (`agc_charge_bytes`), one unit for each item, and the
+  text of an error.
