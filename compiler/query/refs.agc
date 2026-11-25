@@ -27,9 +27,10 @@ import Sites from "sites"
 import Symbol from "symbol"
 import TypeAt from "type_at"
 
-## One use of the declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`, and
-## `qualifier` for the name of a module block written in front of one of its names), the `function` it is in ("" at
-## the top level), the `file` (of its LinkedModule) and the `span` of the name.
+## One use of the declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`;
+## `import` for its name in an import list, `export` in a re-export, and `qualifier` for the name of a module block
+## written in front of one of its names), the `function` it is in ("" at the top level), the `file` (of its
+## LinkedModule) and the `span` of the name.
 struct Reference
   kind: String
   function: String
@@ -325,9 +326,12 @@ def qualifier(text: String, site: Sites.Site, prefix: String) -> Optional[Source
   some(Source.Span(start: start, stop: stop))
 end
 
-# The references among the sites of `module`: those of the target `key` that are not its definition.
+# The references among the sites of `module`: those of the target `key` that are not its definition, and the names of
+# its import lists and re-exports.
 def used(module: Linker.LinkedModule, sites: List[Sites.Site], key: String) -> List[Reference]
   found = sites.filter do |site: Sites.Site| site.target.key == key and site.kind != "definition" end
+  listed = Sites.import_sites(module).filter do |site: Sites.Site| site.target.key == key end
+  found = found.concat(listed)
   found.map do |site: Sites.Site|
     Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
   end

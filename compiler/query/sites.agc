@@ -122,6 +122,34 @@ def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
   none
 end
 
+## The places of `module` that name a declaration in an import list (`make` of `import {make as create} from "models"`,
+## the exported name and not the alias) or in a re-export (`parse` of `export Url.parse`), of kind `import` and
+## `export`. They are not in `of_module`, which a position selects from; `refs` adds them to the uses of the target.
+def import_sites(module: Linker.LinkedModule) -> List[Site]
+  out: List[Site] = []
+  for declaration in module.parsed.declarations
+    case declaration
+      Ast.Decl.Import(node) ->
+        for entry in node.names
+          linked = module.named.get(entry.local)
+          if linked.some?
+            out = out.push(listed(named(linked.unwrap!), "import", entry.span))
+          end
+        end
+
+      Ast.Decl.Reexport(node) ->
+        linked = module.reexported.get(node.name)
+        if linked.some?
+          out = out.push(listed(named(linked.unwrap!), "export", node.name_span))
+        end
+
+      _ -> next
+    end
+  end
+
+  out
+end
+
 private
 
 # The characters of a name written in the source: a name, a module alias, an enum, a variant.
@@ -182,6 +210,11 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Export(_) -> []
     Ast.Decl.Module(_) -> []
   end
+end
+
+# One name of an import list or a re-export: it has no function and its reach is its span.
+def listed(target: Target, kind: String, span: Source.Span) -> Site
+  Site(target: target, kind: kind, span: span, reach: span, function: "")
 end
 
 def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset

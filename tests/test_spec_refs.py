@@ -163,11 +163,12 @@ def test_a_function_has_its_calls_and_values_through_every_way_to_name_it(progra
     # one of the references, and each reference is the name alone.
     line_a, col_a = where(ORDERS, "Models.make(", 7)
     assert places(report) == [
+        ("orders.agc", *where(ORDERS, "make as create"), "import", None),
         ("orders.agc", line_a, col_a, "call", "build"),
         ("orders.agc", *where(ORDERS, "create(", 0), "call", "build"),
         ("orders.agc", *where(ORDERS, "Models.make()", 7), "call", "build"),
     ]
-    assert end(report["references"][1]["span"]) == (where(ORDERS, "create(", 6))
+    assert end(report["references"][2]["span"]) == (where(ORDERS, "create(", 6))
     # A `&name` is a value; the reference is the name after the `&`.
     values = answer(("orders.agc", where(ORDERS, "&total", 2)), cwd=program)
     assert places(values) == [("orders.agc", *where(ORDERS, "&total", 1), "value", "build")]
@@ -268,6 +269,7 @@ def test_a_constant_is_a_value_wherever_it_is_read(program):
     assert (report["definition"]["kind"], report["definition"]["name"], report["definition"]["module"]) == (
         "constant", "LIMIT", "models.agc")
     assert places(report) == [
+        ("orders.agc", *where(ORDERS, "{LIMIT", 1), "import", None),
         ("orders.agc", *where(ORDERS, "+ LIMIT", 2), "value", "total"),
         ("models.agc", *where(MODELS, "return LIMIT", 7), "value", "unused"),
     ]
@@ -572,7 +574,7 @@ def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_
     for report in (told(position, ".", cwd=program), told("make", ".", cwd=program)):
         assert [(left["file"], left["diagnostic"]["code"]) for left in report["skipped"]] == [
             ("broken.agc", "LEX-UNCLOSED-DELIMITER")]
-        assert report["definition"]["name"] == "make" and len(report["references"]) == 3
+        assert report["definition"]["name"] == "make" and len(report["references"]) == 4
     text = ask("make", ".", cwd=program, style="--ai")
     assert (text.code, text.stderr.strip()) == (0, "skipped broken.agc: LEX-UNCLOSED-DELIMITER")
     # The file of the position is a root of its own: when it does not link there is nothing to ask about.
@@ -660,6 +662,31 @@ def test_a_position_on_a_name_of_an_import_list_selects_the_imported_declaration
     for needle, inside in (("Models from", 1), ('"models"', 2), ("from", 1), ("import", 2)):
         diagnostic = problem(refs(("orders.agc", where(ORDERS, needle, inside)), cwd=program), "QUERY-NO-EXPRESSION", 2)
         assert diagnostic["file"] == "orders.agc", needle
+
+
+def test_an_import_list_and_a_re_export_name_the_declaration_with_their_own_kinds(program):
+    (program / "facade.agc").write_text(FACADE, encoding="utf-8")
+    (program / "through.agc").write_text(THROUGH, encoding="utf-8")
+    report = told("make", ".", cwd=program)
+    # The exported name of `make as create` is the reference, not the alias; the re-export is of kind `export`.
+    assert places(report) == [
+        ("facade.agc", *where(FACADE, "make"), "export", None),
+        ("orders.agc", *where(ORDERS, "make as create"), "import", None),
+        ("orders.agc", *where(ORDERS, "Models.make(", 7), "call", "build"),
+        ("orders.agc", *where(ORDERS, "create(", 0), "call", "build"),
+        ("orders.agc", *where(ORDERS, "Models.make()", 7), "call", "build"),
+        ("through.agc", *where(THROUGH, "make"), "call", "build"),
+    ]
+    named = report["references"][1]["span"]
+    assert end(named) == where(ORDERS, "make as create", 4)
+    # Asked from the name of the import list, the answer is the same, the root file first.
+    from_import = told(spot("orders.agc", ORDERS, "make as create", 1), ".", cwd=program)
+    assert from_import["definition"] == report["definition"]
+    assert sorted(places(from_import)) == sorted(places(report))
+    # The text form lists the kind.
+    text = ask("make", ".", cwd=program, style="--ai")
+    assert (text.code, text.stderr) == (0, "")
+    assert re.search(r"^orders\.agc:2:\d+ import$", text.stdout, re.MULTILINE)
 
 
 def test_a_check_error_of_a_path_is_exit_1_and_the_standard_input_stands_for_a_file_of_the_paths(program):
@@ -785,6 +812,7 @@ def test_type_members_is_a_use_of_the_type_name_alone(tmp_path):
     found = [(start(item["span"]), end(item["span"]))
              for item in report["references"] if item["span"]["file"] == "main.agc"]
     assert found == [
+        (where(main, "{User}", 1), where(main, "{User}", 5)),
         (where(main, "User.members", 0), where(main, "User.members", 4)),
         (where(main, "Models.User.members", 7), where(main, "Models.User.members", 11)),
     ]
@@ -798,7 +826,8 @@ def test_a_name_inside_a_module_block_is_found_by_position_and_by_name_with_the_
                              ("agents.agc", *where(AGENTS, "total\n  end"), "binding", "clamp")]
     # A file and its blocks are several modules, which another file is linked between; the uses of a file still come
     # in the order of its text, asked from inside a block or outside.
-    limit = [("agents.agc", *where(AGENTS, "LIMIT if"), "value", "clamp"),
+    limit = [("agents.agc", *where(AGENTS, "{LIMIT", 1), "import", None),
+             ("agents.agc", *where(AGENTS, "LIMIT if"), "value", "clamp"),
              ("agents.agc", *where(AGENTS, "LIMIT\n"), "value", "clamp"),
              ("agents.agc", *where(AGENTS, "+ LIMIT)", 2), "value", "main"),
              ("limits.agc", *where(LIMITS, "+ LIMIT", 2), "value", "cap")]
@@ -870,7 +899,8 @@ def test_a_builtin_type_that_std_re_exports_is_found_by_its_written_names(tmp_pa
         report = told(name, "server.agc", cwd=tmp_path)
         assert report["definition"] == definition, name
         own = [place for place in places(report) if place[0] == "server.agc"]
-        assert own == [("server.agc", *where(SERVER, "Request) ->"), "type", "handle"),
+        assert own == [("server.agc", *where(SERVER, "{Request", 1), "import", None),
+                       ("server.agc", *where(SERVER, "Request) ->"), "type", "handle"),
                        ("server.agc", *where(SERVER, "Request(method"), "construct", "main")], name
     body = told("HTTP.Request.body", "server.agc", cwd=tmp_path)
     assert ("server.agc", *where(SERVER, "body))"), "read", "handle") in places(body)
