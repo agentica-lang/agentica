@@ -529,6 +529,9 @@ header and the entry.
 - The VM accepts only its own format version and Agentica version. Any change to
   the layout or to an opcode's meaning bumps the format version. A new opcode,
   type kind or constant kind does not: an older VM rejects the file as unknown.
+  Nor does a new optional section at the end, written only when a program needs
+  it (Field defaults): an older VM rejects such a file (trailing bytes), and
+  the bytes of other programs do not change.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
   such a file and the call fails at run time with a wrong value type. Versions
   7 and 8 are reserved by the rest of the sized numeric types (issue #984) and

@@ -164,7 +164,9 @@ the checker enforces:
 `Optional[T]` is JSON's `null` or a `T`, anywhere a type is: a struct field, a
 list item, a map value, an `Optional` item, or the whole value of `JSON.encode`
 and `JSON.from`. `none` is `null`, `some(x)` is `x`, and a missing key of an
-`Optional` struct field decodes as `none`.
+`Optional` struct field decodes as `none`. A missing key of a field with a
+default (`wire: String = ""`) decodes as the default; `null` there is still an
+error unless the field is an `Optional`.
 
 - `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since
   `some(nil)` would be written as `null`. An `Optional` cannot hold a
