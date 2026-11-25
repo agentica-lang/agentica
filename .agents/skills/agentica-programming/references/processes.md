@@ -233,8 +233,8 @@ System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
   signal ignored at start (`nohup`, `Int` in a background shell job) stays
   ignored and the rest are subscribed, and a list of only such signals is a
   `system.signal` error; on Windows any signal but `Winch` is a
-  `system.signal` error. `send` on
-  the channel is an `argument` error. No flag needed, also under `--sandbox`.
+  `system.signal` error. `send` on the channel is an `argument` error. No flag
+  needed, also under `--sandbox`.
 - `Process.signal` signals a running child; `signal_group` its group (a
   `spawn_group` or `pgroup: true` child). An exited or closed child is an
   error; neither waits, so follow with `Process.wait` and a deadline. Windows
