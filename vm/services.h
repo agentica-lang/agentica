@@ -236,6 +236,8 @@ void agc_term_path_key(agc_json_buffer *b, const uint8_t *key, size_t bytes);
 agc_value agc_term_decode(agc_vm *vm, const uint8_t *data, size_t len, uint32_t kind, uint32_t type);
 extern const agc_builtin agc_term_builtins[];
 extern const size_t agc_term_builtin_count;
+extern const agc_builtin agc_terminal_builtins[];
+extern const size_t agc_terminal_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
 /* The zlib stream of a Lazy step (vm/lazy.c drives it, vm/zlib.c owns it). kind is the step of __lazy_zlib: 0

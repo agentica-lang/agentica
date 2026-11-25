@@ -51,6 +51,15 @@ typedef struct {
 
 typedef BOOL(WINAPI *compare_handles_fn)(HANDLE first, HANDLE second);
 
+/* The console modes before Terminal.raw, kept for the whole process: the input console's, and the output console's
+   when stdout is one. `saved` is set (release) after the modes are written; only Terminal.raw writes them, under
+   rt->sync, and agc_tty_restore (the exit) reads them. */
+typedef struct {
+  HANDLE in, out;
+  DWORD in_mode, out_mode;
+  atomic_bool saved;
+} tty_state;
+
 struct agc_stdio {
   pipe_stream *stream;
   bool socket;
@@ -276,6 +285,70 @@ static HANDLE std_handle(int fd) {
   return GetStdHandle(fd == 0 ? STD_INPUT_HANDLE : fd == 1 ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
 }
 
+static tty_state *tty_status(void) {
+  static tty_state state;
+  return &state;
+}
+
+bool agc_tty_is(int fd) {
+  HANDLE handle = std_handle(fd);
+  DWORD mode;
+  return handle && handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode);
+}
+
+static void tty_set(const tty_state *tty) {
+  SetConsoleMode(tty->in, tty->in_mode);
+  if (tty->out) SetConsoleMode(tty->out, tty->out_mode);
+}
+
+/* Raw: VT sequences in, no line editing, no echo and no Ctrl+C event (ENABLE_PROCESSED_INPUT off, so Ctrl+C is the
+   byte 3), and VT sequences out. */
+int agc_tty_raw(bool on) {
+  tty_state *tty = tty_status();
+  if (!on) {
+    if (!atomic_load_explicit(&tty->saved, memory_order_acquire)) return 0;
+    tty_set(tty);
+    atomic_store_explicit(&tty->saved, false, memory_order_release);
+    return 0;
+  }
+  HANDLE in = std_handle(0), out = std_handle(1);
+  DWORD in_mode, out_mode;
+  if (!in || in == INVALID_HANDLE_VALUE || !GetConsoleMode(in, &in_mode)) return ENOTTY;
+  if (!out || out == INVALID_HANDLE_VALUE || !GetConsoleMode(out, &out_mode)) out = NULL;
+  if (!atomic_load_explicit(&tty->saved, memory_order_acquire)) {
+    tty->in = in;
+    tty->out = out;
+    tty->in_mode = in_mode;
+    tty->out_mode = out_mode;
+    atomic_store_explicit(&tty->saved, true, memory_order_release);
+  }
+  DWORD raw_in = (in_mode & ~(DWORD)(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT)) |
+                 ENABLE_VIRTUAL_TERMINAL_INPUT;
+  if (!SetConsoleMode(in, raw_in)) return EIO;
+  if (out && !SetConsoleMode(out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) return EIO;
+  return 0;
+}
+
+void agc_tty_restore(void) {
+  tty_state *tty = tty_status();
+  if (atomic_load_explicit(&tty->saved, memory_order_acquire)) tty_set(tty);
+}
+
+static bool tty_raw_on(void) { return atomic_load_explicit(&tty_status()->saved, memory_order_acquire); }
+
+/* Standard output's console, else standard error's: the rows and columns of its window, as Ruby's IO#winsize. */
+int agc_tty_size(int64_t *rows, int64_t *cols) {
+  for (int fd = 1; fd <= 2; fd++) {
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    HANDLE handle = std_handle(fd);
+    if (!handle || handle == INVALID_HANDLE_VALUE || !GetConsoleScreenBufferInfo(handle, &info)) continue;
+    *rows = info.srWindow.Bottom - info.srWindow.Top + 1;
+    *cols = info.srWindow.Right - info.srWindow.Left + 1;
+    return 0;
+  }
+  return ENOTTY;
+}
+
 /* Windows resets a socket whose last handle closes with the process, and its reader loses what it has not read yet.
    After shutdown the bytes already sent stay readable and then the reader sees the end; shutdown does not wait for the
    reader. A socket that another process still holds (a parent, a child, a second writer) is left open for it: it is
@@ -438,8 +511,9 @@ static int console_read(agc_stdin_reader *r, HANDLE console, size_t room) {
       errno = EIO;
       return -1;
     }
-    /* Accepted edge: after a held high surrogate, a 0-unit read drops it, and a Ctrl+Z is text, not the end. */
-    if (got == 0 || (!start && units[0] == 0x1A)) {
+    /* Accepted edge: after a held high surrogate, a 0-unit read drops it, and a Ctrl+Z is text, not the end. In raw
+       mode (Terminal.raw) a Ctrl+Z is the byte 26, as on a POSIX terminal. */
+    if (got == 0 || (!start && units[0] == 0x1A && !tty_raw_on())) {
       r->high = 0;
       return 0;
     }
@@ -641,6 +715,7 @@ agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
 }
 
 void agc_exit_now(unsigned code) {
+  agc_tty_restore();
   TerminateProcess(GetCurrentProcess(), code);
   ExitProcess(code);
 }

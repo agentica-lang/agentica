@@ -10,12 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Terminal.tty?`, `Terminal.raw` and `Terminal.size`, and `System.Signal.Winch` for a resize, on Linux, macOS and Windows: what a full-screen program needs; the VM gives the terminal's mode back at exit (#1862).
 - `Term.decode(bytes, Type)` reads what `Term.encode` writes back into a struct or enum: heads, lengths, floats, text and limits are checked, an error has the path of the first bad value, and `JSON.Field` is a plain enum in the bytes (#994).
 - `Term.encode(value)` writes a value as CBOR (RFC 8949) in a deterministic form: `Map`s with `Int` keys, the exact bits of a `Float` and a `Float32`, `Bytes`, `nil`, enums, structs and `Optional`; a value past 10,000 levels, 4,000,000 values or 64 MiB is an error with its path (#994).
 
 ### Changed
 
 - **Breaking:** `Term` is a reserved type name (#994).
+- **Breaking:** `Terminal` is a reserved type name (#1862).
 
 ## [0.38.0] - 2026-11-25
 

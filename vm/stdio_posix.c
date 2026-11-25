@@ -11,6 +11,10 @@
 #include "core.h"
 
 #include <errno.h>
+#include <stdatomic.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
@@ -225,5 +229,71 @@ agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
   funlockfile(stream);
   errno = saved_errno;
   return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FAILED;
+}
+
+/* The mode of the terminal of stdin before Terminal.raw, kept for the whole process. `saved` is set (release) after
+   the mode is written, so agc_tty_restore, which a signal or the exit may run on any thread, reads a whole mode. Only
+   Terminal.raw writes them, under rt->sync. */
+static struct termios *tty_before(void) {
+  static struct termios before;
+  return &before;
+}
+
+_Static_assert(ATOMIC_BOOL_LOCK_FREE == 2, "the saved mode is read at a signal");
+
+static atomic_bool *tty_saved(void) {
+  static atomic_bool saved;
+  return &saved;
+}
+
+static int tty_set(const struct termios *mode) {
+  while (tcsetattr(STDIN_FILENO, TCSANOW, mode) != 0)
+    if (errno != EINTR) return errno;
+  return 0;
+}
+
+bool agc_tty_is(int fd) { return isatty(fd) == 1; }
+
+/* As Ruby's IO#raw (io/console), but output processing (OPOST) stays on, as on Windows: "\n" still starts a line. */
+int agc_tty_raw(bool on) {
+  if (!on) {
+    if (!atomic_load_explicit(tty_saved(), memory_order_acquire)) return 0;
+    int err = tty_set(tty_before());
+    if (!err) atomic_store_explicit(tty_saved(), false, memory_order_release);
+    return err;
+  }
+  struct termios mode;
+  if (tcgetattr(STDIN_FILENO, &mode) != 0) return errno;
+  if (!atomic_load_explicit(tty_saved(), memory_order_acquire)) {
+    *tty_before() = mode;
+    atomic_store_explicit(tty_saved(), true, memory_order_release);
+  }
+  mode.c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY | IMAXBEL);
+  mode.c_lflag &= ~(tcflag_t)(ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG | IEXTEN);
+  mode.c_cflag &= ~(tcflag_t)(CSIZE | PARENB);
+  mode.c_cflag |= CS8;
+  mode.c_cc[VMIN] = 1;
+  mode.c_cc[VTIME] = 0;
+  return tty_set(&mode);
+}
+
+/* Async-signal-safe: tcsetattr is, and the saved mode is only read. */
+void agc_tty_restore(void) {
+  if (atomic_load_explicit(tty_saved(), memory_order_acquire)) (void)tty_set(tty_before());
+}
+
+/* Standard output's terminal, else standard error's. */
+int agc_tty_size(int64_t *rows, int64_t *cols) {
+  struct winsize size;
+  int err = ENOTTY;
+  for (int fd = STDOUT_FILENO; fd <= STDERR_FILENO; fd++) {
+    if (ioctl(fd, TIOCGWINSZ, &size) == 0) {
+      *rows = size.ws_row;
+      *cols = size.ws_col;
+      return 0;
+    }
+    err = errno;
+  }
+  return err;
 }
 #endif

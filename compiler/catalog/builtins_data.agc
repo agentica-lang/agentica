@@ -244,6 +244,11 @@ RECORDS: List[Model.Record] = [
   ),
   # The dates and times of the Time family. Only their builtins build them (SEALED_RECORDS), and vm/dates.c makes them
   # by name with these fields in this order: keep them in step.
+  # vm/terminal.c builds it with these fields in this order (Terminal.size): keep them in step.
+  Model.Record(
+    name: "Terminal.Size",
+    fields: [Model.Named(name: "rows", type: Types.Type.Int), Model.Named(name: "cols", type: Types.Type.Int)],
+  ),
   Model.Record(
     name: "Time.Date",
     fields: [
@@ -340,8 +345,18 @@ ENUMS: List[Model.EnumDef] = [
       Model.Variant(name: "Hup", payload: []),
       Model.Variant(name: "Usr1", payload: []),
       Model.Variant(name: "Usr2", payload: []),
+      Model.Variant(name: "Winch", payload: []),
       Model.Variant(name: "Quit", payload: []),
       Model.Variant(name: "Kill", payload: []),
+    ],
+  ),
+  Model.EnumDef(
+    name: "Terminal.Stream",
+    parameters: [],
+    variants: [
+      Model.Variant(name: "Stdin", payload: []),
+      Model.Variant(name: "Stdout", payload: []),
+      Model.Variant(name: "Stderr", payload: []),
     ],
   ),
   Model.EnumDef(
@@ -391,6 +406,8 @@ TYPE_DESCRIPTIONS: Map[String, String] = {
   "TaskDown": "The notice that Task.monitor sends when a watched task ends: how it ended and, for a crash, where.",
   "TaskExit": "How a task ended: Ok, Crashed or Cancelled.",
   "TaskRef": "The running task, from Task.current, which Task.monitor, Task.cancel and id take.",
+  "Terminal.Size": "What Terminal.size returns: the rows and columns of the terminal.",
+  "Terminal.Stream": "A standard stream of the program, which Terminal.tty? takes.",
   "Test.Case": "A test case, from Test.test; Test.run runs a list of them.",
   "Time.Date": "A day of the calendar, from Time.Date.new.",
   "Time.DateTime": "A date and time of day at a fixed offset from UTC, an instant, from Time.DateTime.new.",
@@ -444,6 +461,7 @@ RESERVED_TYPE_NAMES: List[String] = [
   "TaskExit",
   "TaskRef",
   "Term",
+  "Terminal",
   "Test",
   "Time",
   "UInt16",
@@ -458,7 +476,7 @@ RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Test", "Time"]
+FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Terminal", "Test", "Time"]
 
 ## The builtin records that only their builtins build, because a value must be valid (a Time.Date is a real day): a
 ## construction or a .with of one is CHECK-NOT-CONSTRUCTIBLE, and JSON neither encodes nor decodes one.

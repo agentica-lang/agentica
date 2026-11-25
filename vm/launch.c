@@ -396,6 +396,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
 }
 
 void agc_launch_exit(int code) {
+  agc_tty_restore();
 #if defined(__linux__) || defined(__APPLE__)
   sigset_t saved;
   COVERAGE_WRITE();

@@ -392,14 +392,14 @@ void agc_io_children_stopped(void);
  * records a subscribed signal in a pending mask and wakes the loop; a scheduler takes the mask between turns
  * (agc_signals_deliver, vm/channel.c, true when it gave a channel a value). `set` stores the subscribed mask and keeps the loop alive while it is not 0;
  * `stop` sends a taken signal that no channel wants any more down the stop path; `end` drops every subscription at the
- * end of the run, so a later signal takes the stop path. `supported` is false where signals cannot be subscribed to
- * (Windows); `ignored` holds the signals the VM started ignored (nohup); `number` is the OS number of a variant. */
+ * end of the run, so a later signal takes the stop path. `supported` is the mask of the signals that can be subscribed
+ * to (on Windows only Winch); `ignored` holds the signals the VM started ignored (nohup); `number` is the OS number of a variant. */
 void agc_io_signals_set(agc_vm *vm, unsigned mask);
 bool agc_io_signals_pending(void);
 unsigned agc_io_signals_take(void);
 void agc_io_signals_stop(unsigned index);
 void agc_io_signals_end(agc_vm *vm);
-bool agc_io_signals_supported(void);
+unsigned agc_io_signals_supported(void);
 unsigned agc_io_signals_ignored(void);
 int agc_io_signal_number(unsigned index);
 bool agc_signals_deliver(agc_vm *vm);

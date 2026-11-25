@@ -214,14 +214,15 @@ Process.pid(process: Process) -> Result[Int]     # the child's OS pid; error onc
 
 ```text
 System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]]
-System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Quit 3, Kill 9
+System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Winch 28, Quit 3, Kill 9
 Process.signal(process: Process, signal: System.Signal) -> Result[Void]
 Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
 Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
 ```
 
-- `System.Signal` is `Term`, `Int`, `Hup`, `Usr1`, `Usr2`, `Quit`, `Kill`. A
+- `System.Signal` is `Term`, `Int`, `Hup`, `Usr1`, `Usr2`, `Winch`, `Quit`,
+  `Kill`. `Winch` is a terminal resize (below); it never stops the program. A
   subscribed signal arrives as a value on the channel and does not stop the
   program; exit with `128 + System.signal_number(sig)` after the cleanup.
 - One pending value per signal: a burst gives one value. Every subscription
@@ -231,7 +232,8 @@ System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
   stays the force stop (exit 131). An empty list is an `argument` error; a
   signal ignored at start (`nohup`, `Int` in a background shell job) stays
   ignored and the rest are subscribed, and a list of only such signals is a
-  `system.signal` error; Windows returns a `system.signal` error. `send` on
+  `system.signal` error; on Windows any signal but `Winch` is a
+  `system.signal` error. `send` on
   the channel is an `argument` error. No flag needed, also under `--sandbox`.
 - `Process.signal` signals a running child; `signal_group` its group (a
   `spawn_group` or `pgroup: true` child). An exited or closed child is an
@@ -256,3 +258,20 @@ def main() -> Void
   System.exit(128 + System.signal_number(sig))
 end
 ```
+
+## Terminal
+
+```text
+Terminal.tty?(stream: Terminal.Stream) -> Bool       # Stdin, Stdout, Stderr
+Terminal.raw(on: Bool = true) -> Result[Void]        # stdin's terminal
+Terminal.size() -> Result[Terminal.Size]             # rows, cols of stdout's (else stderr's)
+```
+
+- Raw mode: no echo, keys at once, Ctrl-C is the byte 3; `"\n"` still starts
+  a line. Read keys with `IO.read_bytes(1)` and parse the VT sequences
+  yourself. `raw(on: false)` gives the old mode back; the VM also does at
+  exit, on a runtime error and on a stop signal. Windows 10+ the same (VT in
+  and out).
+- Not a terminal (a pipe, a file): `raw` and `size` are `io.failed` errors.
+- Resize: `System.subscribe([System.Signal.Winch])`, then `Terminal.size` on
+  each value; works on Windows too.

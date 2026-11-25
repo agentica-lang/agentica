@@ -1,14 +1,16 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 49,
+  "steps": 68,
   "stdout": [
     "System.Signal.Term 15",
     "System.Signal.Int 2",
     "System.Signal.Hup 1",
+    "System.Signal.Winch 28",
     "System.Signal.Quit 3",
     "System.Signal.Kill 9",
     "argument: signal: no signals",
+    "subscribed: channel: timed out",
     ""
   ],
   "stderr": []

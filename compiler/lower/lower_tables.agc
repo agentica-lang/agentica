@@ -117,7 +117,7 @@ VM_BUILTINS = Set.new([
   "Time.Date.cwday", "Time.Date.yday", "Time.Date.strftime", "Time.TimeOfDay.strftime", "Time.NaiveDateTime.strftime",
   "Time.DateTime.strftime", "Path.replace", "Process.pid", "System.program_name", "Ref.new", "Task.spawn_link",
   "Float.to_float32", "Int.to_float32", "Float32.to_f", "Float32.to_bits", "Float32.from_bits", "Term.encode",
-  "Term.decode",
+  "Term.decode", "Terminal.raw", "Terminal.size", "Terminal.tty?",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
@@ -160,6 +160,7 @@ BUILTIN_STRUCTS = [
   "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
   "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
   "TaskDown", "Process.Options", "Error", "Time.Date", "Time.TimeOfDay", "Time.NaiveDateTime", "Time.DateTime",
+  "Terminal.Size",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
