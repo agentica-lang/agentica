@@ -1720,6 +1720,69 @@ static void field_default_tests(void) {
   free(tail.data);
 }
 
+/* The struct Box(value, other) with the instance Box[Int] of field types Int (0) and E (2), the enums E(A) and F(C),
+   with E decodable, then a Field defaults section of `count` records of four words each. */
+static bool loads_enum_defaults(const uint32_t *records, uint32_t count, const char *reason) {
+  buffer t = {malloc(512), 0, 0, 0};
+  assert(t.data);
+  u32(&t, 1);
+  str(&t, "Box");
+  u32(&t, 2);
+  str(&t, "value");
+  str(&t, "other");
+  u32(&t, 3);
+  u8(&t, AGC_TYPE_INT);
+  u8(&t, AGC_TYPE_INSTANCE);
+  u32(&t, 0);
+  u8(&t, AGC_TYPE_ENUM);
+  u32(&t, 0);
+  u32(&t, 0);
+  u32(&t, 2);
+  str(&t, "E");
+  u32(&t, 1);
+  str(&t, "A");
+  u32(&t, 0);
+  str(&t, "F");
+  u32(&t, 1);
+  str(&t, "C");
+  u32(&t, 0);
+  buffer tail = {malloc(512), 0, 0, 0};
+  assert(tail.data);
+  u32(&tail, 1);
+  u32(&tail, 0);
+  str(&tail, "E");
+  u32(&tail, 1);
+  u32(&tail, 0);
+  str(&tail, "Box[Int]");
+  u32(&tail, 0);
+  u32(&tail, 2);
+  u32(&tail, count);
+  for (uint32_t k = 0; k < count * 4; k++) u32(&tail, records[k]);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &tail;
+  bool ok = loads(s, reason);
+  free(t.data);
+  free(tail.data);
+  return ok;
+}
+
+/* The records go in increasing (struct, field) order, a variant must be of the field's enum, and an empty Map fits
+   only a Map field. */
+static void field_default_order_tests(void) {
+  static const uint32_t good[] = {0, 0, AGC_DEFAULT_CONSTANT, 0, 0, 1, AGC_DEFAULT_VARIANT, 0};
+  static const uint32_t backwards[] = {0, 1, AGC_DEFAULT_VARIANT, 0, 0, 0, AGC_DEFAULT_CONSTANT, 0};
+  static const uint32_t twice[] = {0, 0, AGC_DEFAULT_CONSTANT, 0, 0, 0, AGC_DEFAULT_CONSTANT, 0};
+  static const uint32_t other_enum[] = {0, 1, AGC_DEFAULT_VARIANT, 1};
+  static const uint32_t map_on_enum[] = {0, 1, AGC_DEFAULT_MAP, 0};
+  assert(loads_enum_defaults(good, 2, NULL));
+  assert(!loads_enum_defaults(backwards, 2, "field defaults out of order"));
+  assert(!loads_enum_defaults(twice, 2, "field defaults out of order"));
+  assert(!loads_enum_defaults(other_enum, 1, "field default does not fit its type"));
+  assert(!loads_enum_defaults(map_on_enum, 1, "field default does not fit its type"));
+  assert(!loads_default(1, 0, AGC_DEFAULT_MAP, 0, "field default does not fit its type"));
+}
+
 /* A narrow integer kind is a scalar with no operand, and a field default of one must be an Int in its range. A UInt64
    is a scalar too, and its default is a constant of kind 8 (the 64 bits), which no other type takes. */
 static void narrow_default_tests(void) {
@@ -2729,6 +2792,7 @@ int main(void) {
   json_enum_tests();
   json_instance_tests();
   field_default_tests();
+  field_default_order_tests();
   narrow_default_tests();
   narrow_kind_tests();
   session_json_names();
