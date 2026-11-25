@@ -619,9 +619,7 @@ def fmt_file(session: Session, file: String, settings: Result[Format.Settings], 
   return reject(session, Front.link_problem(Failure.unpack_failure(settings.message)), file, 1) if !settings.ok?
 
   case SourceReader.read(file)
-    SourceFile.Read.Unreadable(_) ->
-      IO.warn("agentica: cannot read #{file}")
-      2
+    SourceFile.Read.Unreadable(_) -> failed(session, Core.unreadable(file))
     SourceFile.Read.Invalid(at) -> reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
     SourceFile.Read.Text(text) ->
       case CliFmt.verdict(text, settings.unwrap!)
@@ -904,7 +902,7 @@ end
 # to run (a run, `compile`) needs a main.
 def verdict(session: Session, source: String, found: Core.Verdict) -> Int
   case found
-    Core.Verdict.Unreadable -> emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Core.Verdict.Unreadable -> failed(session, Core.unreadable(source))
     Core.Verdict.Rejected(problem) -> reject(session, problem, source, 1)
     Core.Verdict.Passed ->
       return emit(Reply.printed("{\"ok\":true}\n")) if session.options.style == "json"
