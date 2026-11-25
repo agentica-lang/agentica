@@ -1875,8 +1875,8 @@ end
 
 def test_uint64_operators_run_in_compiled_code(tmp_path):
     bytecode = compile_text(UINT64S.replace("KIND", "-1"), "uint64s", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["mix"] if jit_host() else [])
-    assert compiled(bytecode, tmp_path) == (["fail", "main", "mix"] if jit_host() else [])
+    assert_compiled_without_exits(bytecode, tmp_path, {"on": ["mix"], "always": ["fail", "main", "mix"]},
+                                  lambda op: op.endswith("_u"))
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("342451935\n774578041\n"), (stdout, stderr)
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1].split()[0]))
