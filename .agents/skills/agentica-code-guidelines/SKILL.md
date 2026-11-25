@@ -169,9 +169,9 @@ Change style only in code you touch. Restyle untouched code separately.
   (`user.address&.city.unwrap_or("?")`); use `case` when `none` needs work of
   its own. Write `&.` at each step of a chain (`a&.b&.c`). Do not let it hide a
   failure: a member that returns a `Result` gives `Optional[Result[T]]`, so make
-  the Optional a `Result` first (`to_result`, `try`); a `Void` member
-  (`logger&.log("x")`) does nothing for `none`, which is right only for a part
-  that is optional by design.
+  the Optional a `Result` first (`to_result`, `try`); a member that returns
+  `Void` (`logger&.log("x")`) does nothing for `none`, which is right only for
+  a part that is optional by design.
 
 ## Strings and collections
 
@@ -186,7 +186,7 @@ Change style only in code you touch. Restyle untouched code separately.
   only where its width is part of the data: a binary format (`std/binary`), a
   field with a fixed range, a native call. Compute in `Int`; convert once, at
   the edge.
-- A number from outside converts with `to_uint16` (a `Result`; `try` it).
+- An `Int` from outside converts with `to_uint16` (a `Result`; `try` it).
   `to_uint16!` only where the range was just checked. Never `wrap_uint16` to
   make a value fit: it keeps the low bits (`70000` becomes `4464`).
 - Operators on sized types stop on overflow; keep that. `wrapping_add`,
@@ -202,9 +202,10 @@ Change style only in code you touch. Restyle untouched code separately.
   with the same diagnostic, so the caller does not wait for a dead helper.
 - `Task.spawn` with `Task.await` or `Task.monitor` when the caller goes on
   after the crash (restart, report, clean up). A `Task.spawn` nobody awaits or
-  monitors shows its crash only as exit code 1 at the end.
-- A link does not end the other task on a return or a cancel; cancel a helper
-  to stop it.
+  monitors only prints the crash to stderr, and the run exits 1 when `main`
+  returns, so the caller never reacts to it.
+- A link does not end the other task when one of them returns or is cancelled;
+  cancel a helper to stop it.
 
 ## Speed (only on a hot path)
 

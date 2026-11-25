@@ -2,7 +2,7 @@
 title: Guía de estilo
 weight: 6
 description: Cómo escribir código de Agentica simple y fácil de leer, con un ejemplo para cada regla.
-source_hash: "0a853b698347"
+source_hash: "8eed4b52f9d6"
 ---
 
 El código se lee mucho más de lo que se escribe. Esta guía mantiene el código de Agentica simple y fácil de leer, con el espíritu de las guías de estilo de Ruby y Elixir. Cuando una regla estorba a un código claro, gana el código claro. Cambia el estilo solo del código que tocas.
@@ -569,7 +569,7 @@ end
 
 Una firma, un campo de estructura o un alias de tipo que declara `Result[Result[T]]` u `Optional[Optional[T]]` suele tener una capa de más: usa `try` sobre el valor interno para que quede un solo `Result`, o dale al fallo interno un error propio. Deja las dos capas solo cuando significan cosas distintas. Un anidamiento que hace un genérico, como `task.await` de una tarea que devuelve un `Result`, está bien.
 
-Lee a través de un Optional con `&.` cuando `none` solo significa que no hay respuesta: `user.address&.city.unwrap_or("?")` lo dice en una línea, donde un `case` repite las dos ramas. Usa `case` cuando `none` necesita trabajo propio. Escribe `&.` en cada paso de una cadena (`a&.b&.c`):
+Lee a través de un Optional con `&.` (navegación segura) cuando `none` solo significa que no hay respuesta: `user.address&.city.unwrap_or("?")` lo dice en una línea, donde un `case` repite las dos ramas. Usa `case` cuando `none` necesita trabajo propio. Escribe `&.` en cada paso de una cadena (`a&.b&.c`):
 
 ```agentica {mode="check"}
 # bad
@@ -612,7 +612,7 @@ def main() -> Void
 end
 ```
 
-No dejes que `&.` oculte un fallo. Un miembro que devuelve un `Result` da un `Optional[Result[T]]`, como `some(ok(8080))`, así que un error viaja dentro de un `some`; convierte primero el Optional en un `Result` con `to_result` y `try`. Un miembro que no da nada (`logger&.log("x")`) no hace nada con `none`: está bien para una pieza opcional por diseño, no para una cuya ausencia es un fallo:
+No dejes que `&.` oculte un fallo. Un miembro que devuelve un `Result` da un `Optional[Result[T]]`, como `some(ok(8080))`, así que un error viaja dentro de un `some`; convierte primero el Optional en un `Result` con `to_result` y `try`. Un miembro que devuelve `Void` (`logger&.log("x")`) no hace nada con `none`: está bien para una pieza opcional por diseño, no para una cuya ausencia es un fallo:
 
 ```agentica {mode="check"}
 # bad
@@ -676,7 +676,7 @@ Usa una `List` para el orden, un `Set` para la pertenencia, un `Map` para buscar
 
 Usa `Int` y `Float` por defecto. Usa un tipo con tamaño (`UInt8`, `Int32`, `UInt64`, `Float32`) solo cuando su ancho es parte de los datos: un formato binario (`std/binary` los lee y los escribe), un campo con un rango fijo, una llamada nativa. Calcula con `Int` y convierte una vez, en el borde.
 
-Un número que viene de fuera se convierte con `to_uint16`, que da un `Result` con error cuando el valor no cabe, y `try` lo propaga. `to_uint16!` detiene el programa, así que úsalo solo donde el rango se acaba de comprobar. No uses `wrap_uint16` para hacer que un valor quepa: se queda con los bits bajos y `70000` pasa a ser `4464`:
+Un `Int` que viene de fuera se convierte con `to_uint16`, que da un `Result` con error cuando el valor no cabe, y `try` lo propaga. `to_uint16!` detiene el programa, así que úsalo solo donde el rango se acaba de comprobar. No uses `wrap_uint16` para hacer que un valor quepa: se queda con los bits bajos y `70000` pasa a ser `4464`:
 
 ```agentica {mode="check"}
 # bad
@@ -723,33 +723,38 @@ Usa `Float32` solo para un formato o un tipo nativo que guarda binary32 (`Binary
 
 ## Tareas {#tasks}
 
-Inicia con `Task.spawn_link` una auxiliar cuyo fallo debe terminar a su llamador: las dos tareas fallan con el mismo diagnóstico, así que el llamador no espera a una auxiliar que ya murió. Usa `Task.spawn` con `Task.await` o `Task.monitor` cuando el llamador sigue después del fallo, para reiniciar el trabajador, informar o limpiar. Un `Task.spawn` que nadie espera ni vigila muestra su fallo solo cuando el programa termina con código 1. Un enlace no termina la otra tarea cuando una retorna o se cancela, así que no es la forma de detener a una auxiliar: cancélala.
+Inicia con `Task.spawn_link` una auxiliar cuyo fallo debe terminar a su llamador: las dos tareas fallan con el mismo diagnóstico, así que el llamador no espera a una auxiliar que ya murió. Usa `Task.spawn` con `Task.await` o `Task.monitor` cuando el llamador sigue después del fallo, para reiniciar el trabajador, informar o limpiar. Un `Task.spawn` que nadie espera ni vigila solo imprime el fallo en stderr, y la ejecución termina con 1 cuando `main` devuelve, así que el llamador nunca reacciona a él. Un enlace no termina la otra tarea cuando una de las dos devuelve un valor o se cancela, así que no es la forma de detener a una auxiliar: cancélala.
+
+En los dos programas la auxiliar falla. Con `Task.spawn`, `main` espera los 60 segundos completos de `recv`; con `Task.spawn_link`, termina enseguida con el diagnóstico de la auxiliar:
 
 ```agentica {mode="check"}
 # bad
 def tick(inbox: Channel[Int]) -> Void
+  puts(10 / 0)
   _ = inbox.send(1, 1000)
 end
 
 def main() -> Void
   inbox: Channel[Int] = Channel.new(1)
   _ticker = Task.spawn(&tick, inbox)
-  puts(inbox.recv(1000))
+  puts(inbox.recv(60000))
 end
 ```
 
 ```agentica {mode="check"}
 # good
 def tick(inbox: Channel[Int]) -> Void
+  puts(10 / 0)
   _ = inbox.send(1, 1000)
 end
 
 def main() -> Void
   inbox: Channel[Int] = Channel.new(1)
   _ticker = Task.spawn_link(&tick, inbox)
-  puts(inbox.recv(1000))
+  puts(inbox.recv(60000))
 end
 ```
+
 ## Efectos {#effects}
 
 Agentica no tiene monkey patching y una función no es un valor, pero una lambda sí lo es, así que una prueba cambia un efecto (la lectura de un archivo, el reloj, una llamada HTTP, un número aleatorio) mediante una estructura de campos `Fn`: el registro de efectos. Construye el real una vez, al arrancar, a partir de la configuración; una prueba construye otra. El comprobador se asegura de que ambos tengan la misma forma. El compilador lo hace con `Workspace` (`compiler/modules/workspace.agc`), que `io/host.agc` construye y `app/` pasa. Hace el papel de un behaviour más un mock en otros lenguajes. Cuando un servidor real en `localhost` puerto 0 es igual de simple, úsalo en lugar de simular la red.

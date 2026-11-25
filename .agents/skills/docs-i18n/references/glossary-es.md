@@ -493,5 +493,4 @@ One line per term, sorted. "stays" means the term is not translated.
 | worker | trabajador |  |
 | workflow | flujo de trabajo |  |
 | workspace | espacio de trabajo |  |
-| wrap around | dar la vuelta | A number past its range; `wrapping_add` stays |
 | wrapper | envoltorio | A wrapper function: función envoltorio |

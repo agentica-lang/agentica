@@ -568,7 +568,7 @@ end
 
 A signature, a struct field or a type alias that declares `Result[Result[T]]` or `Optional[Optional[T]]` is usually one layer too many: use `try` on the inner value so one `Result` is left, or give the inner failure an error of its own. Keep both layers only when they mean different things. A nesting that a generic makes, such as `task.await` of a task that returns a `Result`, is fine.
 
-Read through an Optional with `&.` when `none` only means there is no answer: `user.address&.city.unwrap_or("?")` says it in one line, where a `case` repeats both arms. Use `case` when `none` needs work of its own. Write `&.` at each step of a chain (`a&.b&.c`):
+Read through an Optional with `&.` (safe navigation) when `none` only means there is no answer: `user.address&.city.unwrap_or("?")` says it in one line, where a `case` repeats both arms. Use `case` when `none` needs work of its own. Write `&.` at each step of a chain (`a&.b&.c`):
 
 ```agentica {mode="check"}
 # bad
@@ -611,7 +611,7 @@ def main() -> Void
 end
 ```
 
-Do not let `&.` hide a failure. A member that returns a `Result` gives an `Optional[Result[T]]`, such as `some(ok(8080))`, so an error rides inside a `some`; make the Optional a `Result` first with `to_result` and `try`. A member that gives nothing (`logger&.log("x")`) does nothing for `none`: fine for a part that is optional by design, not for one whose absence is a failure:
+Do not let `&.` hide a failure. A member that returns a `Result` gives an `Optional[Result[T]]`, such as `some(ok(8080))`, so an error rides inside a `some`; make the Optional a `Result` first with `to_result` and `try`. A member that returns `Void` (`logger&.log("x")`) does nothing for `none`: fine for a part that is optional by design, not for one whose absence is a failure:
 
 ```agentica {mode="check"}
 # bad
@@ -675,7 +675,7 @@ Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a
 
 Use `Int` and `Float` by default. Use a sized type (`UInt8`, `Int32`, `UInt64`, `Float32`) only where its width is part of the data: a binary format (`std/binary` reads and writes them), a field with a fixed range, a native call. Compute in `Int` and convert once, at the edge.
 
-A number that comes from outside converts with `to_uint16`, which gives an error `Result` when the value does not fit, and `try` passes it up. `to_uint16!` stops the program, so use it only where the range was just checked. Do not use `wrap_uint16` to make a value fit: it keeps the low bits and `70000` becomes `4464`:
+An `Int` that comes from outside converts with `to_uint16`, which gives an error `Result` when the value does not fit, and `try` passes it up. `to_uint16!` stops the program, so use it only where the range was just checked. Do not use `wrap_uint16` to make a value fit: it keeps the low bits and `70000` becomes `4464`:
 
 ```agentica {mode="check"}
 # bad
@@ -722,31 +722,35 @@ Use `Float32` only for a format or a native type that stores binary32 (`Binary.w
 
 ## Tasks
 
-Start a helper whose crash should end its caller with `Task.spawn_link`: both tasks fail with the same diagnostic, so the caller does not wait for a helper that is dead. Use `Task.spawn` with `Task.await` or `Task.monitor` when the caller goes on after the crash, to restart the worker, report it or clean up. A `Task.spawn` that nobody awaits or monitors shows its crash only when the program exits with code 1. A link does not end the other task on a return or a cancel, so it is not how you stop a helper: cancel it.
+Start a helper whose crash should end its caller with `Task.spawn_link`: both tasks fail with the same diagnostic, so the caller does not wait for a helper that is dead. Use `Task.spawn` with `Task.await` or `Task.monitor` when the caller goes on after the crash, to restart the worker, report it or clean up. A `Task.spawn` that nobody awaits or monitors only prints the crash to stderr, and the run exits 1 when `main` returns, so the caller never reacts to it. A link does not end the other task when one of them returns or is cancelled, so it is not how you stop a helper: cancel it.
+
+In both programs the helper crashes. With `Task.spawn`, `main` waits the full 60 seconds of `recv`; with `Task.spawn_link`, it ends at once with the helper's diagnostic:
 
 ```agentica {mode="check"}
 # bad
 def tick(inbox: Channel[Int]) -> Void
+  puts(10 / 0)
   _ = inbox.send(1, 1000)
 end
 
 def main() -> Void
   inbox: Channel[Int] = Channel.new(1)
   _ticker = Task.spawn(&tick, inbox)
-  puts(inbox.recv(1000))
+  puts(inbox.recv(60000))
 end
 ```
 
 ```agentica {mode="check"}
 # good
 def tick(inbox: Channel[Int]) -> Void
+  puts(10 / 0)
   _ = inbox.send(1, 1000)
 end
 
 def main() -> Void
   inbox: Channel[Int] = Channel.new(1)
   _ticker = Task.spawn_link(&tick, inbox)
-  puts(inbox.recv(1000))
+  puts(inbox.recv(60000))
 end
 ```
 

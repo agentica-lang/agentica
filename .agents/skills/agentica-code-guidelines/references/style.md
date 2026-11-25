@@ -112,3 +112,8 @@ fields: the effects record. Build the real one once at startup, a test builds
 another; the checker keeps both the same shape. Reference: `Workspace`
 (`compiler/modules/workspace.agc`), built by `compiler/io/host.agc`. Example:
 `site/content/style.md`, section Effects.
+
+## Optional, numbers and tasks
+
+Pairs for `&.`, sized numbers and `Task.spawn_link`: `site/content/style.md`,
+sections Errors, Numbers and Tasks.
