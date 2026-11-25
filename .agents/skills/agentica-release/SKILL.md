@@ -25,7 +25,7 @@ check before it fails.
   the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
-- A patch (`X.Y.Z`, Z > 0) is built from the last tag of its line: §6.
+- A patch (`X.Y.Z`, Z > 0) is built from the last tag of its line: §7.
 
 ## 1. Version bump PR
 
@@ -35,7 +35,7 @@ and the root docs) and merge its PR: the site is built once per release tag from
 that tag's tree (the theme's `tools/site_versions.py`), so a later pruning
 shows only in `dev`.
 
-Then make a worktree from `origin/master` (a patch: §6; never switch the main
+Then make a worktree from `origin/master` (a patch: §7; never switch the main
 checkout) on a branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
@@ -121,20 +121,40 @@ This run also adds the new release to the version selector (it builds every
 tag). Then check that the selector lists it, that the Install section shows the
 new version and its release link opens the release.
 
-## 5. Post-release checks
+## 5. Blog post
+
+The home site (repo `agentica-lang/agentica-lang.github.io`, `content/blog/`)
+has one post per release, `agentica-X-Y-Z.md`; copy the shape of the last one.
+Work in a `git worktree add` from `origin/main`, never the main checkout.
+
+- Front matter: `title: Agentica X.Y.Z`, `description` (one sentence naming
+  the headline features), `date` (the release's `publishedAt` in UTC, from
+  `gh release view <version> --json publishedAt`), `draft: false`,
+  `tags: [release]`.
+- Body, from the CHANGELOG section (it must say what users see): an intro
+  that links the CHANGELOG at the tag and says whether there are breaking
+  changes; `## What is new` with one `###` per headline feature and a
+  runnable example; `## Breaking changes` when there are any; `## Also` for
+  the rest, one line each.
+- Run every example with the released binary and paste its output in an
+  `output` block after the code. Claim no number you did not measure.
+- Open a PR in the home repo, check its Pages run, merge it, and check that
+  the post is live.
+
+## 6. Post-release checks
 
 - The release page has the five archives (`agentica-<version>-<platform>`) and
   `SHA256SUMS`. A beta is Pre-release; a final release is Latest.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
-- CI and Pages on master are green.
+- CI and Pages on master are green, and the blog post is live.
 - The Nix flake on `site/content/getting-started.md` and its Spanish page has
   the new `version` and its four `hash` values; if not, a docs PR. A `hash` is
   `sha256-` and the base64 of the archive's SHA-256 bytes: without `nix`,
   `echo HEX | xxd -r -p | base64` with HEX from `SHA256SUMS`.
 - Report the release URL, the archives, the notes and anything skipped.
 
-## 6. Patch releases
+## 7. Patch releases
 
 A patch (`X.Y.Z`, Z > 0): read `references/patch.md` (bug fixes only, a
 `release/X.Y.x` branch from the last tag, cherry-picks, the forward-port).

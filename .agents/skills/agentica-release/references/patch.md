@@ -57,10 +57,10 @@ test is not patch material, since it does not change the binary.
   shows it once `pages.yml` runs (SKILL.md §4), and make `[unreleased]` compare
   `X.Y.Z...HEAD`. Leave stage0 alone: the next master release refreshes it.
   For a patch of an older line, `VERSION` and `[unreleased]` stay.
-- **Pages and checks:** after the master PR, follow SKILL.md §4 and §5. For a
+- **Pages and checks:** after the master PR, follow SKILL.md §4 to §6. For a
   patch of an older line, the Install section keeps the newest release; check
   only that the version selector lists `X.Y.Z` and that its release page has the
   archives.
-- After SKILL.md §5 passes, delete `release/X.Y.Z` and `release/X.Y.x` (the
+- After SKILL.md §6 passes, delete `release/X.Y.Z` and `release/X.Y.x` (the
   next patch makes `release/X.Y.x` again from the last tag), and create the
   milestone `X.Y.<Z+1>`.
