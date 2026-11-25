@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-25
+
 ### Added
 
 - `Term.encode(value)` writes a value as CBOR (RFC 8949) in a deterministic form: `Map`s with `Int` keys, the exact bits of a `Float` and a `Float32`, `Bytes`, `nil`, enums, structs and `Optional`; a value past 10,000 levels, 4,000,000 values or 64 MiB is an error with its path (#994).
@@ -29,12 +31,28 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `Term` is a reserved type name (#994).
 - An integer or float literal argument of a generic call takes the type that another argument gives the type variable of its parameter, or the type the call is expected to give: `pick(3, bytes)` on a `List[UInt8]` (#1971).
 - **Breaking:** a float literal that rounds to an infinity, such as `1e309`, is `CHECK-FLOAT-RANGE` (#984).
+- `Float32`, IEEE 754 binary32, with its literals, arithmetic, text, conversions and JSON (#984).
+- `UInt64`, the unsigned 64-bit integer, with its arithmetic, conversions, JSON, `Map` keys, `Set` elements and sorting (#984).
+- `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` and `UInt32`: literals typed by their place, operators, bit and wrapping methods, range-checked conversions, and JSON (#984).
+- `BDD.run` takes `hooks:` with `before_all` and `after_all`, run once per `--jobs` worker, and `BDD.feature_state` gives each scenario its result (#1459).
+- `Task.spawn_link` starts a task linked to its caller (#1916).
+- `o&.name` and `o&.name(args)` read through an Optional (#1947).
+- `agentica COMMAND --help` (and `-h`) prints that command's usage (#1928).
+- `agentica add NAME URL --version REQ` and `version = "~> 0.8"` take the highest git tag that matches, and packages that share a repository meet in one tag (#1147).
+- A method call's `{ ... }` block works in the head of an `if`, `elsif`, guard, `while`, `for` or `case`, and `agentica fmt` writes it so (#1924).
+- `bytes.incomplete_utf8_length` counts the bytes that cut a UTF-8 character at the end (#1789).
+- `JSON.encode`, `JSON.decode` and `JSON.schema` take the narrow integer types, with a range check on decode and `minimum` and `maximum` in the schema (#984).
+
+### Changed
+
+- An integer or float literal argument of a generic call takes the type that another argument gives the type variable (#1971).
+- **Breaking:** a float literal that rounds to infinity, such as `1e309`, is `CHECK-FLOAT-RANGE` (#984).
 - **Breaking:** `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float32` and `Float64` are reserved type names (#984).
-- **Breaking:** `std/binary` uses the sized types: `read_u16_be` and the other readers give `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64` (all 64 bits, no error above `Int`) or `Int` (`i64`), and the writers take that type and return a plain `Bytes` (no `Result`: a value that may not fit is converted first, `try n.to_uint16`) (#984).
-- **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one, and `std/binary` reads and writes `f32` as a `Float32` (#984).
-- **Breaking:** `Float.to_bits32` and `Float.from_bits32` are removed: use `Float32.to_bits` and `Float32.from_bits` (`x.to_float32` rounds a `Float`) (#984).
-- With the JIT, loops of `UInt64` arithmetic and comparisons are compiled instead of running in the interpreter (#1976).
-- `Result.unwrap_or(n.to_uint8, 0)` and `.unwrap_or(0)` type an integer or float literal default by the Result's value (#984).
+- **Breaking:** `std/binary` uses the sized types, and its writers return `Bytes` with no `Result` (#984).
+- **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one (#984).
+- **Breaking:** `Float.to_bits32` and `Float.from_bits32` are removed: use `Float32.to_bits` and `Float32.from_bits` (#984).
+- With the JIT, loops of `UInt64` arithmetic and comparisons are compiled (#1976).
+- `Result.unwrap_or` types an integer or float literal default by the Result's value (#984).
 
 ### Fixed
 
@@ -1811,7 +1829,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.37.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.38.0...HEAD
+[0.38.0]: https://github.com/agentica-lang/agentica/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/agentica-lang/agentica/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/agentica-lang/agentica/compare/0.35.1...0.36.0
 [0.35.1]: https://github.com/agentica-lang/agentica/compare/0.35.0...0.35.1
