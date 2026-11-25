@@ -26,11 +26,12 @@ EAG_ESCAPER = "eag#e"
 
 ## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its decimal digits
 ## (a hex, binary or octal literal far past 2^64 keeps its prefix and digits instead, `0x1ff...`), with a leading -
-## when a pattern negates it.
+## when a pattern negates it. Real keeps the Float and the decimal text it was written as (no `_`, a leading - when a
+## pattern negates it), which a Float32 is rounded from.
 enum LitValue
   Whole(Int)
   Huge(String)
-  Real(Float)
+  Real(Float, String)
   Text(String)
   Flag(Bool)
   Nothing

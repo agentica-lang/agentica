@@ -313,7 +313,7 @@ def lower_catalog_default(
   literal = Ast.LitValue.Nothing
   case value
     Model.Default.Whole(number) -> literal = Ast.LitValue.Whole(number)
-    Model.Default.Real(number) -> literal = Ast.LitValue.Real(number)
+    Model.Default.Real(number) -> literal = Ast.LitValue.Real(number, number.to_s)
     Model.Default.Text(text) -> literal = Ast.LitValue.Text(text)
     Model.Default.Flag(flag) -> literal = Ast.LitValue.Flag(flag)
     Model.Default.Nothing -> literal = Ast.LitValue.Nothing

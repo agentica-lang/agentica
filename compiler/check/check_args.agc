@@ -86,14 +86,23 @@ def integer_literal?(node: Ast.Expr) -> Bool
   end
 end
 
-# True for an integer literal, a minus before one, or an arithmetic operator on two such trees: `1`, `-5`, `(1 + 2) *
-# 3`. It takes the narrow type that its other side or its context gives it.
-def literal_tree?(node: Ast.Expr) -> Bool
+# True for a tree of integer literals or one of float literals: `1`, `-5`, `(1 + 2) * 3`, `1.5 * 2.0`. It takes the
+# sized type that its other side or its context gives it (fitting).
+def literal_tree?(node: Ast.Expr) -> Bool = number_tree?(node, false) or number_tree?(node, true)
+
+# True for a number literal, float when real and integer otherwise, a minus before one, or an arithmetic operator on
+# two such trees.
+def number_tree?(node: Ast.Expr, real: Bool) -> Bool
   case node
-    Ast.Expr.Literal(_) -> integer_literal?(node)
-    Ast.Expr.Unary(found) -> found.op == "minus" and literal_tree?(found.operand)
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Real(_, _) -> real
+        _ -> !real and integer_literal?(node)
+      end
+
+    Ast.Expr.Unary(found) -> found.op == "minus" and number_tree?(found.operand, real)
     Ast.Expr.Binary(found) ->
-      ARITHMETIC_OPERATORS.include?(found.op) and literal_tree?(found.left) and literal_tree?(found.right)
+      ARITHMETIC_OPERATORS.include?(found.op) and number_tree?(found.left, real) and number_tree?(found.right, real)
     _ -> false
   end
 end

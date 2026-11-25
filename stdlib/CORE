@@ -25,6 +25,7 @@ catalog/builtins_dns.agc
 catalog/builtins_error.agc
 catalog/builtins_file.agc
 catalog/builtins_float.agc
+catalog/builtins_float32.agc
 catalog/builtins_frontend.agc
 catalog/builtins_httpwire.agc
 catalog/builtins_int.agc

@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 6313,
+  "stdout": [
+    "0 literals differ",
+    ""
+  ],
+  "stderr": []
+}

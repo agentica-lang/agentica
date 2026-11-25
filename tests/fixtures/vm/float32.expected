@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 123,
+  "stdout": [
+    "0.1",
+    "0.10000000149011612",
+    "0.3",
+    "+inf.0",
+    "-inf.0",
+    "-0.0",
+    "+nan.0 false true false 2143289344",
+    "2143289344",
+    "1509949441",
+    "+inf.0",
+    "[1.5, -0.25, 1e-45, 16777216.0]",
+    "[1.5, -0.25, 1e-45, 16777216.0]",
+    "Reading(value: 3.0, scale: 0.5)",
+    "{\"value\":3.0,\"scale\":0.5}",
+    "ok(Reading(value: 0.1, scale: 0.5))",
+    "error(\"value: expected finite Float32\", kind: \"json.decode\")",
+    "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"number\"},\"scale\":{\"type\":\"number\"}},\"required\":[\"value\"]}",
+    "a case on 0.1",
+    "true",
+    "1e-45",
+    ""
+  ],
+  "stderr": []
+}

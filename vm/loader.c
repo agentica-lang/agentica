@@ -7,6 +7,7 @@
 #include "core.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -536,7 +537,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_UINT64) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_FLOAT32) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (agc_type_scalar(t->kind)) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -767,6 +768,7 @@ static bool default_fits(const agc_program *p, uint32_t t, const agc_field_defau
       return (type->kind == AGC_TYPE_INT && agc_is(c, AGC_T_INT)) ||
              (type->kind == AGC_TYPE_UINT64 && agc_is(c, AGC_T_UINT64)) ||
              (type->kind == AGC_TYPE_FLOAT && agc_is(c, AGC_T_FLOAT)) ||
+             (type->kind == AGC_TYPE_FLOAT32 && agc_is(c, AGC_T_FLOAT32)) ||
              (type->kind == AGC_TYPE_BOOL && agc_is(c, AGC_T_BOOL)) ||
              (type->kind == AGC_TYPE_STRING && agc_is(c, AGC_T_STRING));
     }
@@ -1018,6 +1020,16 @@ static void load(reader *r, agc_program *p) {
       case 6: p->constants[i] = agc_string_value(read_string(r)); break;
       case 7: p->constants[i] = agc_bytes_value(read_bytes(r)); break;
       case 8: p->constants[i] = agc_uint64(read_u64(r)); break;
+      case 9: {
+        /* A Float32 literal, as its decimal text: rounded here once, so it is never rounded through a double. */
+        uint32_t len = read_u32(r);
+        const char *text = (const char *)take(r, len);
+        double f;
+        if (!agc_read_float32(text, len, &f)) reject(r, "Float32 constant is not a decimal");
+        if (isinf(f)) reject(r, "Float32 constant is past the largest Float32");
+        p->constants[i] = agc_float32(f);
+        break;
+      }
       default: reject(r, "unsupported constant kind %u", (unsigned)kind);
     }
   }

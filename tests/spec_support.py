@@ -178,6 +178,20 @@ def assert_rule(found, program, code, text):
         assert covered(program, found["range"]) == text
 
 
+def main_of(*lines: str) -> str:
+    """A `main` function whose body is the lines."""
+    return "def main() -> Void\n" + "".join("  %s\n" % line for line in lines) + "end\n\n"
+
+
+def halted(program: str, directory: Path) -> dict[str, object]:
+    """The diagnostic of a program that the CLI runs and that halts."""
+    path = directory / "program.agc"
+    path.write_text(program, encoding="utf-8")
+    result = run(cli() + ["--json", str(path)])
+    assert result.code == 1, result.stderr
+    return json.loads(result.stderr)
+
+
 def covered(text, span):
     """Return the source text from a diagnostic range's start to its exclusive end."""
     lines = text.split("\n")

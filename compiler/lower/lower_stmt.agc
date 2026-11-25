@@ -773,7 +773,7 @@ def lower_literal_test(
         imm = Ir.Imm.UInt64(number)
       end
 
-    Ast.LitValue.Real(number) -> imm = Ir.Imm.Float(number)
+    Ast.LitValue.Real(number, text) -> imm = Ir.real(number, text, cx.types[node.id])
     Ast.LitValue.Text(text) -> imm = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> imm = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> imm = Ir.Imm.Nil

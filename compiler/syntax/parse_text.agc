@@ -288,7 +288,7 @@ def value_text(value: Ast.LitValue) -> String
   case value
     Ast.LitValue.Whole(number) -> "int:#{number}"
     Ast.LitValue.Huge(digits) -> "int:#{digits}"
-    Ast.LitValue.Real(number) -> "float:bits:#{Float.to_bits(number)}"
+    Ast.LitValue.Real(number, _) -> "float:bits:#{Float.to_bits(number)}"
     Ast.LitValue.Text(text) -> "string:#{Text.quote(text)}"
     Ast.LitValue.Flag(flag) -> "bool:#{flag}"
     Ast.LitValue.Nothing -> "nil"

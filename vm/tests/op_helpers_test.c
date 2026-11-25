@@ -86,6 +86,39 @@ static void float_rules(void) {
   fails(agc_op_div_f(&vm, &dst, &i, &x), AGC_STATUS_WRONG_TAG, &dst, mark);
 }
 
+/* Two Float32s take the slow path of the Float helpers: one rounding to binary32, an infinity past the largest, -0.0
+   and NaN as binary32 has them. A Float with a Float32 is the wrong tag, never a silent widening. */
+static void float32_rules(void) {
+  agc_value one = agc_float32(1.0), tenth = agc_float32((double)0.1f), third = agc_float32((double)(1.0f / 3.0f));
+  agc_value big = agc_float32(0x1.fffffep127), zero = agc_float32(0.0), mark = agc_nil(), dst = mark;
+  agc_value sum = agc_float32((double)(0.1f + 1.0f / 3.0f));
+  assert(agc_op_add_f(&vm, &dst, &tenth, &third) == AGC_STATUS_OK && same_bits(dst, sum));
+  assert(agc_op_div_f(&vm, &dst, &one, &third) == AGC_STATUS_OK && same_bits(dst, agc_float32(3.0)));
+  assert(agc_op_mul_f(&vm, &dst, &big, &big) == AGC_STATUS_OK && same_bits(dst, agc_float32(INFINITY)));
+  assert(agc_op_sub_f(&vm, &dst, &zero, &big) == AGC_STATUS_OK && same_bits(dst, agc_float32(-0x1.fffffep127)));
+  assert(agc_op_neg_f(&vm, &dst, &zero) == AGC_STATUS_OK && same_bits(dst, agc_float32(-0.0)));
+  assert(agc_op_lt_f(&vm, &dst, &tenth, &third) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_le_f(&vm, &dst, &third, &tenth) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  dst = mark;
+  fails(agc_op_div_f(&vm, &dst, &one, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  agc_value nan = agc_float32(NAN), negative = agc_float32(-0.0);
+  assert(agc_op_eq(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_lt_f(&vm, &dst, &nan, &one) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_le_f(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_eq(&vm, &dst, &zero, &negative) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_same(&vm, &dst, &zero, &negative) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_same(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  agc_value f = agc_float(1.0);
+  dst = mark;
+  fails(agc_op_add_f(&vm, &dst, &f, &one), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_add_f(&vm, &dst, &one, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_lt_f(&vm, &dst, &one, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_div_f(&vm, &dst, &f, &one), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_div_f(&vm, &dst, &one, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_eq(&vm, &dst, &one, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  assert(agc_op_same(&vm, &dst, &one, &f) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+}
+
 /* A wrong tag is hand-made bytecode: the helper reports it instead of calling agc_wrong_tag. */
 static void wrong_tags(void) {
   agc_value i = agc_int(1), f = agc_float(1.0), list = agc_list_value(agc_list_from_array(&i, 1));
@@ -241,6 +274,7 @@ int main(void) {
   int_rules();
   uint64_rules();
   float_rules();
+  float32_rules();
   wrong_tags();
   lists();
   strings();

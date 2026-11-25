@@ -678,12 +678,13 @@ def check_pattern(
   case pattern
     Ast.Pattern.Wildcard(_) -> ok(ArmDone(st: st, arms: arms.with(wildcard: true)))
     Ast.Pattern.Literal(literal) ->
-      noted = try check_literal(cx, st, literal, value_type)
-      if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value) end
-        return error(duplicate(cx, st, "literal", "case arm", spot))
+      typed = try check_literal(cx, st, literal, value_type)
+      float32 = T.is?(value_type, "Float32")
+      if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value, float32) end
+        return error(duplicate(cx, typed, "literal", "case arm", spot))
       end
 
-      ok(ArmDone(st: noted, arms: arms.with(literals: arms.literals.push(literal.value))))
+      ok(ArmDone(st: typed, arms: arms.with(literals: arms.literals.push(literal.value))))
     Ast.Pattern.Variant(variant) -> check_variant(cx, st, variant, value_type, arms, spot)
     # The parser makes an or-pattern only at the top of an arm, out of the other kinds.
     Ast.Pattern.Or(_) -> ok(ArmDone(st: st, arms: arms))
@@ -691,7 +692,8 @@ def check_pattern(
 end
 
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested. The
-# state has the type of the value recorded at the pattern: the lowering reads it for an integer pattern of a UInt64.
+# state has the type of the value recorded at the pattern: the lowering reads it for an integer pattern of a UInt64
+# and a float pattern of a Float32.
 def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[State.St]
   pattern_type = literal_type(pattern.value)
   message = "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}"
@@ -706,11 +708,17 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     return ok(State.record_type(st, pattern.id, value_type))
   end
 
-  if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
+  float32 = T.is?(value_type, "Float32") and T.is?(pattern_type, "Float")
+  if !float32 and (!Types.primitive?(value_type) or !T.same?(value_type, pattern_type))
     return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span))
   end
 
-  ok(st)
+  case pattern.value
+    Ast.LitValue.Real(number, text) if T.float_overflow?(value_type, number, text) ->
+      error(State.fail(cx, st, "CHECK-FLOAT-RANGE", T.float_outside(value_type, text), pattern.span))
+    _ if float32 -> ok(State.record_type(st, pattern.id, T.Type.Float32))
+    _ -> ok(st)
+  end
 end
 
 # An integer pattern of a case on a narrow integer type takes that type: CHECK-INT-RANGE when it does not hold it.
@@ -1115,19 +1123,20 @@ def literal_type(value: Ast.LitValue) -> T.Type
   case value
     Ast.LitValue.Whole(_) -> T.Type.Int
     Ast.LitValue.Huge(_) -> T.Type.Int
-    Ast.LitValue.Real(_) -> T.Type.Float
+    Ast.LitValue.Real(_, _) -> T.Type.Float
     Ast.LitValue.Text(_) -> T.Type.String
     Ast.LitValue.Flag(_) -> T.Type.Bool
     Ast.LitValue.Nothing -> T.Type.Nil
   end
 end
 
-# equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ.
-def same_literal?(a: Ast.LitValue, b: Ast.LitValue) -> Bool
+# equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ; in a case on a Float32, on the bits of the
+# Float32 it gives.
+def same_literal?(a: Ast.LitValue, b: Ast.LitValue, float32: Bool) -> Bool
   case a
     Ast.LitValue.Whole(x) -> whole_is?(b, x)
     Ast.LitValue.Huge(x) -> huge_is?(b, x)
-    Ast.LitValue.Real(x) -> real_is?(b, x)
+    Ast.LitValue.Real(x, text) -> real_is?(b, x, text, float32)
     Ast.LitValue.Text(x) -> text_is?(b, x)
     Ast.LitValue.Flag(x) -> flag_is?(b, x)
     Ast.LitValue.Nothing -> nothing?(b)
@@ -1148,11 +1157,21 @@ def huge_is?(b: Ast.LitValue, x: String) -> Bool
   end
 end
 
-def real_is?(b: Ast.LitValue, x: Float) -> Bool
+def real_is?(b: Ast.LitValue, x: Float, text: String, float32: Bool) -> Bool
   case b
-    Ast.LitValue.Real(y) -> Float.to_bits(x) == Float.to_bits(y)
+    Ast.LitValue.Real(y, other) if float32 -> same_float32?(x, text, y, other)
+    Ast.LitValue.Real(y, _) -> Float.to_bits(x) == Float.to_bits(y)
     _ -> false
   end
+end
+
+# Two float literals that give one Float32; when the bits of one cannot be told from its Float, only the same text.
+def same_float32?(x: Float, text: String, y: Float, other: String) -> Bool
+  a = T.float32_bits(x, text)
+  b = T.float32_bits(y, other)
+  return a == b if a.some? and b.some?
+
+  text == other
 end
 
 def text_is?(b: Ast.LitValue, x: String) -> Bool

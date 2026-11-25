@@ -164,14 +164,14 @@ INTERPOLATION = "#{", expression, "}" ;
 any Unicode character except double quotes, backslash, newlines, and a `#`
 followed by `{`. `NL`, `DOC` and `EOF` are lexer tokens.
 
-The minus sign is an operator, not part of a literal, except before an integer
-literal of a narrow type (below). An exponent follows the
+The minus sign is an operator, not part of a literal, except before a literal
+of a narrow integer type or `Float32` (below). An exponent follows the
 digits or the fraction, as in Ruby: `1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are
 Floats, and `Float#to_s` writes `1e+300`, which reads back. The `e` needs a
 digit before it and a digit after the optional sign, so `1.e5` is the call
-`1.e5` and `1e` is the Int `1` next to the name `e`. An exponent too large gives
-infinity (`1e999` is `+inf.0`). A string literal cannot span lines; text of two
-or more lines is a heredoc (below).
+`1.e5` and `1e` is the Int `1` next to the name `e`. An exponent too large is
+`CHECK-FLOAT-RANGE` (`1e999`; below). A string literal cannot span lines; text
+of two or more lines is a heredoc (below).
 
 A `_` may separate digits in `INTEGER` and in both parts of `FLOAT`: `1_000`,
 `1_000.000_5`, `1e1_0`. It is only visual: `1_000` is the same `Int` as `1000`,
@@ -210,6 +210,19 @@ side, and so does an arithmetic of integer literals (`(1 + 2) * 3`); with two
 such trees under an arithmetic operator, the type expected of the whole
 expression goes into both (`x: UInt8 = 1 + 2`). A Float literal never takes a
 narrow type.
+
+A float literal is a `Float`, unless its context expects `Float32`, in the same
+places and with the same rules for operators and minus; an integer literal
+never becomes a `Float` or a `Float32` (`x: Float32 = 1` is
+`CHECK-TYPE-MISMATCH`). A `Float32` literal is kept as its decimal text and
+rounded once, to the nearest `Float32` (ties to even), when the program loads,
+never through a `Float`. A float literal that rounds to an infinity in its type
+is `CHECK-FLOAT-RANGE` with the literal as the span (a minus before it
+included): in `Float` from `2^1024 - 2^970` (about `1.7976931348623158e308`,
+halfway past the largest `Float`) up, in `Float32` from `2^128 - 2^103` (about
+`3.4028235677973366e38`, halfway past the largest `Float32`) up. A literal too
+small for its type rounds to zero. In a `case` on a `Float32`, two literals that
+give one `Float32` (`16777216.0` and `16777217.0`) are the same pattern.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

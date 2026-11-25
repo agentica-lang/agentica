@@ -76,8 +76,8 @@ def key_here?(cx: State.Cx, type: ResolvedType) -> Bool = key_type?(type) or (cx
 ## True for Int and Float.
 def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Types.is?(type, "Float")
 
-## True for the types that arithmetic and < take: Int, Float, the narrow integer types and UInt64.
-def number?(type: ResolvedType) -> Bool = numeric?(type) or Types.sized_int?(type)
+## True for the types that arithmetic and < take: Int, Float, the sized integer types and Float32.
+def number?(type: ResolvedType) -> Bool = numeric?(type) or Types.sized_int?(type) or Types.is?(type, "Float32")
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
 def primitive?(type: ResolvedType) -> Bool
@@ -807,6 +807,8 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Float)
   elsif Types.sized_name?(name)
     return ok(Types.sized_int(name))
+  elsif name == "Float32"
+    return ok(Types.Type.Float32)
   elsif name == "Bool"
     return ok(Types.Type.Bool)
   elsif name == "String"
@@ -959,6 +961,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "UInt16",
     "UInt32",
     "UInt64",
+    "Float32",
     "Bool",
     "String",
     "Nil",
@@ -1178,7 +1181,7 @@ def refused_in_field(cx: State.Cx, found: Walk, name: String, index: Int, why: S
 end
 
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
-  if primitive?(type) or Types.sized_int?(type) or Types.is?(type, "Json")
+  if primitive?(type) or Types.sized_int?(type) or Types.is?(type, "Float32") or Types.is?(type, "Json")
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
     return refused(seen) if json_null_item?(type)
@@ -1203,7 +1206,7 @@ end
 
 def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   scalar = Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
-  if scalar or Types.sized_int?(type)
+  if scalar or Types.sized_int?(type) or Types.is?(type, "Float32")
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
     return refused(seen) if json_null_item?(type)
@@ -1322,7 +1325,7 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
   # of a constant). A Ref is a number in the VM.
   plain = primitive?(type) or Types.sized_int?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes")
-  plain = plain or Types.is?(type, "Address")
+  plain = plain or Types.is?(type, "Address") or Types.is?(type, "Float32")
   plain = plain or ref?(type)
   if plain or Types.is?(type, "Json")
     return passed(seen)

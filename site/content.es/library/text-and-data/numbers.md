@@ -1,8 +1,8 @@
 ---
 title: Int y Float
 weight: 2
-description: Convierte entre Int, Float, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "d82a5546a18c"
+description: Convierte entre Int, Float, Float32, String, UInt64 y los tipos enteros de menos bits, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
+source_hash: "a651ca665089"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
@@ -565,6 +565,53 @@ end
 ```agentica {expect="RUNTIME-INVALID-NUMBER"}
 def main() -> Void
   puts(Float.from_bits32(4294967296))
+end
+```
+
+## Float32 {#float32}
+
+```signature
+Float32.to_f(float32: Float32) -> Float
+Float.to_float32(float: Float) -> Float32
+Int.to_float32(int: Int) -> Float32
+Float32.to_bits(float32: Float32) -> UInt32
+Float32.from_bits(bits: UInt32) -> Float32
+```
+
+`Float32` es un número binary32 de IEEE 754. Un literal flotante lo toma donde su lugar lo espera, como un literal entero toma un tipo de menos bits: una anotación, un parámetro, un campo de un struct, un tipo de retorno, un elemento de una lista o de un mapa, un patrón de `case`, o el otro lado de un operador. El literal se redondea una sola vez al `Float32` más cercano, con empates hacia el número par. Un literal entero nunca se vuelve un `Float32`, y un literal que se redondearía a un infinito es `CHECK-FLOAT-RANGE` en el literal, desde `2^128 - 2^103` (unos `3.4028235677973366e38`) hacia arriba; un literal `Float` desde `2^1024 - 2^970` (unos `1.7976931348623158e308`) hacia arriba también es `CHECK-FLOAT-RANGE`.
+
+Los operadores `+`, `-`, `*`, `/`, `<`, `<=`, `>`, `>=`, `==` y `!=` toman dos valores `Float32`; un `Float32` y un `Float` son `CHECK-TYPE-MISMATCH`, y no hay `%`. Cada resultado es el `Float32` más cercano al exacto. Un resultado más allá del mayor `Float32` es un infinito, un divisor cero es `RUNTIME-DIVISION-BY-ZERO`, y NaN y `-0.0` se comportan como con `Float`. `to_s` da la menor cantidad de dígitos que se leen de vuelta como el mismo valor, así que el `Float32` más cercano a `0.1` se imprime `0.1`.
+
+`x.to_f` amplía un `Float32` de forma exacta. `f.to_float32` redondea un `Float` al `Float32` más cercano (un infinito más allá del mayor), y `n.to_float32` redondea un `Int` o un tipo entero de menos bits una sola vez, desde su propio valor. `to_bits` da los 32 bits como un `UInt32`, todo NaN como `2143289344`, y `Float32.from_bits` los lee de vuelta. `sum`, `min`, `max`, `sort` y `sort_by` rechazan un `List[Float32]` (`CHECK-TYPE-MISMATCH`): amplíalo primero, `xs.map { |x| x.to_f }.sum`. En [JSON](/library/text-and-data/json/), un `Float32` se escribe como su texto más corto y se lee como el `Float32` más cercano al texto del número; un número más allá del mayor `Float32` es un error.
+
+```agentica
+def main() -> Void
+  x: Float32 = 0.1
+  puts(x)
+  puts(x.to_f)
+  puts(x * 3.0)
+  puts(x.to_bits)
+  puts(Float32.from_bits(1065353216))
+  puts(16777217.to_float32)
+  big: Float32 = 3.0e38
+  puts(big * 2.0)
+end
+```
+
+```output
+0.1
+0.10000000149011612
+0.3
+1036831949
+1.0
+16777216.0
++inf.0
+```
+
+```agentica {expect="CHECK-FLOAT-RANGE"}
+def main() -> Void
+  x: Float32 = 1e39
+  puts(x)
 end
 ```
 

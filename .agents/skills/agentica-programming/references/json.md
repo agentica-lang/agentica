@@ -45,7 +45,8 @@ JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
   User)` for an item of a parsed document; no `JSON.encode` first).
 - Decoded fields may be Int, the narrow integers (`UInt8`: only an integer in
   its range, else `r: expected UInt8 from 0 to 255`; the schema has its
-  `minimum` and `maximum`), Float, Bool, String, lists, String-keyed maps,
+  `minimum` and `maximum`), Float, Float32 (nearest to the text; past the
+  largest is an error), Bool, String, lists, String-keyed maps,
   nested or recursive structs and enums, generic struct instances of those
   (`Box[Int]`), and `Optional` and `JSON.Field` of those; other types, a
   generic enum instance included, are `CHECK-NOT-DECODABLE`. `JSON.decode(text,

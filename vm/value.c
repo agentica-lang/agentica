@@ -7,6 +7,7 @@
  */
 #include "core.h"
 
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,15 @@ typedef struct {
 struct agc_weak {
   uintptr_t hidden;
 };
+
+/* An unsigned integer in 32-bit limbs, least significant first. The reader's integers stay under 620 bits: at most
+   129 digits (FLOAT32_DIGITS + 1) times 10^38 or over 10^174, scaled by 2^149 at most, then by 2^26 in big_divide. */
+#define BIG_LIMBS 32
+
+typedef struct {
+  uint32_t limb[BIG_LIMBS];
+  size_t n;
+} big;
 
 #ifndef AGC_NO_GC
 /* The record of agc_gc_record_start. The collector writes it from its event callback, with its lock held, and
@@ -886,7 +896,11 @@ uint64_t agc_value_units(agc_value v) {
     case AGC_T_LIST: return agc_list_len(v.as.p);
     case AGC_T_MAP:
     case AGC_T_SET: return ((const agc_map *)v.as.p)->size;
-    case AGC_T_JSON: return ((const agc_json *)v.as.p)->count;
+    case AGC_T_JSON: {
+      /* The count of a float leaf is the side hint of agc_json_to_float32, not a size. */
+      const agc_json *j = v.as.p;
+      return j->kind == AGC_JSON_FLOAT ? 0 : j->count;
+    }
     default: return 0;
   }
 }
@@ -1491,23 +1505,9 @@ static uint64_t shortest_decimal(double x, int *exponent) {
   return vr + ((vr == vm && (!accept_bounds || !vm_zeros)) || last >= 5);
 }
 
-size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
-  if (isnan(x)) return put(out, 0, "+nan.0", 6);
-  if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
-  size_t at = 0;
-  if (signbit(x)) {
-    out[at++] = '-';
-    x = -x;
-  }
-  if (x == 0) return put(out, at, "0.0", 3);
-  int e;
-  uint64_t mantissa = shortest_decimal(x, &e);
-  for (; mantissa % 10 == 0; e++) mantissa /= 10;
-  char digits[20];
-  size_t n = 0;
-  for (uint64_t m = mantissa; m; m /= 10) n++;
-  for (size_t k = n; k > 0; mantissa /= 10) digits[--k] = (char)('0' + mantissa % 10);
-  e += (int)n - 1;
+/* DIGITS (N of them, the first and last not 0) times 10^E for the first one, written at AT: positional, or scientific
+   when that is shorter and the positional text is past 16 characters, or the value is below 1e-4. */
+static size_t decimal_text(char *out, size_t at, const char *digits, size_t n, int e) {
   int magnitude = e < 0 ? -e : e;
   int exponent_digits = magnitude >= 100 ? 3 : magnitude >= 10 ? 2 : 1;
   int positional = (int)n > e + 1 ? (int)n + 1 : e + 3;
@@ -1537,4 +1537,314 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
   at = put(out, at, digits, n);
   for (size_t k = n; k < whole; k++) out[at++] = '0';
   return put(out, at, ".0", 2);
+}
+
+size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
+  if (isnan(x)) return put(out, 0, "+nan.0", 6);
+  if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
+  size_t at = 0;
+  if (signbit(x)) {
+    out[at++] = '-';
+    x = -x;
+  }
+  if (x == 0) return put(out, at, "0.0", 3);
+  int e;
+  uint64_t mantissa = shortest_decimal(x, &e);
+  for (; mantissa % 10 == 0; e++) mantissa /= 10;
+  char digits[20];
+  size_t n = 0;
+  for (uint64_t m = mantissa; m; m /= 10) n++;
+  for (size_t k = n; k > 0; mantissa /= 10) digits[--k] = (char)('0' + mantissa % 10);
+  return decimal_text(out, at, digits, n, e + (int)n - 1);
+}
+
+/* Float32: a double that holds a binary32 value. The text of a Float32 is read and written here, exactly: on
+   integers, with no libc conversion and no locale, so every system gives the same binary32 for a text and the same
+   text for a value. */
+
+/* 2^128 - 2^103, halfway between the largest binary32 and 2^128: a magnitude from here up rounds to infinity. */
+#define FLOAT32_OVERFLOW 0x1.ffffffp127
+
+/* The significant digits of a decimal that its binary32 depends on: no binary32 value and no midpoint between two
+   has more than 113 ((2^25 - 1) * 2^-150), so a text with more is cut to FLOAT32_DIGITS and a nonzero digit cut off
+   becomes one more digit 1, which stays between the same two midpoints. */
+#define FLOAT32_DIGITS 128
+
+static void big_set(big *b, uint32_t value) {
+  b->limb[0] = value;
+  b->n = value != 0;
+}
+
+static void big_mul_add(big *b, uint32_t factor, uint32_t add) {
+  uint64_t carry = add;
+  for (size_t k = 0; k < b->n; k++) {
+    uint64_t t = (uint64_t)b->limb[k] * factor + carry;
+    b->limb[k] = (uint32_t)t;
+    carry = t >> 32;
+  }
+  if (carry && b->n < BIG_LIMBS) b->limb[b->n++] = (uint32_t)carry;
+}
+
+static void big_shl(big *b, unsigned bits) {
+  if (b->n == 0) return;
+  size_t words = bits / 32, n = b->n + words + 1;
+  unsigned shift = bits % 32;
+  if (n > BIG_LIMBS) n = BIG_LIMBS;
+  for (size_t k = n; k-- > 0;) {
+    uint64_t high = k >= words && k - words < b->n ? b->limb[k - words] : 0;
+    uint64_t low = shift && k >= words + 1 && k - words - 1 < b->n ? b->limb[k - words - 1] : 0;
+    b->limb[k] = (uint32_t)((high << shift) | (low >> (32 - shift)));
+  }
+  b->n = n;
+  while (b->n && b->limb[b->n - 1] == 0) b->n--;
+}
+
+static int big_cmp(const big *a, const big *b) {
+  if (a->n != b->n) return a->n < b->n ? -1 : 1;
+  for (size_t k = a->n; k-- > 0;)
+    if (a->limb[k] != b->limb[k]) return a->limb[k] < b->limb[k] ? -1 : 1;
+  return 0;
+}
+
+/* a -= b, for a >= b. */
+static void big_sub(big *a, const big *b) {
+  int64_t borrow = 0;
+  for (size_t k = 0; k < a->n; k++) {
+    int64_t t = (int64_t)a->limb[k] - (k < b->n ? b->limb[k] : 0) - borrow;
+    borrow = t < 0;
+    a->limb[k] = (uint32_t)(t + (borrow ? INT64_C(1) << 32 : 0));
+  }
+  while (a->n && a->limb[a->n - 1] == 0) a->n--;
+}
+
+static unsigned big_bits(const big *b) {
+  if (b->n == 0) return 0;
+  unsigned bits = (unsigned)(b->n - 1) * 32;
+  for (uint32_t top = b->limb[b->n - 1]; top; top >>= 1) bits++;
+  return bits;
+}
+
+/* The quotient of a / b, which must be below 2^26; a becomes the remainder. */
+static uint32_t big_divide(big *a, const big *b) {
+  uint32_t q = 0;
+  for (unsigned bit = 26; bit-- > 0;) {
+    big t = *b;
+    big_shl(&t, bit);
+    if (big_cmp(a, &t) >= 0) {
+      big_sub(a, &t);
+      q |= UINT32_C(1) << bit;
+    }
+  }
+  return q;
+}
+
+/* b /= divisor; the remainder. */
+static uint32_t big_div_small(big *b, uint32_t divisor) {
+  uint64_t rest = 0;
+  for (size_t k = b->n; k-- > 0;) {
+    uint64_t t = rest << 32 | b->limb[k];
+    b->limb[k] = (uint32_t)(t / divisor);
+    rest = t % divisor;
+  }
+  while (b->n && b->limb[b->n - 1] == 0) b->n--;
+  return (uint32_t)rest;
+}
+
+double agc_round_f32(double x) {
+  if (fabs(x) >= FLOAT32_OVERFLOW) return copysign(INFINITY, x);
+  return (double)(float)x;
+}
+
+bool agc_f32_midpoint(double x) {
+  uint64_t bits;
+  memcpy(&bits, &x, sizeof bits);
+  /* A midpoint has at most 25 significant bits: the low 28 of the 52 are zero. Most doubles stop here. */
+  if (bits & ((UINT64_C(1) << 28) - 1)) return false;
+  x = fabs(x);
+  if (!(x < 0x1p128) || x < 0x1p-150) return false;
+  int e;
+  frexp(x, &e);
+  int half = (e - 24 < -149 ? -149 : e - 24) - 1;
+  double scaled = ldexp(x, -half);
+  return scaled == floor(scaled) && fmod(scaled, 2.0) == 1.0;
+}
+
+/* The binary32 nearest DIGITS (N of them, the first and last not 0) times 10^Q, ties to even, as a double; an infinity
+   past the largest binary32. With M * 2^E the result, M of 24 bits (fewer for a subnormal), it takes E from the bit
+   lengths, divides, and rounds the quotient on its remainder. */
+static double decimal_f32(const char *digits, size_t n, int64_t q) {
+  int64_t lead = q + (int64_t)n - 1;
+  if (lead >= 39) return INFINITY;
+  if (lead <= -47) return 0.0;
+  big num, den;
+  big_set(&num, 0);
+  for (size_t k = 0; k < n; k++) big_mul_add(&num, 10, (uint32_t)(digits[k] - '0'));
+  big_set(&den, 1);
+  for (int64_t k = q; k > 0; k--) big_mul_add(&num, 10, 0);
+  for (int64_t k = q; k < 0; k++) big_mul_add(&den, 10, 0);
+  int e = (int)big_bits(&num) - (int)big_bits(&den) - 24;
+  if (e < -149) e = -149;
+  uint32_t m;
+  for (;;) {
+    big a = num, b = den;
+    if (e < 0)
+      big_shl(&a, (unsigned)-e);
+    else
+      big_shl(&b, (unsigned)e);
+    m = big_divide(&a, &b);
+    if (m >= UINT32_C(1) << 24) {
+      e++;
+      continue;
+    }
+    big_shl(&a, 1);
+    int c = big_cmp(&a, &b);
+    if (c > 0 || (c == 0 && (m & 1))) m++;
+    break;
+  }
+  if (m == UINT32_C(1) << 24) {
+    m >>= 1;
+    e++;
+  }
+  return e > 104 ? INFINITY : ldexp((double)m, e);
+}
+
+bool agc_read_float32(const char *s, size_t len, double *out) {
+  size_t i = len > 0 && s[0] == '-';
+  bool negative = i == 1, cut = false;
+  char digits[FLOAT32_DIGITS + 1];
+  size_t n = 0, first = i;
+  int64_t q = 0;
+  for (; i < len && s[i] >= '0' && s[i] <= '9'; i++) {
+    if (n == FLOAT32_DIGITS) {
+      cut |= s[i] != '0';
+      q++;
+    } else if (n > 0 || s[i] != '0') {
+      digits[n++] = s[i];
+    }
+  }
+  if (i == first) return false;
+  if (i < len && s[i] == '.') {
+    first = ++i;
+    for (; i < len && s[i] >= '0' && s[i] <= '9'; i++) {
+      if (n == FLOAT32_DIGITS) {
+        cut |= s[i] != '0';
+        continue;
+      }
+      if (n > 0 || s[i] != '0') digits[n++] = s[i];
+      q--;
+    }
+    if (i == first) return false;
+  }
+  if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+    bool down = ++i < len && s[i] == '-';
+    i += i < len && (s[i] == '+' || s[i] == '-');
+    first = i;
+    int64_t e = 0;
+    /* Kept exact up to 10^17, past any count of digits, so that a long mantissa can cancel it. */
+    for (; i < len && s[i] >= '0' && s[i] <= '9'; i++)
+      if (e < INT64_C(100000000000000000)) e = e * 10 + (s[i] - '0');
+    if (i == first) return false;
+    q += down ? -e : e;
+  }
+  if (i != len) return false;
+  if (cut) {
+    digits[n++] = '1';
+    q--;
+  }
+  for (; n > 0 && digits[n - 1] == '0'; n--) q++;
+  /* An integer below 10^18 (16777217.0, 3e9) is rounded once from the int64, without the bignum. */
+  int64_t whole = 0;
+  bool small = n <= 18 && q >= 0 && q <= 18;
+  for (size_t k = 0; small && k < n; k++) whole = whole * 10 + (digits[k] - '0');
+  for (int64_t k = 0; small && k < q; k++) small = !__builtin_mul_overflow(whole, 10, &whole);
+  double x = !n ? 0.0 : small ? (double)(float)whole : decimal_f32(digits, n, q);
+  *out = negative ? -x : x;
+  return true;
+}
+
+/* The digits of x > 0, a finite binary32, exactly, without trailing zeros; *lead is the power of ten of the first.
+   With x = m * 2^e and m odd, there are at most 112: m * 5^149 for the smallest e. */
+static size_t f32_exact_digits(double x, char *digits, int *lead) {
+  int e;
+  uint32_t m = (uint32_t)ldexp(frexp(x, &e), 24);
+  for (e -= 24; m % 2 == 0; e++) m /= 2;
+  big b;
+  big_set(&b, m);
+  if (e >= 0) {
+    big_shl(&b, (unsigned)e);
+    e = 0;
+  } else {
+    for (int k = e; k < 0; k++) big_mul_add(&b, 5, 0);
+  }
+  char reversed[FLOAT32_DIGITS];
+  size_t n = 0;
+  for (; b.n; n++) reversed[n] = (char)('0' + big_div_small(&b, 10));
+  size_t skip = 0;
+  while (skip < n && reversed[skip] == '0') skip++;
+  for (size_t k = 0; k < n - skip; k++) digits[k] = reversed[n - 1 - k];
+  *lead = e + (int)n - 1;
+  return n - skip;
+}
+
+/* The digits of the integer v > 0 without trailing zeros, and the power of ten of the first, the last of v being
+   at 10^last. */
+static size_t integer_digits(uint64_t v, int last, char *digits, int *lead) {
+  for (; v % 10 == 0; last++) v /= 10;
+  size_t n = 0;
+  for (uint64_t t = v; t; t /= 10) n++;
+  for (size_t k = n; k > 0; v /= 10) digits[--k] = (char)('0' + v % 10);
+  *lead = last + (int)n - 1;
+  return n;
+}
+
+/* 10^e for 0 <= e <= 66, with at most two roundings. */
+static double power_of_ten(unsigned e) {
+  static const double exact[] = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+                                 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+  double p = 1;
+  for (; e > 22; e -= 22) p *= exact[22];
+  return p * exact[e];
+}
+
+/* True when value * 10^last (DIGITS, COUNT of them, the first at 10^first) reads as the binary32 x > 0. A double
+   estimate, within a few roundings, decides unless it falls near the midpoint on either side of x; decimal_f32
+   decides those. */
+static bool reads_as(uint64_t value, int last, double x, const char *digits, size_t count, int first) {
+  double v = last >= 0 ? (double)value * power_of_ten((unsigned)last) : (double)value / power_of_ten((unsigned)-last);
+  float f = (float)x;
+  double below = ((double)nextafterf(f, 0) + x) / 2;
+  double above = f == FLT_MAX ? FLOAT32_OVERFLOW : ((double)nextafterf(f, INFINITY) + x) / 2;
+  double slack = v * 0x1p-48;
+  if (v + slack < below || v - slack > above) return false;
+  if (v - slack > below && v + slack < above) return true;
+  return decimal_f32(digits, count, first - (int64_t)count + 1) == x;
+}
+
+size_t agc_float32_text(double x, char out[AGC_SCALAR_TEXT]) {
+  x = agc_round_f32(x);
+  if (isnan(x) || isinf(x)) return agc_float_text(x, out);
+  size_t at = 0;
+  if (signbit(x)) {
+    out[at++] = '-';
+    x = -x;
+  }
+  if (x == 0) return put(out, at, "0.0", 3);
+  char exact[FLOAT32_DIGITS], digits[24];
+  int lead;
+  size_t k = f32_exact_digits(x, exact, &lead);
+  /* The fewest digits that read back as x and, of two with as many, the nearer; an exact tie takes the upper one,
+     as agc_float_text does. Nine digits always read back. */
+  for (size_t n = 1; n < k && n <= 9; n++) {
+    uint64_t down = 0;
+    for (size_t j = 0; j < n; j++) down = down * 10 + (uint64_t)(exact[j] - '0');
+    int above = exact[n] > '5' || (exact[n] == '5' && n + 1 < k) ? 1 : exact[n] == '5' ? 0 : -1;
+    uint64_t tries[2] = {above >= 0 ? down + 1 : down, above >= 0 ? down : down + 1};
+    int last = lead - (int)n + 1;
+    for (size_t t = 0; t < 2; t++) {
+      int first;
+      size_t count = integer_digits(tries[t], last, digits, &first);
+      if (reads_as(tries[t], last, x, digits, count, first)) return decimal_text(out, at, digits, count, first);
+    }
+  }
+  return decimal_text(out, at, exact, k < 9 ? k : 9, lead);
 }

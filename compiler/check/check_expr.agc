@@ -159,25 +159,49 @@ end
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal, expected: T.Type) -> Result[State.Out]
   target = narrow_target(expected)
   case node.value
-    Ast.LitValue.Whole(value) if !T.unknown?(target) ->
+    Ast.LitValue.Whole(value) if T.sized_int?(target) ->
       narrow_literal(cx, st, value, "#{value}", false, target, node.span)
     Ast.LitValue.Whole(_) -> ok(State.Out(st: st, type: T.Type.Int))
-    Ast.LitValue.Huge(digits) if !T.unknown?(target) -> narrow_literal(cx, st, 0, digits, true, target, node.span)
+    Ast.LitValue.Huge(digits) if T.sized_int?(target) -> narrow_literal(cx, st, 0, digits, true, target, node.span)
     Ast.LitValue.Huge(_) ->
       error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
-    Ast.LitValue.Real(_) -> ok(State.Out(st: st, type: T.Type.Float))
+    Ast.LitValue.Real(number, text) ->
+      type = T.Type.Float
+      if T.is?(target, "Float32")
+        type = T.Type.Float32
+      end
+
+      real_literal(cx, st, number, text, type, node.span)
     Ast.LitValue.Text(_) -> ok(State.Out(st: st, type: T.Type.String))
     Ast.LitValue.Flag(_) -> ok(State.Out(st: st, type: T.Type.Bool))
     Ast.LitValue.Nothing -> ok(State.Out(st: st, type: T.Type.Nil))
   end
 end
 
-# The narrow integer type that an integer literal takes where `expected` is expected, or Unknown, and the literal is an
-# Int.
+# The sized type that a number literal takes where `expected` is expected, or Unknown: an integer literal takes a
+# narrow integer type and is otherwise an Int, a float literal takes Float32 and is otherwise a Float.
 def narrow_target(expected: T.Type) -> T.Type
-  return expected if T.sized_int?(expected)
+  return expected if sized?(expected)
 
   T.Type.Unknown
+end
+
+# True for the sized integer types and Float32, which a literal takes from its context.
+def sized?(type: T.Type) -> Bool = T.sized_int?(type) or T.is?(type, "Float32")
+
+# A float literal of type (Float or Float32), with its value and its text: CHECK-FLOAT-RANGE when it rounds to an
+# infinity there.
+def real_literal(
+  cx: State.Cx,
+  st: State.St,
+  number: Float,
+  text: String,
+  type: T.Type,
+  span: Source.Span,
+) -> Result[State.Out]
+  return ok(State.Out(st: st, type: type)) if !T.float_overflow?(type, number, text)
+
+  error(State.fail(cx, st, "CHECK-FLOAT-RANGE", T.float_outside(type, text), span))
 end
 
 # An integer literal of the narrow type `target`: CHECK-INT-RANGE when its value is outside the type. `text` is
@@ -728,14 +752,19 @@ end
 # - and not. -9223372036854775808 is the one literal that only fits under a minus.
 def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -> Result[State.Out]
   target = narrow_target(expected)
+  if node.op == "minus"
+    # -1e39 past the largest Float32 is the error of the whole literal, minus included.
+    try negative_real(cx, st, node, target)
+  end
+
   inner = T.Type.Unknown
-  if node.op == "minus" and !Args.integer_literal?(node.operand) and Args.literal_tree?(node.operand)
-    # -(1 + 2): the tree under the minus takes the narrow type too.
-    inner = target
+  if node.op == "minus" and !Args.integer_literal?(node.operand)
+    # -(1 + 2) and -1.5: the tree under the minus takes the sized type too.
+    inner = fitting(node.operand, target)
   end
 
   operand = try unary_operand(cx, st, node, inner)
-  if node.op == "minus" and !T.unknown?(target) and Args.integer_literal?(node.operand)
+  if node.op == "minus" and T.sized_int?(target) and Args.integer_literal?(node.operand)
     # A minus before an integer literal is part of it: -128 is an Int8.
     return negative_literal(cx, operand.st, node, target)
   end
@@ -775,6 +804,25 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary, expected: T.Type) -
   end
 
   ok(State.Out(st: operand.st, type: T.Type.Bool))
+end
+
+# CHECK-FLOAT-RANGE at a minus and the float literal after it, in Float32 when that is the target, else in Float.
+def negative_real(cx: State.Cx, st: State.St, node: Ast.Unary, target: T.Type) -> Result[Void]
+  type = T.Type.Float
+  if T.is?(target, "Float32")
+    type = T.Type.Float32
+  end
+
+  case node.operand
+    Ast.Expr.Literal(found) ->
+      case found.value
+        Ast.LitValue.Real(number, text) if T.float_overflow?(type, number, text) ->
+          error(State.fail(cx, st, "CHECK-FLOAT-RANGE", T.float_outside(type, "-#{text}"), node.span))
+        _ -> ok()
+      end
+
+    _ -> ok()
+  end
 end
 
 # -N where the narrow type `target` is expected, N an integer literal (integer_literal?).
@@ -861,15 +909,15 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) 
     wanted = left.type
   elsif node.op == "plus" and T.is?(left.type, "List")
     wanted = left.type
-  elsif NUMBER_OPERATORS.include?(node.op) and T.sized_int?(left.type) and Args.literal_tree?(node.right)
-    wanted = left.type
+  elsif NUMBER_OPERATORS.include?(node.op)
+    wanted = fitting(node.right, left.type)
   end
 
   right = try State.expr(cx, left.st, node.right, wanted)
   ok(Sides(st: right.st, left: left.type, right: right.type))
 end
 
-# The sides of an operator whose left side is a tree of integer literals (literal_tree?). With a literal tree on the
+# The sides of an operator whose left side is a tree of number literals (literal_tree?). With a literal tree on the
 # right too, an arithmetic operator gives both sides the narrow type expected of it: `x: UInt8 = 1 + 2`. Else the right
 # side is checked first, and a narrow type of it is the type of the left side: `255 == a`.
 def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type) -> Result[Sides]
@@ -879,14 +927,23 @@ def literal_sides(cx: State.Cx, st: State.St, node: Ast.Binary, expected: T.Type
       wanted = narrow_target(expected)
     end
 
-    left = try State.expr(cx, st, node.left, wanted)
-    right = try State.expr(cx, left.st, node.right, wanted)
+    left = try State.expr(cx, st, node.left, fitting(node.left, wanted))
+    right = try State.expr(cx, left.st, node.right, fitting(node.right, wanted))
     return ok(Sides(st: right.st, left: left.type, right: right.type))
   end
 
   right = try State.expr(cx, st, node.right, T.Type.Unknown)
-  left = try State.expr(cx, right.st, node.left, narrow_target(right.type))
+  left = try State.expr(cx, right.st, node.left, fitting(node.left, right.type))
   ok(Sides(st: left.st, left: left.type, right: right.type))
+end
+
+# `type` when it is a sized type that the literals of node take: a sized integer type for a tree of integer literals,
+# Float32 for one of float literals. Else Unknown, and a literal keeps its own type.
+def fitting(node: Ast.Expr, type: T.Type) -> T.Type
+  return type if T.sized_int?(type) and Args.number_tree?(node, false)
+  return type if T.is?(type, "Float32") and Args.number_tree?(node, true)
+
+  T.Type.Unknown
 end
 
 # The ids of the method calls and field accesses along the target chain of an expression.
@@ -1004,6 +1061,8 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
     )
   elsif either_string and either_error
     return ERROR_TEXT_HELP
+  elsif either_float and (T.is?(sides.left, "Float32") or T.is?(sides.right, "Float32"))
+    return "make both sides one type: x.to_f gives the Float of a Float32, f.to_float32 the Float32 of a Float"
   elsif either_int and either_float
     return "make both sides the same type: n.to_f turns the Int into a Float, " + "x.to_i! truncates the Float"
   elsif either_string and (either_int or either_float)
