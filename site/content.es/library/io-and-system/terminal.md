@@ -2,7 +2,7 @@
 title: Terminal
 weight: 10
 description: Si un flujo es una terminal, el modo raw, el tamaño de la terminal y sus cambios de tamaño.
-source_hash: "27fb6e7ecadb"
+source_hash: "81a360fc891d"
 ---
 
 Un programa de pantalla completa (un editor, una TUI) lee las teclas de una en una y dibuja con secuencias de escape VT. `Terminal` le da lo que necesita del sistema, igual en Linux, macOS y Windows 10 o posterior. Las teclas se siguen leyendo con [`IO.read_bytes`](/library/io-and-system/io/) en la entrada estándar: llegan como bytes, y el programa (o su biblioteca) analiza las secuencias de escape de las teclas, del ratón y del texto pegado. El ejemplo espera una tecla, así que muestra un cambio de tamaño después de la siguiente tecla.
@@ -102,4 +102,4 @@ io.failed
 Un cambio de tamaño de la terminal es la señal `System.Signal.Winch`, que [`System.subscribe`](/library/io-and-system/system/#systemsubscribe) entrega en un canal. Lee el tamaño nuevo con `Terminal.size` cuando llega un valor. Sin una suscripción, un cambio de tamaño no hace nada.
 
 - En Linux y macOS es `SIGWINCH`, que el sistema envía a los programas del trabajo en primer plano de la terminal.
-- En Windows la VM la recibe cuando libuv ve que la consola cambia de tamaño; `Winch` es la única señal a la que un programa de Windows puede suscribirse.
+- En Windows, mientras `Winch` está suscrita, la VM lee el tamaño de la ventana de la consola cada cuarto de segundo, más o menos, y envía `Winch` cuando cambió, así que un cambio de tamaño se ve en un cuarto de segundo, más o menos. `Winch` es la única señal a la que un programa de Windows puede suscribirse.

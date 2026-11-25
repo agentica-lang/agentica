@@ -101,4 +101,4 @@ io.failed
 A resize of the terminal is the signal `System.Signal.Winch`, which [`System.subscribe`](/library/io-and-system/system/#systemsubscribe) delivers on a channel. Read the new size with `Terminal.size` when a value comes. Without a subscription a resize does nothing.
 
 - On Linux and macOS it is `SIGWINCH`, which the system sends to the programs of the terminal's foreground job.
-- On Windows the VM gets it when libuv sees the console change size; `Winch` is the one signal a Windows program can subscribe to.
+- On Windows, while `Winch` is subscribed, the VM reads the size of the console window about every quarter second and sends `Winch` when it changed, so a resize is seen within about a quarter second. `Winch` is the one signal a Windows program can subscribe to.

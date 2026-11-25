@@ -316,11 +316,12 @@ section says how the scheduler and the loop keep them.
   bytes). The end of the run drops every subscription first, so a signal
   during the exit path is a stop signal. `SIGWINCH` (`System.Signal.Winch`, a
   terminal resize) is no stop signal: it has the handler only while it is
-  subscribed and its default action (nothing) otherwise, the handler drops one
+  subscribed and the action it had before otherwise, the handler drops one
   that is not subscribed or comes after a stop began, and the threads that
   block the stop signals block it too. Windows has no subscription but
-  `Winch`, which a `uv_signal_t` on the loop takes from libuv's console resize
-  watch.
+  `Winch`: no event reaches every console (a pseudo console sends none to
+  libuv's resize watch), so while it is subscribed a loop timer reads the
+  console window's size every 250 ms and a new size is a `Winch`.
 - **Terminal mode** (`Terminal.raw`, `vm/terminal.c`). The first raw call
   keeps the terminal's mode (termios of stdin; the console modes on Windows)
   for the process, and `agc_tty_restore` sets it back from every way the

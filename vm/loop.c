@@ -72,7 +72,7 @@ typedef struct {
   atomic_uint subscribed, pending, ignored;
 #if defined(_WIN32)
   HANDLE driver;
-  /* The loop of the run has its Winch handle (watch_winch), so Winch can be subscribed to. */
+  /* The loop of the run has its Winch timer (watch_winch), so Winch can be subscribed to. */
   atomic_bool winch;
 #else
   pid_t driver;
@@ -92,7 +92,10 @@ struct agc_loop {
   uv_timer_t bound;
   uv_async_t wake;
 #if defined(_WIN32)
-  uv_signal_t stop_signals[3], winch;
+  uv_signal_t stop_signals[3];
+  /* The poll of the console size while Winch is subscribed, and the size it saw last. */
+  uv_timer_t winch;
+  int64_t winch_rows, winch_cols;
   uv_timer_t stop_grace, parent_check;
   HANDLE driver;
   size_t stop_signal_count;
@@ -1591,33 +1594,41 @@ static const int signal_numbers[AGC_SIGNAL_COUNT] = {15, 2, 1, 10, 12, 28, 3, 9}
 
 #define WINCH_BIT (1u << AGC_SIGNAL_WINCH)
 
-/* libuv raises SIGWINCH on Windows when it sees the console resized (a thread of its own watches the console). */
-static void winch_received(uv_signal_t *handle, int sig) {
-  (void)handle;
-  (void)sig;
+/* Windows sends no signal for a resize that every console gives (a pseudo console sends no layout event to libuv's
+   watch), so while Winch is subscribed the loop reads the console's size every WINCH_POLL_MS, as Terminal.size does,
+   and a size other than the last one is a Winch. */
+#define WINCH_POLL_MS 250
+
+static void winch_tick(uv_timer_t *timer) {
+  agc_loop *loop = timer->data;
+  int64_t rows = 0, cols = 0;
+  if (agc_tty_size(&rows, &cols) != 0 || (rows == loop->winch_rows && cols == loop->winch_cols)) return;
+  loop->winch_rows = rows;
+  loop->winch_cols = cols;
   if (atomic_load(&stop_status()->subscribed) & WINCH_BIT) atomic_fetch_or(&stop_status()->pending, WINCH_BIT);
 }
 
-/* The Winch handle runs for the whole run but keeps the loop alive only while Winch is subscribed. A loop that has no
-   handle (its init failed) leaves `winch` false, and System.subscribe refuses Winch. */
+/* A loop whose timer cannot be made leaves `winch` false, and System.subscribe refuses Winch. */
 static void watch_winch(agc_loop *loop) {
-  if (uv_signal_init(&loop->uv, &loop->winch) != 0) return;
-  if (uv_signal_start(&loop->winch, winch_received, SIGWINCH) != 0) {
-    uv_close((uv_handle_t *)&loop->winch, NULL);
-    return;
-  }
-  uv_unref((uv_handle_t *)&loop->winch);
+  if (uv_timer_init(&loop->uv, &loop->winch) != 0) return;
+  loop->winch.data = loop;
   loop->winch_init = true;
   atomic_store(&stop_status()->winch, true);
 }
 
+/* On the loop's thread: the poll runs, and keeps the loop alive, only while Winch is subscribed. */
 static void keep_winch(void *data) {
   agc_loop *loop = data;
   if (!loop->winch_init) return;
-  if (atomic_load(&stop_status()->subscribed) & WINCH_BIT)
-    uv_ref((uv_handle_t *)&loop->winch);
-  else
-    uv_unref((uv_handle_t *)&loop->winch);
+  bool on = atomic_load(&stop_status()->subscribed) & WINCH_BIT;
+  bool running = uv_is_active((uv_handle_t *)&loop->winch);
+  if (on && !running) {
+    loop->winch_rows = loop->winch_cols = 0;
+    (void)agc_tty_size(&loop->winch_rows, &loop->winch_cols);
+    uv_timer_start(&loop->winch, winch_tick, WINCH_POLL_MS, WINCH_POLL_MS);
+  } else if (!on && running) {
+    uv_timer_stop(&loop->winch);
+  }
 }
 
 void agc_io_signals_set(agc_vm *vm, unsigned mask) {
@@ -2553,7 +2564,7 @@ static void unwatch_stop(agc_loop *loop) {
   loop->stop_signal_count = 0;
   if (loop->winch_init) {
     atomic_store(&stop_status()->winch, false);
-    uv_signal_stop(&loop->winch);
+    uv_timer_stop(&loop->winch);
     uv_close((uv_handle_t *)&loop->winch, NULL);
     loop->winch_init = false;
   }
