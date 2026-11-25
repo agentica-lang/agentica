@@ -28,9 +28,8 @@ programs are valid and how they run.
 - `Float32`: IEEE 754 binary32. A float literal takes it where its context
   expects it (§4, "Literals"). `+ - * /`, `< <= > >=` and `== !=` take two
   `Float32`s, never a `Float32` and a `Float` (`CHECK-TYPE-MISMATCH`); there is
-  no `%`. Each operation runs in binary64 and rounds once to binary32, which for
-  `+ - * /` is the binary32 nearest the exact result (binary64 has 53 >= 2 * 24
-  + 2 bits: Figueroa, 1995). A result past the largest `Float32` is an
+  no `%`. Each `+ - * /` gives the binary32 nearest the exact result
+  (`docs/vm/02-reference-behavior.md`). A result past the largest `Float32` is an
   infinity; a zero divisor is `RUNTIME-DIVISION-BY-ZERO`; NaN and `-0.0` behave
   as in `Float`. `to_s` gives the fewest digits that read back as the same
   `Float32` (`0.1`, not `0.10000000149011612`). `x.to_f` widens it exactly,
