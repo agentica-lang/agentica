@@ -8,6 +8,7 @@ import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
+import Args from "check_args"
 import Help from "check_help"
 import Tables from "check_tables"
 import Names from "check_names"
@@ -367,8 +368,10 @@ end
 # bind its variables to types (which may hold the variables of the caller, and are never read again as template). The
 # order is:
 #   1. the arguments that have a type of their own, from left to right, each against its parameter type as far as the
-#      variables are known;
-#   2. the expected type of the call, matched with the result type, for the variables still open;
+#      variables are known; a number literal whose parameter type has an open variable waits for step 2;
+#   2. the expected type of the call, matched with the result type, for the variables still open; then those literals,
+#      in order, against their parameter type (the sized type a variable has already) or alone (Int, Float) when it is
+#      still open, which binds it;
 #   3. the arguments that need an expected type ([], {}, error(...), Option.None, &f of a generic function ...),
 #      against their parameter type, and they bind nothing;
 #   4. the lambdas among the other arguments, from left to right, then the block: each may bind the variables its
@@ -387,12 +390,15 @@ def check_generic_call(
   found: Map[String, T.Type] = {}
   waiting: List[Int] = []
   blocks: List[Int] = []
+  literals: List[Int] = []
   index = 0
   while index < count
     template = signature.params[Defaults.param_of(shape, node.slots, count, index)]
     arg = node.args[index]
     if block_literal?(arg) and T.is?(template, "Fn")
       blocks = blocks.push(index)
+    elsif Args.literal_tree?(arg) and Types.open_variables?(template, found)
+      literals = literals.push(index)
     elsif needs_expected?(cx, arg)
       waiting = waiting.push(index)
     else
@@ -405,6 +411,17 @@ def check_generic_call(
   end
 
   found = Types.learn(signature.result, expected, found)
+  for at in literals
+    template = signature.params[Defaults.param_of(shape, node.slots, count, at)]
+    if Types.open_variables?(template, found)
+      out = try State.expr(cx, current, node.args[at], T.Type.Unknown)
+      current = out.st
+      found = try Types.unify(cx, current, template, out.type, found, Ast.expr_span(node.args[at]))
+    else
+      current = try check_closed_argument(cx, current, node.args[at], template, found)
+    end
+  end
+
   later: List[Int] = []
   for at in waiting
     template = signature.params[Defaults.param_of(shape, node.slots, count, at)]

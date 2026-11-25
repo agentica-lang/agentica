@@ -28,6 +28,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- An integer or float literal argument of a generic call takes the type that another argument gives the type variable of its parameter: `pick(3, bytes)` on a `List[UInt8]` (#1971).
 - **Breaking:** a float literal that rounds to an infinity, such as `1e309`, is `CHECK-FLOAT-RANGE` (#984).
 - **Breaking:** `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float32` and `Float64` are reserved type names (#984).
 - **Breaking:** `std/binary` uses the sized types: `read_u16_be` and the other readers give `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64` (all 64 bits, no error above `Int`) or `Int` (`i64`), and the writers take that type and return a plain `Bytes` (no `Result`: a value that may not fit is converted first, `try n.to_uint16`) (#984).

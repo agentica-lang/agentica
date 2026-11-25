@@ -208,8 +208,10 @@ must be in its range, or it is `CHECK-INT-RANGE` with the literal as the span
 of `+ - * / %`, `< <= > >=` or `== !=` takes the narrow type of the other
 side, and so does an arithmetic of integer literals (`(1 + 2) * 3`); with two
 such trees under an arithmetic operator, the type expected of the whole
-expression goes into both (`x: UInt8 = 1 + 2`). A Float literal never takes a
-narrow type.
+expression goes into both (`x: UInt8 = 1 + 2`). An argument of a call that is
+a literal takes the type another argument gives to the type variable of its
+parameter (`List.append(bytes, 1)`, `pick(3, bytes)`), and is `Int` or `Float`
+when none does. A Float literal never takes a narrow type.
 
 A float literal is a `Float`, unless its context expects `Float32`, in the same
 places and with the same rules for operators and minus; an integer literal
