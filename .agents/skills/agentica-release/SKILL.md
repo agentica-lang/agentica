@@ -35,6 +35,10 @@ and the root docs) and merge its PR: the site is built once per release tag from
 that tag's tree (the theme's `tools/site_versions.py`), so a later pruning
 shows only in `dev`.
 
+Next, bring the stale Spanish pages up to date and merge that PR too, for the
+same reason: `make site-translations` lists them, and the `docs-i18n` skill
+says how (batches of at most 8 pages per PR).
+
 Then make a worktree from `origin/master` (a patch: §7; never switch the main
 checkout) on a branch such as `release/<version>`. Change only:
 
