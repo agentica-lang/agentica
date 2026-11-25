@@ -1360,7 +1360,8 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
 
 /* agc_op_fail for the running instruction of the interpreter, read back from the top frame (frame->pc is written
    before each instruction runs), so the hot loop passes only the status and keeps no operand live for the cold call.
-   Only the statuses of LIST_GET and MAP_GET need the operands. */
+   Only the statuses of LIST_GET and MAP_GET need the operands. The overflow of a UInt64 opcode has its own message
+   here, for the failures that compiled code reports (unsigned_op reports those of the interpreter). */
 static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_status status) {
   const agc_task *t = vm->task;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
@@ -1368,6 +1369,9 @@ static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_
   agc_instr in = f->code[frame->pc - 1];
   const agc_value *R = t->regs + frame->base;
   bool operands = status == AGC_STATUS_INDEX_OUT_OF_RANGE || status == AGC_STATUS_KEY_NOT_FOUND;
+  if (status == AGC_STATUS_OVERFLOW && in.op >= AGC_OP_ADD_U && in.op <= AGC_OP_LE_U)
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "UInt64 result is outside 0 to 18446744073709551615",
+             f->spans[frame->pc - 1]);
   agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
 }
 

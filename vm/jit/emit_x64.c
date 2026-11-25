@@ -489,8 +489,8 @@ void agc_emit_map(agc_emitter *e, agc_instr in, uint32_t pc) {
 }
 
 /* The instructions that are one call of their opcode HELPER (with R[c] when TWO), the interpreter's own code: the
-   Float operators and compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT
-   (CHARGED: the cost_exit applies their charges, as the interpreter does). */
+   Float and UInt64 operators and compares (so NaN, rounding, overflow and the result's bits are the C code's), SAME,
+   CONCAT and TO_TEXT (CHARGED: the cost_exit applies their charges, as the interpreter does). */
 void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc) {
   call_helper(e, helper, in, two, pc);
   if (charged) cost_exit(e, pc);

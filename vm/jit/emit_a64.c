@@ -507,7 +507,8 @@ void A64(map)(agc_emitter *e, agc_instr in, uint32_t pc) {
   window_call(e, in, pc, (uint64_t)(uintptr_t)agc_jit_map, in.c);
 }
 
-/* One call of an opcode HELPER (with R[c] when TWO), then the cost exit when CHARGED, as on x86-64. */
+/* One call of an opcode HELPER (with R[c] when TWO): a Float or UInt64 operator or compare, SAME, CONCAT or TO_TEXT.
+   Then the cost exit when CHARGED, as on x86-64. */
 void A64(helper)(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc) {
   call_helper(e, helper, in, two, pc);
   if (charged) cost_exit(e, pc);
