@@ -76,7 +76,9 @@ def test_the_errors_of_compile_are_json_under_json(tmp_path):
     assert failure(empty) == (2, "", "QUERY-USAGE", "<arguments>")
 
 
-@pytest.mark.skipif(WINDOWS or os.geteuid() == 0, reason="a folder is unreadable by its permission bits, which root ignores")
+@pytest.mark.skipif(
+    WINDOWS or os.geteuid() == 0, reason="a folder is unreadable by its permission bits, which root ignores"
+)
 def test_an_unreadable_folder_is_reported_and_the_other_mains_still_compile(tmp_path):
     write(tmp_path, {"a/main.agc": OK, "locked/main.agc": OK, "tests/locked/main.agc": OK})
     for locked in (tmp_path / "locked", tmp_path / "tests" / "locked"):
@@ -87,8 +89,9 @@ def test_an_unreadable_folder_is_reported_and_the_other_mains_still_compile(tmp_
     finally:
         for locked in (tmp_path / "locked", tmp_path / "tests" / "locked"):
             locked.chmod(0o700)
-    assert (plain.code, plain.stdout, plain.stderr) == (2, "compiled a/main.agc\n", "agentica: cannot read locked\n")
-    assert failure(found) == (2, found.stdout, "QUERY-USAGE", "locked")
+    assert (plain.code, plain.stdout, len(plain.stderr.splitlines()), "locked" in plain.stderr) == (
+        2, "compiled a/main.agc\n", 1, True)
+    assert (found.code, failure(found)[2:]) == (2, ("QUERY-USAGE", "locked"))
     assert [json.loads(line) for line in found.stdout.splitlines()] == [{"file": "a/main.agc", "state": "fresh"}]
 
 

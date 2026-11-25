@@ -830,8 +830,9 @@ def compile_ahead(session: Session, files: List[String]) -> Int
   files = listing.roots.map do |root: SymbolPaths.Root| root.typed end
   mains = files.select(&entry_point?)
   unreadable = listing.unreadable.select do |folder: String| !skipped?(folder) end
+  status = 0
   for folder in unreadable
-    failed(session, Core.unreadable(folder))
+    status = failed(session, QueryOptions.refusal("cannot read the folder #{folder}", "").with(file: folder))
   end
 
   if mains.size == 0 and unreadable.size == 0
@@ -840,7 +841,7 @@ def compile_ahead(session: Session, files: List[String]) -> Int
   end
 
   worst = ahead_each(session, mains)
-  return 2 if unreadable.size > 0
+  return status if status > worst
 
   worst
 end
