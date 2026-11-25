@@ -568,6 +568,75 @@ end
 
 A signature, a struct field or a type alias that declares `Result[Result[T]]` or `Optional[Optional[T]]` is usually one layer too many: use `try` on the inner value so one `Result` is left, or give the inner failure an error of its own. Keep both layers only when they mean different things. A nesting that a generic makes, such as `task.await` of a task that returns a `Result`, is fine.
 
+Read through an Optional with `&.` when `none` only means there is no answer: `user.address&.city.unwrap_or("?")` says it in one line, where a `case` repeats both arms. Use `case` when `none` needs work of its own. Write `&.` at each step of a chain (`a&.b&.c`):
+
+```agentica {mode="check"}
+# bad
+struct Address
+  city: String
+end
+
+struct User
+  name: String
+  address: Optional[Address]
+end
+
+def city_of(user: User) -> String
+  case user.address
+    some(address) -> address.city
+    none -> "?"
+  end
+end
+
+def main() -> Void
+  puts(city_of(User(name: "Ana", address: some(Address(city: "Lima")))))
+end
+```
+
+```agentica {mode="check"}
+# good
+struct Address
+  city: String
+end
+
+struct User
+  name: String
+  address: Optional[Address]
+end
+
+def city_of(user: User) -> String = user.address&.city.unwrap_or("?")
+
+def main() -> Void
+  puts(city_of(User(name: "Ana", address: some(Address(city: "Lima")))))
+end
+```
+
+Do not let `&.` hide a failure. A member that returns a `Result` gives an `Optional[Result[T]]`, such as `some(ok(8080))`, so an error rides inside a `some`; make the Optional a `Result` first with `to_result` and `try`. A member that gives nothing (`logger&.log("x")`) does nothing for `none`: fine for a part that is optional by design, not for one whose absence is a failure:
+
+```agentica {mode="check"}
+# bad
+def port_of(text: Optional[String]) -> Optional[Result[Int]] = text&.to_i
+
+def main() -> Void
+  puts(port_of(some("8080")).inspect)
+end
+```
+
+```agentica {mode="check"}
+# good
+def port_of(text: Optional[String]) -> Result[Int]
+  found = try text.to_result("no port")
+  found.to_i
+end
+
+def main() -> Void
+  case port_of(some("8080"))
+    ok(n) -> puts(n)
+    error(e) -> IO.warn(e.message)
+  end
+end
+```
+
 ## Text and collections
 
 Build text with interpolation, not by joining pieces with `+` and `.to_s`. To wrap a long text, a few sentence-sized `+` pieces in parentheses are fine. Use a heredoc for text of several lines:
@@ -601,6 +670,85 @@ end
 A `String` that grows by `+` in a loop is copied on every pass, so the loop is quadratic: `push` the pieces on a `List` and `join` them once after the loop.
 
 Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a struct for a record with known fields.
+
+## Numbers
+
+Use `Int` and `Float` by default. Use a sized type (`UInt8`, `Int32`, `UInt64`, `Float32`) only where its width is part of the data: a binary format (`std/binary` reads and writes them), a field with a fixed range, a native call. Compute in `Int` and convert once, at the edge.
+
+A number that comes from outside converts with `to_uint16`, which gives an error `Result` when the value does not fit, and `try` passes it up. `to_uint16!` stops the program, so use it only where the range was just checked. Do not use `wrap_uint16` to make a value fit: it keeps the low bits and `70000` becomes `4464`:
+
+```agentica {mode="check"}
+# bad
+import Binary from "std/binary"
+
+def header(length: Int) -> Bytes = Binary.write_u16_be(length.wrap_uint16)
+
+def main() -> Void
+  puts(header(70000).to_a)
+end
+```
+
+```agentica {mode="check"}
+# good
+import Binary from "std/binary"
+
+def header(length: Int) -> Result[Bytes]
+  size = try length.to_uint16
+  ok(Binary.write_u16_be(size))
+end
+
+def main() -> Void
+  case header(70000)
+    ok(bytes) -> puts(bytes.to_a)
+    error(e) -> IO.warn(e.message)
+  end
+end
+```
+
+The operators of a sized type stop on overflow, which is the safe default. Use `wrapping_add`, `wrapping_sub`, `wrapping_mul` and the `wrap_*` methods only when arithmetic modulo the width is the point (a hash, a checksum, a random generator), and say so in a comment:
+
+```agentica {mode="check"}
+# good
+# FNV-1a wraps on purpose: the hash is arithmetic modulo 2^32
+def mix(hash: UInt32, byte: UInt8) -> UInt32 = hash.bit_xor(byte.to_uint32).wrapping_mul(16777619)
+
+def main() -> Void
+  hash: UInt32 = 2166136261
+  puts(mix(hash, 97))
+end
+```
+
+Use `Float32` only for a format or a native type that stores binary32 (`Binary.write_f32_le`); everywhere else use `Float`, since the two do not mix without a conversion.
+
+## Tasks
+
+Start a helper whose crash should end its caller with `Task.spawn_link`: both tasks fail with the same diagnostic, so the caller does not wait for a helper that is dead. Use `Task.spawn` with `Task.await` or `Task.monitor` when the caller goes on after the crash, to restart the worker, report it or clean up. A `Task.spawn` that nobody awaits or monitors shows its crash only when the program exits with code 1. A link does not end the other task on a return or a cancel, so it is not how you stop a helper: cancel it.
+
+```agentica {mode="check"}
+# bad
+def tick(inbox: Channel[Int]) -> Void
+  _ = inbox.send(1, 1000)
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(1)
+  _ticker = Task.spawn(&tick, inbox)
+  puts(inbox.recv(1000))
+end
+```
+
+```agentica {mode="check"}
+# good
+def tick(inbox: Channel[Int]) -> Void
+  _ = inbox.send(1, 1000)
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(1)
+  _ticker = Task.spawn_link(&tick, inbox)
+  puts(inbox.recv(1000))
+end
+```
 
 ## Effects
 

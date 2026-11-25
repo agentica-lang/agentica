@@ -2,9 +2,9 @@
 name: agentica-code-guidelines
 description: >-
   Style and idiom for Agentica (.agc) code: naming, layout, modules, functions,
-  pipes, case, Result/try, comments, and performance. Use when writing or
-  reviewing Agentica code style; language correctness belongs to
-  agentica-programming.
+  pipes, case, Result/try, Optional, numbers, tasks, comments, and performance.
+  Use when writing or reviewing Agentica code style; language correctness
+  belongs to agentica-programming.
 ---
 
 # Agentica code guidelines
@@ -160,6 +160,18 @@ Change style only in code you touch. Restyle untouched code separately.
 - A failure a caller may branch on gets a kind (`error("...", kind:
   "db.constraint")`); the caller tests `e.is_a?("db")` or `e.code`, never the
   message text.
+- A signature, field or alias of `Result[Result[T]]` or
+  `Optional[Optional[T]]` has one layer too many (`LINT-NESTED-WRAPPER`): `try`
+  the inner value, or give the inner failure its own error. Keep both only when
+  the layers mean different things; a nesting a generic makes (`task.await` of a
+  task that returns a `Result`) is fine.
+- Read through an Optional with `&.` when `none` only means no answer
+  (`user.address&.city.unwrap_or("?")`); use `case` when `none` needs work of
+  its own. Write `&.` at each step of a chain (`a&.b&.c`). Do not let it hide a
+  failure: a member that returns a `Result` gives `Optional[Result[T]]`, so make
+  the Optional a `Result` first (`to_result`, `try`); a `Void` member
+  (`logger&.log("x")`) does nothing for `none`, which is right only for a part
+  that is optional by design.
 
 ## Strings and collections
 
@@ -167,6 +179,32 @@ Change style only in code you touch. Restyle untouched code separately.
   sentence-sized `+` pieces, never one per line.
 - Use `List` for order, `Set` for membership, `Map` for keyed lookup, and a
   struct for a record with known fields.
+
+## Numbers
+
+- Use `Int` and `Float`. A sized type (`UInt8`, `Int32`, `UInt64`, `Float32`)
+  only where its width is part of the data: a binary format (`std/binary`), a
+  field with a fixed range, a native call. Compute in `Int`; convert once, at
+  the edge.
+- A number from outside converts with `to_uint16` (a `Result`; `try` it).
+  `to_uint16!` only where the range was just checked. Never `wrap_uint16` to
+  make a value fit: it keeps the low bits (`70000` becomes `4464`).
+- Operators on sized types stop on overflow; keep that. `wrapping_add`,
+  `wrapping_sub`, `wrapping_mul` and `wrap_*` only when arithmetic modulo the
+  width is the point (a hash, a checksum, a random generator), with a comment
+  that says so.
+- `Float32` only for a format or native type that stores binary32
+  (`Binary.write_f32_le`); the rest is `Float`.
+
+## Tasks
+
+- `Task.spawn_link` for a helper whose crash should end its caller: both fail
+  with the same diagnostic, so the caller does not wait for a dead helper.
+- `Task.spawn` with `Task.await` or `Task.monitor` when the caller goes on
+  after the crash (restart, report, clean up). A `Task.spawn` nobody awaits or
+  monitors shows its crash only as exit code 1 at the end.
+- A link does not end the other task on a return or a cancel; cancel a helper
+  to stop it.
 
 ## Speed (only on a hot path)
 

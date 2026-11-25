@@ -383,6 +383,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | run queue | cola de ejecución |  |
 | runner | ejecutor de pruebas | Short: ejecutor |
 | runtime | stays |  |
+| safe navigation | navegación segura | `&.` |
 | salt | sal |  |
 | sampling | muestreo |  |
 | sandbox | stays |  |
@@ -410,6 +411,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | signal | señal | An OS signal |
 | signature | firma | A function signature |
 | site | sitio | The documentation site |
+| sized type | tipo con tamaño | `UInt8`; narrow type: tipo de menos bits |
 | skill | stays | An agent skill |
 | sleep | pausar | `Task.sleep` stays |
 | slice | porción |  |
@@ -491,4 +493,5 @@ One line per term, sorted. "stays" means the term is not translated.
 | worker | trabajador |  |
 | workflow | flujo de trabajo |  |
 | workspace | espacio de trabajo |  |
+| wrap around | dar la vuelta | A number past its range; `wrapping_add` stays |
 | wrapper | envoltorio | A wrapper function: función envoltorio |
