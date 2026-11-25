@@ -52,12 +52,44 @@ def test_compile_reports_a_program_that_does_not_compile_and_goes_on(tmp_path):
     assert len(list(tmp_path.glob("*/_build/bytecode/*.agcb"))) == 1
     assert agentica(tmp_path, "--no-cache", "compile", "b/main.agc").code == 2
 
+    again = agentica(tmp_path, "--json", "compile", "b/main.agc")
+    assert (again.code, json.loads(again.stdout)) == (0, {"file": "b/main.agc", "state": "fresh"})
+
 
 @pytest.mark.parametrize("files", [{}, {"lib.agc": OK}])
 def test_a_folder_with_no_main_is_one_short_line(tmp_path, files):
     write(tmp_path, files)
     found = agentica(tmp_path, "compile")
     assert (found.code, found.stdout, len(found.stderr.splitlines())) == (2, "", 1)
+
+
+def failure(result):
+    """The one JSON diagnostic on stderr: its code and the file it names."""
+    found = json.loads(result.stderr)
+    return result.code, result.stdout, found["code"], found["file"]
+
+
+def test_the_errors_of_compile_are_json_under_json(tmp_path):
+    missing = agentica(tmp_path, "--json", "compile", "nope.agc")
+    assert failure(missing) == (2, "", "QUERY-USAGE", "nope.agc")
+    empty = agentica(tmp_path, "--json", "compile")
+    assert failure(empty) == (2, "", "QUERY-USAGE", "<arguments>")
+
+
+@pytest.mark.skipif(WINDOWS or os.geteuid() == 0, reason="a folder is unreadable by its permission bits, which root ignores")
+def test_an_unreadable_folder_is_reported_and_the_other_mains_still_compile(tmp_path):
+    write(tmp_path, {"a/main.agc": OK, "locked/main.agc": OK, "tests/locked/main.agc": OK})
+    for locked in (tmp_path / "locked", tmp_path / "tests" / "locked"):
+        locked.chmod(0)
+    try:
+        plain = agentica(tmp_path, "compile")
+        found = agentica(tmp_path, "--json", "compile")
+    finally:
+        for locked in (tmp_path / "locked", tmp_path / "tests" / "locked"):
+            locked.chmod(0o700)
+    assert (plain.code, plain.stdout, plain.stderr) == (2, "compiled a/main.agc\n", "agentica: cannot read locked\n")
+    assert failure(found) == (2, found.stdout, "QUERY-USAGE", "locked")
+    assert [json.loads(line) for line in found.stdout.splitlines()] == [{"file": "a/main.agc", "state": "fresh"}]
 
 
 def test_a_compile_under_a_deny_flag_fills_the_entry_that_a_run_under_it_reads(tmp_path):
