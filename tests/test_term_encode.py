@@ -105,6 +105,7 @@ def test_the_limits_of_depth_and_of_values_name_the_path_of_the_value_past_them(
     items = ": more than 4000000 values"
     map_path = 'by_name["k\\"q"][3999996]'
     enum_path = "items[0].values[0][3999996]"
+    cut_path = 'by_name["' + "a" * 63 + '..."][3999996]'
     # A level is the map head and its one field name, "next", and the innermost level is followed by null.
     expected = [
         f"depth 10000 ok {10000 * 6 + 1}",
@@ -114,6 +115,8 @@ def test_the_limits_of_depth_and_of_values_name_the_path_of_the_value_past_them(
         # The struct, the Map, its key and its List are four values; each item after them is one more.
         f"struct map list term.encode {len(map_path + items)} {map_path}{items}",
         f"list enum term.encode {len(enum_path + items)} {enum_path}{items}",
+        # The key is cut at 64 bytes, which is inside the two bytes of the "é", so the cut steps back before it.
+        f"long key term.encode {len(cut_path + items)} {shorten(cut_path + items)}",
     ]
     assert result.stdout.splitlines() == expected
 

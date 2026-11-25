@@ -2,7 +2,7 @@
 title: Term (CBOR)
 weight: 15
 description: Escribe un valor de Agentica como CBOR, una forma binaria compacta que conserva claves Int, los bits exactos de un Float, nil, Bytes y enums.
-source_hash: "8e906b08040d"
+source_hash: "66d50ae2bb85"
 ---
 
 `Term.encode` escribe un valor como bytes [CBOR](https://www.rfc-editor.org/rfc/rfc8949), la forma binaria de un valor. JSON sirve para otros programas; CBOR conserva lo que JSON pierde o deforma: un `Map` con claves `Int`, los bits exactos de un `Float` (infinitos incluidos), `nil` como valor propio, `Bytes` y un enum como un arreglo simple. También es más pequeño. Usos típicos son un caché en disco y los mensajes entre programas de Agentica. Leer los bytes de vuelta, `Term.decode`, llega más adelante: por ahora `Term.encode` da los bytes, y otro programa los lee como CBOR.
@@ -63,7 +63,7 @@ La forma es determinista (RFC 8949 sección 4.2): la cabecera más corta de cada
 - **Valores:** como máximo 4,000,000 valores en total. La clave de un `Map` cuenta como un valor y el nombre de un campo no.
 - **Tamaño:** como máximo 64 MiB de salida.
 
-El mensaje es `ruta: motivo`, con la ruta de los errores de `JSON.decode`: la raíz es `$`, un campo es `by_name`, un índice `[3]`, una clave `Int` `[3]`, una clave `String` `["k"]`, y un payload de un enum `values[0]`:
+El mensaje es `ruta: motivo`, con la ruta de los errores de `JSON.decode`: la raíz es `$`, un campo es `by_name`, un índice `[3]`, una clave `Int` `[3]`, una clave `String` `["k"]` (cortada a 64 bytes, con `...` después del corte), y un payload de un enum `values[0]`:
 
 ```text
 items[0].values[0][3999996]: more than 4000000 values

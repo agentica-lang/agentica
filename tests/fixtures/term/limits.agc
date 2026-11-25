@@ -61,4 +61,5 @@ def main() -> Void
   summary("list at", Term.encode(at))
   summary("struct map list", Term.encode(Holder(by_name: {"k\"q": at})))
   summary("list enum", Term.encode(Items(items: [Item.Big(at)])))
+  summary("long key", Term.encode(Holder(by_name: {("a" * 63) + "é" + "z": at})))
 end

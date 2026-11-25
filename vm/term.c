@@ -132,7 +132,7 @@ static agc_string *text_string(const term_buffer *b) {
 
 /* The error "path: reason" for the value being written, which is the last child that each open frame took: the keys,
    indexes and field names of the frames (a payload of an enum is `values[i]`, as in the JSON form). The root is $. The
-   bytes written so far are charged, as for a value that is written whole. */
+   bytes written so far and the text of the error are charged. */
 static agc_value limit_error(agc_vm *vm, const term_buffer *written, const term_frame *stack, size_t depth,
                              const char *reason) {
   agc_charge_bytes(vm, written->len);
@@ -166,6 +166,7 @@ static agc_value limit_error(agc_vm *vm, const term_buffer *written, const term_
   if (!b.len) put_text(&b, "$", 1);
   put_text(&b, ": ", 2);
   put_text(&b, reason, strlen(reason));
+  agc_charge_bytes(vm, b.len);
   return agc_error_string(vm, AGC_KIND_TERM_ENCODE, text_string(&b));
 }
 
@@ -234,8 +235,8 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
         const agc_map *m = agc_as_map(vm, item);
         f->kind = FRAME_MAP;
         f->n = agc_size_mul(m->size, 2);
-        f->keys = m->size ? agc_map_keys(vm, m, span) : NULL;
         fits = put_head(&b, 5, m->size);
+        f->keys = fits && m->size ? agc_map_keys(vm, m, span) : NULL;
       } else if (agc_is(item, AGC_T_STRUCT)) {
         const agc_struct_def *def = agc_struct_def_of(vm, agc_as_struct(vm, item));
         f->kind = FRAME_STRUCT;

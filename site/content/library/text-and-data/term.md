@@ -62,7 +62,7 @@ The form is deterministic (RFC 8949 section 4.2): the shortest head of each item
 - **Values:** at most 4,000,000 values in all. A `Map` key counts as a value and a field name does not.
 - **Size:** at most 64 MiB of output.
 
-The message is `path: reason`, with the path of `JSON.decode` errors: the root is `$`, a field is `by_name`, an index `[3]`, an `Int` key `[3]`, a `String` key `["k"]`, and a payload of an enum `values[0]`:
+The message is `path: reason`, with the path of `JSON.decode` errors: the root is `$`, a field is `by_name`, an index `[3]`, an `Int` key `[3]`, a `String` key `["k"]` (cut at 64 bytes, with `...` after the cut), and a payload of an enum `values[0]`:
 
 ```text
 items[0].values[0][3999996]: more than 4000000 values
