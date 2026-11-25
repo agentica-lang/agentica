@@ -8,34 +8,31 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-25
+
 ### Added
 
-- `Float32`, IEEE 754 binary32: a float literal takes it where its place expects it, rounded once, `+ - * /` and the comparisons round each result to the nearest `Float32`, `to_s` gives the shortest text (`0.1`), `x.to_f`, `f.to_float32`, `n.to_float32`, `x.to_bits` and `Float32.from_bits` convert, and JSON encodes and decodes it (#984).
-- `UInt64`, the unsigned 64-bit integer: literals from `0` to `18446744073709551615`, `+ - * / %` and the comparisons in unsigned arithmetic (a result outside the type halts with `RUNTIME-INTEGER-OVERFLOW`, a zero divisor with `RUNTIME-DIVISION-BY-ZERO`), `n.to_uint64`, `n.wrap_uint64`, `x.to_i` (a `Result`), `x.to_f`, the bit and wrapping methods, widenings from `UInt8`, `UInt16` and `UInt32`, JSON, `Map` keys, `Set` elements and `List.sort`; the sized integer types sort too (#984).
-- The narrow integer types have the bit methods of `Int` at their width (`a.bit_not`, `a.shift_left(1)`), `wrapping_add`, `wrapping_sub` and `wrapping_mul` (on `Int` too), `n.wrap_uint8` and the other `wrap_<type>` of an `Int`, widenings that cannot fail (`a.to_uint16`) and `a.to_f` (#984).
-- The narrow integer types take `+`, `-`, `*`, `/`, `%`, the comparisons and `==`: a literal on either side takes the type of the other (`a + 1`, `a == 255`), two types are `CHECK-TYPE-MISMATCH`, a result outside the type halts with `RUNTIME-INTEGER-OVERFLOW`, and an unsigned value has no unary minus (#984).
-- The narrow integer types `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` and `UInt32`: an integer literal takes the type its place expects, out of range is `CHECK-INT-RANGE`, and `x.to_i`, `n.to_uint8` and `n.to_uint8!` convert; `Int64` and `Float64` name `Int` and `Float` (#984).
-- `BDD.run(steps, hooks: some(BDD.Hooks(before_all:, after_all:)))` sets a feature up once per `--jobs` worker, as RSpec's `before(:all)`, and `BDD.feature_state(ctx)` gives each scenario what it returned; failures are `RUNTIME-BDD-BEFORE-ALL` and `RUNTIME-BDD-AFTER-ALL` (#1459).
-- `Task.spawn_link` starts a task linked to its caller: a crash of either ends the other with the same diagnostic, and a return or a cancel leaves it running (#1916).
-- `o&.name` and `o&.name(args)` read a field or call a method of the value inside an Optional and give an Optional (`user.address&.city.unwrap_or("?")`); on a receiver that is not an Optional it is `CHECK-SAFE-NAV-RECEIVER` (#1947).
-- `agentica COMMAND --help` (and `-h`) prints the usage of that command and its part of the summary, for every command, and exits 0 (#1928).
-- The `version` requirements and `tag` pins that several packages of one tree ask for the same repository meet in one tag: `add` and `update` take the highest tag that meets them all, and `PKG-VERSION-UNSATISFIED` says who asked for what (#1147).
-- `version = "~> 0.8"` in a dependency takes the highest git tag that satisfies a RubyGems-style requirement, with `agentica add NAME URL --version REQ`; `update` moves it, the lock keeps the chosen tag, and none is `PKG-VERSION-UNSATISFIED` (#1147).
-- `agentica fmt` writes a brace block in an `if`, `elsif`, guard, `while`, `for` or `case` head without parentheses (#1924).
-- A method call takes its `{ ... }` block in the head of an `if`, `elsif`, a guard, a `while`, a `for` or a `case`: `if xs.any? { |x| x > 0 }`, `for y in xs.sort_by { |x| -x }` (#1924).
-- `bytes.incomplete_utf8_length` counts the bytes at the end that cut a UTF-8 character, so a stream reader can keep them for the next chunk (#1789).
-- `JSON.encode`, `JSON.decode` and `JSON.schema` take the narrow integer types: decode reads only an integer in the type's range (`r: expected UInt8 from 0 to 255`), and the schema gives its `minimum` and `maximum`; the narrow types are `Map` keys and `Set` elements too (#984).
+- `Float32`, IEEE 754 binary32, with its literals, arithmetic, text, conversions and JSON (#984).
+- `UInt64`, the unsigned 64-bit integer, with its arithmetic, conversions, JSON, `Map` keys, `Set` elements and sorting (#984).
+- `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16` and `UInt32`: literals typed by their place, operators, bit and wrapping methods, range-checked conversions, and JSON (#984).
+- `BDD.run` takes `hooks:` with `before_all` and `after_all`, run once per `--jobs` worker, and `BDD.feature_state` gives each scenario its result (#1459).
+- `Task.spawn_link` starts a task linked to its caller (#1916).
+- `o&.name` and `o&.name(args)` read through an Optional (#1947).
+- `agentica COMMAND --help` (and `-h`) prints that command's usage (#1928).
+- `agentica add NAME URL --version REQ` and `version = "~> 0.8"` take the highest git tag that matches, and packages that share a repository meet in one tag (#1147).
+- A method call's `{ ... }` block works in the head of an `if`, `elsif`, guard, `while`, `for` or `case`, and `agentica fmt` writes it so (#1924).
+- `bytes.incomplete_utf8_length` counts the bytes that cut a UTF-8 character at the end (#1789).
 
 ### Changed
 
-- An integer or float literal argument of a generic call takes the type that another argument gives the type variable of its parameter, or the type the call is expected to give: `pick(3, bytes)` on a `List[UInt8]` (#1971).
-- **Breaking:** a float literal that rounds to an infinity, such as `1e309`, is `CHECK-FLOAT-RANGE` (#984).
+- An integer or float literal argument of a generic call takes the type that another argument gives the type variable (#1971).
+- **Breaking:** a float literal that rounds to infinity, such as `1e309`, is `CHECK-FLOAT-RANGE` (#984).
 - **Breaking:** `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float32` and `Float64` are reserved type names (#984).
-- **Breaking:** `std/binary` uses the sized types: `read_u16_be` and the other readers give `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64` (all 64 bits, no error above `Int`) or `Int` (`i64`), and the writers take that type and return a plain `Bytes` (no `Result`: a value that may not fit is converted first, `try n.to_uint16`) (#984).
-- **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one, and `std/binary` reads and writes `f32` as a `Float32` (#984).
-- **Breaking:** `Float.to_bits32` and `Float.from_bits32` are removed: use `Float32.to_bits` and `Float32.from_bits` (`x.to_float32` rounds a `Float`) (#984).
-- With the JIT, loops of `UInt64` arithmetic and comparisons are compiled instead of running in the interpreter (#1976).
-- `Result.unwrap_or(n.to_uint8, 0)` and `.unwrap_or(0)` type an integer or float literal default by the Result's value (#984).
+- **Breaking:** `std/binary` uses the sized types, and its writers return `Bytes` with no `Result` (#984).
+- **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one (#984).
+- **Breaking:** `Float.to_bits32` and `Float.from_bits32` are removed: use `Float32.to_bits` and `Float32.from_bits` (#984).
+- With the JIT, loops of `UInt64` arithmetic and comparisons are compiled (#1976).
+- `Result.unwrap_or` types an integer or float literal default by the Result's value (#984).
 
 ### Fixed
 
@@ -1812,7 +1809,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.37.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.38.0...HEAD
+[0.38.0]: https://github.com/agentica-lang/agentica/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/agentica-lang/agentica/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/agentica-lang/agentica/compare/0.35.1...0.36.0
 [0.35.1]: https://github.com/agentica-lang/agentica/compare/0.35.0...0.35.1
