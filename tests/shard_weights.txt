@@ -42,7 +42,6 @@ tests/test_release_tools.py 2 0 0 0
 tests/test_shard_tests.py 1 0 0 0
 tests/test_single_binary.py 8 1 14 0
 tests/test_site_examples.py 4 20 0 0
-tests/test_site_versions.py 6 0 0 0
 tests/test_source_paths.py 4 0 0 0
 tests/test_source_utf8.py 1 0 0 0
 tests/test_spec_alias.py 4 0 0 0

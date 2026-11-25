@@ -37,7 +37,7 @@ weight = 2
   branch = "master"
   repoPublic = false
 
-  # The theme's version selector; tools/site_versions.py turns it on for every version and passes the root.
+  # The theme's version selector; its tools/site_versions.py turns it on for every version and passes the root.
   [params.versions]
     enabled = true
 

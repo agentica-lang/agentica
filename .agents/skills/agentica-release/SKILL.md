@@ -32,8 +32,8 @@ check before it fails.
 First, with the agentica lines frozen, run a docs pruning pass (the user-level
 `documentation-pruning` skill over `docs/`, `site/content/`, `.agents/skills/`
 and the root docs) and merge its PR: the site is built once per release tag from
-that tag's tree (`tools/site_versions.py`), so a later pruning shows only in
-`dev`.
+that tag's tree (the theme's `tools/site_versions.py`), so a later pruning shows only
+in `dev`.
 
 Then make a worktree from `origin/master` (a patch: §6; never switch the main
 checkout) on a branch such as `release/<version>`. Change only:
