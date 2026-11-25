@@ -77,7 +77,7 @@ def test_the_errors_of_compile_are_json_under_json(tmp_path):
 
 
 @pytest.mark.skipif(
-    WINDOWS or os.geteuid() == 0, reason="a folder is unreadable by its permission bits, which root ignores"
+    WINDOWS or os.geteuid() == 0, reason="host-only: a folder is unreadable by its permission bits, which root ignores"
 )
 def test_an_unreadable_folder_is_reported_and_the_other_mains_still_compile(tmp_path):
     write(tmp_path, {"a/main.agc": OK, "locked/main.agc": OK, "tests/locked/main.agc": OK})
