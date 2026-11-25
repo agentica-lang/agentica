@@ -278,8 +278,10 @@ int agc_tty_raw(bool on) {
   mode.c_cflag |= CS8;
   mode.c_cc[VMIN] = 1;
   mode.c_cc[VTIME] = 0;
+  /* On before the call, so a stop signal or a fatal exit while it runs still gives the kept mode back. */
+  bool was_on = atomic_exchange_explicit(tty_on(), true, memory_order_acq_rel);
   int err = tty_set(&mode);
-  if (!err) atomic_store_explicit(tty_on(), true, memory_order_release);
+  if (err && !was_on) atomic_store_explicit(tty_on(), false, memory_order_release);
   return err;
 }
 

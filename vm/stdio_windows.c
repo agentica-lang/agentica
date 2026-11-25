@@ -335,14 +335,17 @@ int agc_tty_raw(bool on) {
   }
   DWORD raw_in = (in_mode & ~(DWORD)(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT)) |
                  ENABLE_VIRTUAL_TERMINAL_INPUT;
-  if (!SetConsoleMode(in, raw_in)) return tty_errno();
-  if (out && !SetConsoleMode(out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
-    int err = tty_errno();
+  /* On before the calls, so an exit while they run still gives the kept modes back. */
+  bool was_on = atomic_exchange_explicit(&tty->on, true, memory_order_acq_rel);
+  int err = 0;
+  if (!SetConsoleMode(in, raw_in)) {
+    err = tty_errno();
+  } else if (out && !SetConsoleMode(out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+    err = tty_errno();
     SetConsoleMode(in, in_mode);
-    return err;
   }
-  atomic_store_explicit(&tty->on, true, memory_order_release);
-  return 0;
+  if (err && !was_on) atomic_store_explicit(&tty->on, false, memory_order_release);
+  return err;
 }
 
 void agc_tty_restore(void) {
