@@ -8,19 +8,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-25
+
 ### Added
 
-- `agentica lint` suggests one layer (`LINT-NESTED-WRAPPER`) for a `Result[Result[T]]` or an `Optional[Optional[T]]` that a signature, a struct field or a type alias writes (#1822).
-- `agentica refs` of a module block also reports its name in an import list (kind `import`) and in a re-export (kind `export`) (#1997).
-- `agentica refs` also reports a name in an import list (kind `import`) and in a re-export (kind `export`), so a rename built on it reaches them (#1750).
-- `Terminal.tty?`, `Terminal.raw` and `Terminal.size`, and `System.Signal.Winch` for a resize, on Linux, macOS and Windows: what a full-screen program needs; the VM gives the terminal's mode back at exit (#1862).
-- `Term.decode(bytes, Type)` reads what `Term.encode` writes back into a struct or enum: heads, lengths, floats, text and limits are checked, an error has the path of the first bad value, and `JSON.Field` is a plain enum in the bytes (#994).
-- `Term.encode(value)` writes a value as CBOR (RFC 8949) in a deterministic form: `Map`s with `Int` keys, the exact bits of a `Float` and a `Float32`, `Bytes`, `nil`, enums, structs and `Optional`; a value past 10,000 levels, 4,000,000 values or 64 MiB is an error with its path (#994).
+- `agentica lint` suggests one layer (`LINT-NESTED-WRAPPER`) for a `Result[Result[T]]` or `Optional[Optional[T]]` written in a signature, field or alias (#1822).
+- `agentica refs` reports a name in an import list (kind `import`) or a re-export (kind `export`), so a rename reaches them (#1750, #1997).
+- `Terminal.tty?`, `Terminal.raw`, `Terminal.size` and `System.Signal.Winch` on Linux, macOS and Windows; the terminal mode is restored at exit (#1862).
+- `Term.decode(bytes, Type)` reads what `Term.encode` writes back into a struct or enum, and an error gives the path of the first bad value (#994).
+- `Term.encode(value)` writes a value as deterministic CBOR (RFC 8949), with size limits (#994).
 
 ### Changed
 
-- `agentica --json compile` writes an unreadable file, an unreadable folder and a folder with no `main.agc` as JSON diagnostics, and with no FILE an unreadable folder no longer stops the other `main.agc` files from compiling (#1743).
-- `agentica --json check` of one file that cannot be read writes a `QUERY-USAGE` JSON diagnostic instead of a plain line, as `compile` does (#1993).
+- `agentica --json compile` writes unreadable files and folders, and a folder with no `main.agc`, as JSON diagnostics; with no FILE, one unreadable folder no longer stops the others (#1743).
+- `agentica --json check` of an unreadable file writes a `QUERY-USAGE` JSON diagnostic, as `compile` does (#1993).
 - **Breaking:** `Term` is a reserved type name (#994).
 - **Breaking:** `Terminal` is a reserved type name (#1862).
 
@@ -1826,7 +1827,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.38.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.39.0...HEAD
+[0.39.0]: https://github.com/agentica-lang/agentica/compare/0.38.0...0.39.0
 [0.38.0]: https://github.com/agentica-lang/agentica/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/agentica-lang/agentica/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/agentica-lang/agentica/compare/0.35.1...0.36.0
