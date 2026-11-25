@@ -2,7 +2,7 @@
 title: System, Time y Random
 weight: 5
 description: Argumentos del programa, variables de entorno, códigos de salida, relojes y números aleatorios.
-source_hash: "6948a1feab5b"
+source_hash: "86af0195f9eb"
 ---
 
 ## System.args {#systemargs}
@@ -135,7 +135,7 @@ true
 System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]]
 ```
 
-Recibe las señales del sistema operativo que indiques como valores en un canal nuevo, en lugar de dejar que detengan el programa. `System.Signal` es un enum: `Term`, `Int` (Ctrl-C), `Hup`, `Usr1`, `Usr2`, `Quit` y `Kill`; las cinco primeras pueden suscribirse. Un programa que debe limpiar al recibir Ctrl-C o al detenerse un contenedor recibe el primer valor, limpia y termina con `128 + System.signal_number(signal)`, el código que espera un shell.
+Recibe las señales del sistema operativo que indiques como valores en un canal nuevo, en lugar de dejar que detengan el programa. `System.Signal` es un enum: `Term`, `Int` (Ctrl-C), `Hup`, `Usr1`, `Usr2`, `Winch`, `Quit` y `Kill`; las seis primeras pueden suscribirse. `Winch` es un cambio de tamaño de la terminal ([Terminal](/library/io-and-system/terminal/#resize-events)): nunca detiene el programa y, sin una suscripción, no hace nada. Un programa que debe limpiar al recibir Ctrl-C o al detenerse un contenedor recibe el primer valor, limpia y termina con `128 + System.signal_number(signal)`, el código que espera un shell.
 
 - El canal guarda un valor pendiente por señal: un valor se encola solo cuando esa señal no tiene ninguno esperando, así que una ráfaga de una señal da un valor, y la señal nunca espera al programa. El canal no cuenta cuántas veces llegó una señal.
 - Cada suscripción recibe todas las señales que indica, así que dos tareas que se suscriben a `Term` reciben ambas. Una señal indicada dos veces cuenta una vez.
@@ -143,7 +143,7 @@ Recibe las señales del sistema operativo que indiques como valores en un canal 
 - Una señal que llega antes de la suscripción detiene el programa, como ocurre sin ella. Mientras una suscripción está abierta, la ejecución espera sus señales, así que un programa cuyas tareas esperan a una no termina.
 - `send` en el canal, o en su dirección, devuelve `error("signal: channel is read only")` con la clase `argument`.
 - `Quit` o `Kill` en la lista detienen la ejecución con `RUNTIME-INVALID-SIGNAL`. `Quit` (`Ctrl-\`) es la detención forzosa: detiene los programas hijos, escribe los archivos y sale con 131, también en un programa que se suscribió a `Term` e `Int`, salvo que el programa se iniciara con `Quit` ignorada (un trabajo que un shell ejecuta en segundo plano). `Kill` no se puede capturar.
-- Una lista vacía devuelve `error("signal: no signals")` con la clase `argument`. Una señal que el programa tenía ignorada al iniciarse (`nohup`; `Int` y `Quit` en un trabajo que un shell ejecuta en segundo plano) sigue ignorada, y las demás señales indicadas se suscriben; cuando todas las indicadas se ignoraron, la llamada devuelve `error("signal: ignored when the program started")` con la clase `system.signal`. En Windows cada llamada devuelve `error("signal: not supported on this system")` con la clase `system.signal`, y Ctrl-C y Ctrl-Break detienen el programa.
+- Una lista vacía devuelve `error("signal: no signals")` con la clase `argument`. Una señal que el programa tenía ignorada al iniciarse (`nohup`; `Int` y `Quit` en un trabajo que un shell ejecuta en segundo plano) sigue ignorada, y las demás señales indicadas se suscriben; cuando todas las indicadas se ignoraron, la llamada devuelve `error("signal: ignored when the program started")` con la clase `system.signal`. En Windows solo `Winch` puede suscribirse: una lista con otra señal devuelve `error("signal: not supported on this system")` con la clase `system.signal`, y Ctrl-C y Ctrl-Break detienen el programa.
 - No necesita ningún flag, tampoco con `--sandbox`: solo cambia lo que el programa hace con sus propias señales.
 - `SIGPIPE`, `SIGCHLD` y las señales del recolector de basura de la VM no tienen valor de `System.Signal`, así que un programa no puede tomarlas. Un programa iniciado con `Process.spawn` arranca con la acción predeterminada para cada señal.
 
@@ -167,7 +167,7 @@ channel: timed out
 System.signal_number(signal: System.Signal) -> Int
 ```
 
-El número de la señal: `Term` es 15, `Int` 2, `Hup` 1, `Quit` 3 y `Kill` 9. `Usr1` y `Usr2` son 10 y 12 en Linux y Windows, 30 y 31 en macOS. Un proceso que una señal terminó tiene el código de salida `128 +` ese número.
+El número de la señal: `Term` es 15, `Int` 2, `Hup` 1, `Winch` 28, `Quit` 3 y `Kill` 9. `Usr1` y `Usr2` son 10 y 12 en Linux y Windows, 30 y 31 en macOS. Un proceso que una señal terminó tiene el código de salida `128 +` ese número.
 
 ```agentica
 def main() -> Void

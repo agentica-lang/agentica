@@ -55,6 +55,8 @@ if os.name == "nt":
     kernel32.CreatePseudoConsole.argtypes = [Coord, wintypes.HANDLE, wintypes.HANDLE, wintypes.DWORD,
                                              ctypes.POINTER(ctypes.c_void_p)]
     kernel32.CreatePseudoConsole.restype = ctypes.c_long
+    kernel32.ResizePseudoConsole.argtypes = [ctypes.c_void_p, Coord]
+    kernel32.ResizePseudoConsole.restype = ctypes.c_long
     kernel32.ClosePseudoConsole.argtypes = [ctypes.c_void_p]
     kernel32.ClosePseudoConsole.restype = None
     kernel32.DeleteProcThreadAttributeList.argtypes = [ctypes.c_void_p]
@@ -95,7 +97,8 @@ def run_on_console(command, env, limit, typed=None, during=None):
     pseudo console sometimes keeps the last bytes typed until more input comes (#1433), so while the command runs a
     space is typed every NUDGE_SECONDS: it comes after all of `typed`, so a command that reads only that never sees it.
     `during(type_text)` runs after the start, while the command runs: it waits for what the test needs (a file the
-    command writes) and types, with type_text, what the test wants the console to receive. The character 3 is
+    command writes) and types, with type_text, what the test wants the console to receive; `type_text.resize(columns,
+    rows)` resizes the pseudo console. The character 3 is
     Ctrl+C: the console turns it into a CTRL_C_EVENT for every process attached to it, as the keys do on a terminal.
     Returns (exit code, the text the console showed). The pseudo console is closed after the exit, while a thread
     reads its output, because closing it waits for the output to be taken. Whatever step fails, the handles, the
@@ -154,6 +157,11 @@ def run_on_console(command, env, limit, typed=None, during=None):
             written = wintypes.DWORD()
             assert kernel32.WriteFile(in_write, data, len(data), ctypes.byref(written), None)
 
+        def resize(columns, rows):
+            result = kernel32.ResizePseudoConsole(console, Coord(columns, rows))
+            assert result == 0, "ResizePseudoConsole: 0x%08x" % (result & 0xFFFFFFFF)
+
+        type_text.resize = resize
         if typed:
             type_text(typed)
         if during:

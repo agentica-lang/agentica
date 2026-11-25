@@ -534,7 +534,7 @@ bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v) {
 /* The variant ids of System.Signal, by AGC_SIGNAL_* index, found by name the first time (under rt->sync, as every
    signal row is shared): a forged program without the enum fails here with RUNTIME-INTERNAL. */
 static const uint32_t *signal_variants(agc_vm *vm) {
-  static const char *const names[AGC_SIGNAL_COUNT] = {"Term", "Int", "Hup", "Usr1", "Usr2", "Quit", "Kill"};
+  static const char *const names[AGC_SIGNAL_COUNT] = {"Term", "Int", "Hup", "Usr1", "Usr2", "Winch", "Quit", "Kill"};
   agc_runtime *rt = vm->rt;
   if (!rt->signal_found) {
     for (unsigned k = 0; k < AGC_SIGNAL_COUNT; k++)
@@ -571,7 +571,7 @@ static agc_value builtin_subscribe(agc_vm *vm, agc_value *args, uint32_t span) {
     mask |= 1u << index;
   }
   if (!mask) return agc_error(vm, AGC_KIND_ARGUMENT, "signal: no signals");
-  if (!agc_io_signals_supported())
+  if (mask & ~agc_io_signals_supported())
     return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: not supported on this system");
   /* A signal ignored at start stays ignored; the call fails only when nothing is left to subscribe to (#1533). */
   mask &= ~agc_io_signals_ignored();

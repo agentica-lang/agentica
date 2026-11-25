@@ -11,6 +11,7 @@ description: Standard input and output, files, other programs, the network, and 
 - [Archive](/library/io-and-system/archive/): extract named files from TAR and ZIP archives into a new private directory.
 - [Logger](/library/io-and-system/logger/): levels, named handlers, and text or JSON lines on stderr.
 - [System, Time and Random](/library/io-and-system/system/): program arguments, exit codes, clocks and random numbers.
+- [Terminal](/library/io-and-system/terminal/): raw mode, the size of the terminal and its resize events, for full-screen programs.
 - [Dates and times](/library/io-and-system/time/): calendar dates, times of day and date-times at a fixed UTC offset.
 - [Option parser](/library/io-and-system/option-parser/): read the command line into typed values, with defaults, choices, errors and a help text.
 - [Native code](/library/io-and-system/native/): call C functions of a native library with an `extern` block.

@@ -91,6 +91,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | compiler | compilador | The program that turns source into bytecode |
 | composition root | raíz de composición | The place that builds the parts |
 | compute pool | grupo de hilos de cómputo | The threads of `compute def` calls |
+| console | consola | A Windows console |
 | constant | constante | Names like `TAX_PERCENT` stay |
 | constant time | tiempo constante |  |
 | consumer | consumidor |  |
@@ -172,6 +173,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | framing | enmarcado | Verb: enmarcar |
 | free | liberar | `free:` stays in code |
 | front end | stays |  |
+| full-screen program | programa de pantalla completa | An editor, a TUI |
 | function | función | The keyword `def` stays |
 | garbage collector | recolector de basura | GC stays |
 | GC | GC | Garbage collector; the acronym stays |
@@ -346,6 +348,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | queue | cola | The type `Queue` stays |
 | range | rango | The type `Range` stays |
 | raw layer | capa cruda |  |
+| raw mode | modo raw | `Terminal.raw` |
 | read-only | de solo lectura |  |
 | reap | recoger | Child processes |
 | reason | motivo |  |
@@ -365,6 +368,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | reply | respuesta |  |
 | repository | repositorio |  |
 | request | solicitud | An HTTP request |
+| resize (noun) | cambio de tamaño | Of a terminal |
 | resolver | resolutor | Verb: resolver |
 | resource | recurso |  |
 | response | respuesta | An HTTP response |
@@ -442,6 +446,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | target | destino |  |
 | task | tarea | The type `Task` stays |
 | template | plantilla |  |
+| terminal | terminal | A terminal device; not a terminal method |
 | terminal method | método final | A method that runs a `Lazy` |
 | terminal operation | operación final |  |
 | test | prueba | `test` in code stays |

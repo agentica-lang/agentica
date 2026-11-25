@@ -455,6 +455,9 @@ Task.spawn_owning
 Task.unobserved_crash
 Term.decode
 Term.encode
+Terminal.raw
+Terminal.size
+Terminal.tty?
 Test.assert
 Test.eq
 Test.error?

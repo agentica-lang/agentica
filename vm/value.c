@@ -158,6 +158,7 @@ static atomic_size_t heap_used; // NOLINT(cppcoreguidelines-avoid-non-const-glob
 #endif
 
 _Noreturn void agc_out_of_memory(void) {
+  agc_tty_restore();
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
 #ifdef AGC_FUZZ
@@ -169,6 +170,7 @@ _Noreturn void agc_out_of_memory(void) {
 }
 
 _Noreturn void agc_heap_limit_reached(void) {
+  agc_tty_restore();
   ssize_t ignored = heap_limit_json ? write(2, limit_json, sizeof limit_json - 1)
                                     : write(2, limit_line, sizeof limit_line - 1);
   (void)ignored;
@@ -253,6 +255,7 @@ static bool gc_abort_is_out_of_memory(const char *message) {
 
 static void on_gc_abort(const char *message) {
   if (gc_abort_is_out_of_memory(message)) agc_out_of_memory();
+  agc_tty_restore();
   ssize_t ignored = write(2, gc_error_line, sizeof gc_error_line - 1);
   (void)ignored;
   _Exit(70);

@@ -53,13 +53,14 @@ typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
 
 /* The System.Signal variants in catalog order (ENUMS in compiler/catalog/builtins_data.agc); bit k of a signal mask
    is variant k. The first AGC_SIGNAL_DELIVERED can be subscribed to (System.subscribe); Quit is the VM's force stop and
-   Kill is never caught. */
+   Kill is never caught. Winch (a terminal resize) is no stop signal: it is only watched while subscribed. */
 enum {
   AGC_SIGNAL_TERM,
   AGC_SIGNAL_INT,
   AGC_SIGNAL_HUP,
   AGC_SIGNAL_USR1,
   AGC_SIGNAL_USR2,
+  AGC_SIGNAL_WINCH,
   AGC_SIGNAL_QUIT,
   AGC_SIGNAL_KILL,
   AGC_SIGNAL_COUNT,
@@ -1104,6 +1105,15 @@ bool agc_stdio_gone(int err);
 void agc_stdio_failed(void);
 #define AGC_STDIO_FLUSH_WAIT_MS 100
 agc_stdio_flush_result agc_stdio_flush(FILE *stream);
+/* The terminal of the standard streams, for Terminal (vm/terminal.c), in vm/stdio_posix.c and vm/stdio_windows.c.
+   is: FD is a terminal (Windows: a console). raw puts the terminal of stdin in raw mode (ON) or gives back the mode it
+   had before the first raw, which is kept for the process; 0 or an errno. restore gives that mode back, if raw changed
+   it: the exit, a stop signal and the end on a crash call it, so it never waits and is async-signal-safe on POSIX.
+   size reads the rows and columns of stdout's terminal, else stderr's; 0 or an errno. */
+bool agc_tty_is(int fd);
+int agc_tty_raw(bool on);
+void agc_tty_restore(void);
+int agc_tty_size(int64_t *rows, int64_t *cols);
 #ifdef _WIN32
 /* The reader of Windows stdin (vm/stdio_windows.c): a thread of its own makes one blocking read at a time, so a read
    that waits for input keeps no pool thread. new makes it for FD (no thread yet). read asks for up to ROOM bytes and

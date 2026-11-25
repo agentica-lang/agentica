@@ -314,7 +314,23 @@ section says how the scheduler and the loop keep them.
   subscribed signal has `SA_RESTART`, so it never breaks a blocking write
   (glibc empties a `FILE` buffer on a failed write, so a retry would lose
   bytes). The end of the run drops every subscription first, so a signal
-  during the exit path is a stop signal. Windows has no subscription.
+  during the exit path is a stop signal. `SIGWINCH` (`System.Signal.Winch`, a
+  terminal resize) is no stop signal: it has the handler only while it is
+  subscribed and the action it had before otherwise, the handler drops one
+  that is not subscribed or comes after a stop began, and the threads that
+  block the stop signals block it too. Windows has no subscription but
+  `Winch`: no event reaches every console (a pseudo console sends none to
+  libuv's resize watch), so while it is subscribed a loop timer reads the
+  console window's size every 250 ms and a new size is a `Winch`.
+- **Terminal mode** (`Terminal.raw`, `vm/terminal.c`). The first raw call
+  keeps the terminal's mode (termios of stdin; the console modes on Windows)
+  for the process, and `agc_tty_restore` sets it back from every way the
+  process ends: `agc_launch_exit` (a normal end, `System.exit`, a runtime
+  error, a stop signal), `agc_io_die_by` (a second signal), the exits with 70
+  (`agc_out_of_memory`, `agc_heap_limit_reached`, a GC abort,
+  `agc_thread_start_failed`), `agc_internal_abort` and, on Windows,
+  `agc_exit_now`. It is async-signal-safe, as `tcsetattr` is. A crash of the
+  VM itself (`SIGSEGV`, `SIGBUS`) has no handler and leaves the mode.
 - **Per-handle lock.** A `File.Handle` has a `holder` (the job in flight, or a
   socket's direct send or receive, §10.3.1), a `next_owner` task, and a FIFO of
   waiting tasks, all in GC memory. Every handle builtin checks its arguments and

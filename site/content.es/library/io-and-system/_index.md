@@ -2,7 +2,7 @@
 title: IO y sistema
 weight: 5
 description: Entrada y salida estándar, archivos, otros programas, la red y el sistema.
-source_hash: "c48af99e69ad"
+source_hash: "6effb2b47a81"
 ---
 
 - [IO](/library/io-and-system/io/): imprime en la salida estándar y en el error estándar, y lee la entrada estándar.
@@ -12,6 +12,7 @@ source_hash: "c48af99e69ad"
 - [Archivo comprimido](/library/io-and-system/archive/): extrae a un directorio privado nuevo los archivos que indiques de un TAR o un ZIP.
 - [Logger](/library/io-and-system/logger/): niveles, handlers con nombre y líneas de texto o JSON en el error estándar.
 - [System, Time y Random](/library/io-and-system/system/): argumentos del programa, códigos de salida, relojes y números aleatorios.
+- [Terminal](/library/io-and-system/terminal/): el modo raw, el tamaño de la terminal y sus cambios de tamaño, para programas de pantalla completa.
 - [Fechas y horas](/library/io-and-system/time/): fechas del calendario, horas del día y fechas y horas con un desfase UTC fijo.
 - [Option parser](/library/io-and-system/option-parser/): lee la línea de comandos en valores con tipo, con predeterminados, valores permitidos, errores y un texto de ayuda.
 - [Código nativo](/library/io-and-system/native/): llama a funciones C de una biblioteca nativa con un bloque `extern`.

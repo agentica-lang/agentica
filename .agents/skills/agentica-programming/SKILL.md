@@ -80,7 +80,7 @@ Read only what the task needs.
 | `files.md` | File, Dir, Path, locks |
 | `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, `Bytes.build`, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
-| `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid/program_name`, `Process.pid`, signals (`System.subscribe`, `Process.signal`, `System.signal`) |
+| `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid/program_name`, `Process.pid`, signals (`System.subscribe`, `Process.signal`, `System.signal`), `Terminal` (raw mode, size, resize) |
 | `network.md` | TCP, TLS, DNS |
 | `http.md` | `std/http`: client, server, streaming, WebSocket |
 | `tasks.md` | Task, `Task.map`, Channel, ATS tables, timeouts, cancel, monitors, who owns state |
