@@ -456,8 +456,9 @@ as `JSON.decode` does.
   simple values are refused, and bytes after the value are an error.
 - A struct is a map whose keys are read in any order; a key that names no field
   is read and ignored (with the same checks, but the keys of a map inside it are
-  not checked for repeats), a key named twice and a field not named are errors. An enum is `[tag, [payloads]]`; a `JSON.Field` is the
-  enum of its three variants; an `Optional` is `null` or the value and no level.
+  not checked for repeats), a key named twice and a field not named are errors.
+  An enum is `[tag, [payloads]]`; a `JSON.Field` is the enum of its three
+  variants; an `Optional` is `null` or the value and no level.
   A Map with Int keys is the kind 21 of the type table.
 - The limits are those of `Term.encode`, counted the same way (levels: the open
   frames but an `Optional`; values: each item read, a Map key included, a field
