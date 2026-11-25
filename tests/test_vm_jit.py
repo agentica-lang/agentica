@@ -1821,6 +1821,77 @@ def test_list_reads_of_every_layout_and_length_run_in_compiled_code(tmp_path):
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
 
 
+# mix runs every UInt64 operator in its loop beside the Int counter (to_uint64! turns it into a UInt64 each round), so
+# `on` compiles it: the UInt64 opcodes call their helpers instead of leaving it. fail raises one failure of its kind
+# after the program printed, and under `always` its compiled loop must report it as the interpreter does.
+UINT64S = """def mix(rounds: Int, step: Int) -> UInt64
+  acc = 1.to_uint64!
+  seed = 7.to_uint64!
+  limit = 1000000000.to_uint64!
+  i = 0
+  while i < rounds
+    n = i.to_uint64!
+    acc = (acc * 3.to_uint64! + n) % limit
+    acc = acc - (acc / 10.to_uint64!) + seed
+    if acc < seed or acc <= n
+      acc = acc + 2.to_uint64!
+    end
+    i += step
+  end
+  return acc
+end
+
+def fail(kind: Int) -> UInt64
+  acc = 5.to_uint64!
+  big = (-1).wrap_uint64
+  i = 0
+  while i < 100
+    zero = (i - 50).abs.to_uint64!
+    if i == 40 and kind == 0
+      acc = big + acc
+    elsif i == 40 and kind == 1
+      acc = acc - big
+    elsif i == 40 and kind == 2
+      acc = big * acc
+    elsif i == 50 and kind == 3
+      acc = acc / zero
+    elsif i == 50 and kind == 4
+      acc = acc % zero
+    end
+    i += 1
+  end
+  return acc
+end
+
+def main() -> Void
+  puts(mix(5000, 1))
+  puts(mix(40000, 3))
+  puts("steps #{System.Profile.steps()}")
+  puts("before")
+  puts(fail(KIND))
+end
+"""
+
+
+def test_uint64_operators_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(UINT64S.replace("KIND", "-1"), "uint64s", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["mix"] if jit_host() else [])
+    assert compiled(bytecode, tmp_path) == (["fail", "main", "mix"] if jit_host() else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("342451935\n774578041\n"), (stdout, stderr)
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1].split()[0]))
+
+
+@pytest.mark.parametrize("kind,code", [(0, "RUNTIME-INTEGER-OVERFLOW"), (1, "RUNTIME-INTEGER-OVERFLOW"),
+                                       (2, "RUNTIME-INTEGER-OVERFLOW"), (3, "RUNTIME-DIVISION-BY-ZERO"),
+                                       (4, "RUNTIME-DIVISION-BY-ZERO")])
+def test_a_uint64_failure_in_compiled_code_has_the_interpreters_diagnostic_span_and_stack(tmp_path, kind, code):
+    bytecode = compile_text(UINT64S.replace("KIND", str(kind)), "uint64_failure", tmp_path)
+    for style in ((), ("--json",), ("--ai",)):
+        status, stdout, stderr = assert_same(bytecode, *style)
+        assert status == 1 and stdout.endswith("before\n") and code in stderr, (style, stderr)
+
+
 def test_blocks_that_keep_tags_and_results_match_the_interpreter_at_every_stop(tmp_path):
     bytecode = compile_text(KNOWN_TAGS, "known_tags", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["half", "mix"] if jit_host() else [])

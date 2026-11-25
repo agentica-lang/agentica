@@ -26,6 +26,7 @@ NAMES = [
     "maze-bfs",
     "traveling-salesman",
     "arithmetic",
+    "uint64",
     "strings",
     "lists",
     "list-build",

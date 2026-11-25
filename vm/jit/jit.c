@@ -83,6 +83,16 @@ static uint32_t plain_op(uint32_t op) {
   return op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
 }
 
+/* The case labels of the UInt64 opcodes, which are one helper call each. */
+#define UINT64_OPS \
+  case AGC_OP_ADD_U: \
+  case AGC_OP_SUB_U: \
+  case AGC_OP_MUL_U: \
+  case AGC_OP_DIV_U: \
+  case AGC_OP_MOD_U: \
+  case AGC_OP_LT_U: \
+  case AGC_OP_LE_U:
+
 /* True when OP (a fused one: its STEP or CONST) always has code of its own. CALL, CALL_VALUE, TAIL_CALL and RETURN
    have code that may exit (op_kind). */
 static bool has_code(uint32_t op) {
@@ -108,6 +118,7 @@ static bool has_code(uint32_t op) {
     case AGC_OP_NEG_F:
     case AGC_OP_LT_F:
     case AGC_OP_LE_F:
+    UINT64_OPS
     case AGC_OP_SAME:
     case AGC_OP_CONCAT:
     case AGC_OP_TO_TEXT:
@@ -404,6 +415,13 @@ static uint64_t opcode_helper(agc_opcode op, bool *two_operands, bool *charged) 
     case AGC_OP_DIV_F: two = agc_op_div_f; break;
     case AGC_OP_LT_F: two = agc_op_lt_f; break;
     case AGC_OP_LE_F: two = agc_op_le_f; break;
+    case AGC_OP_ADD_U: two = agc_op_add_u; break;
+    case AGC_OP_SUB_U: two = agc_op_sub_u; break;
+    case AGC_OP_MUL_U: two = agc_op_mul_u; break;
+    case AGC_OP_DIV_U: two = agc_op_div_u; break;
+    case AGC_OP_MOD_U: two = agc_op_mod_u; break;
+    case AGC_OP_LT_U: two = agc_op_lt_u; break;
+    case AGC_OP_LE_U: two = agc_op_le_u; break;
     case AGC_OP_SAME: two = agc_op_same; break;
     default: two = agc_op_concat; break;
   }
@@ -563,6 +581,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_NEG_F:
       case AGC_OP_LT_F:
       case AGC_OP_LE_F:
+      UINT64_OPS
       case AGC_OP_SAME:
       case AGC_OP_CONCAT:
       case AGC_OP_TO_TEXT: {
