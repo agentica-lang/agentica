@@ -9,7 +9,6 @@ on:
       - '.github/workflows/pages.yml'
       - 'Makefile'
       - 'mk/**'
-      - 'tools/site_versions.py'
       - 'tools/site_translations.py'
   push:
     branches: [master]
@@ -20,7 +19,6 @@ on:
       - '.github/workflows/pages.yml'
       - 'Makefile'
       - 'mk/**'
-      - 'tools/site_versions.py'
       - 'tools/site_translations.py'
   workflow_dispatch:
 
@@ -36,8 +34,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # The pins of Hugo and Dart Sass. tools/site_versions.py builds dev and every tag that uses the docs theme with
-    # these, and a tag from before the theme with the pins of its own tree; keep the four names and the one-line form.
+    # The pins of Hugo and Dart Sass. The theme's tools/site_versions.py builds dev and every tag that uses the docs
+    # theme with these, and a tag from before the theme with the pins of its own tree; keep the four names and the
+    # one-line form.
     # Keep them equal to the pins of agentica-lang/docs-theme's .github/workflows/ci.yml, which builds the theme's
     # example site.
     env:
@@ -52,7 +51,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # The docs theme (only this submodule: the VM's are not needed), with its history, so that
-      # tools/site_versions.py can unpack the theme commit this checkout pins into every tag that uses the theme.
+      # the theme's tools/site_versions.py can unpack the theme commit this checkout pins into every tag that uses the
+      # theme.
       - run: git submodule update --init site/themes/docs-theme
       # The Spanish pages against their English pages: the structure rules, and the stale ones as warnings.
       - run: python3 -I tools/site_translations.py check
@@ -67,22 +67,22 @@ jobs:
       # wrong). Each run restores the newest entry of the script's version. Only a run that is not a pull request and
       # built something new saves one (also after a failed build, so the tags that did build are kept); the script
       # prunes the folder to the current builds first. Hugo and Dart Sass come from the pins of each tag's pages.yml,
-      # which tools/site_versions.py downloads and checks.
+      # which the theme's tools/site_versions.py downloads and checks.
       - uses: actions/cache/restore@v5
         with:
           path: build/site-versions/cache
-          key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}
+          key: site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-${{ github.run_id }}
           restore-keys: |
-            site-versions-${{ hashFiles('tools/site_versions.py') }}-
+            site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-
       - id: build
-        run: python3 -I tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
+        run: python3 -I site/themes/docs-theme/tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
       # Hugo's stale notes must be the stale pages of the check. The dev site is built from the working tree.
       - run: python3 -I tools/site_translations.py check --built build/site-versions/public/dev
       - uses: actions/cache/save@v5
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.build.outputs.fresh == 'true' }}
         with:
           path: build/site-versions/cache
-          key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}
+          key: site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-${{ github.run_id }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: build/site-versions/public

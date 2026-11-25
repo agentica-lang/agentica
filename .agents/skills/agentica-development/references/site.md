@@ -35,7 +35,7 @@ rule that a site page shows.
 - To take a newer theme: `git -C site/themes/docs-theme checkout <commit>`,
   `git add site/themes/docs-theme`, `make site`. `<commit>` is a commit on the
   theme's default branch (never one from a PR branch): a deleted or squashed
-  branch breaks `git submodule update`. `tools/site_versions.py`
+  branch breaks `git submodule update`. The theme's `tools/site_versions.py`
   builds every tag that uses the theme with the theme commit that HEAD pins,
   not the one checked out in the working tree (dev uses the working tree), so
   commit the bump before `make site-versions`. A theme bump restyles every
@@ -138,9 +138,10 @@ A function signature (`Name.fn(a: T) -> R`) goes in a `signature` fence, not
 ## Versions
 
 Pages serves one site per final release (`/0.24.3/`, ...), `/dev/` (`master`)
-and the latest release again at the root. `tools/site_versions.py`
-(`make site-versions`; its docstring has the rules for tags, retries and the
-cache) builds them all. What it does not say:
+and the latest release again at the root. The theme's `tools/site_versions.py`
+(`make site-versions`; its tests and README are in docs-theme; its docstring
+has the rules for tags, retries and the cache) builds them all. What it does
+not say:
 
 - A tag that uses the theme (0.28.0 on) is built with the Hugo and Dart Sass
   of the current `pages.yml`; an older tag, with its own layouts, with those

@@ -28,12 +28,12 @@ site: site-sass $(THEME)/highlight/node_modules
 site-serve: site-sass
 	hugo server --source site
 
-# One site per release plus dev, as pages.yml deploys it (tools/site_versions.py); serve the output with
+# One site per release plus dev, as pages.yml deploys it (the theme's tools/site_versions.py); serve the output with
 # `python3 -m http.server 8000 -d build/site-versions/public`. SITE_BASE_URL is where the root is served.
 SITE_BASE_URL ?= http://localhost:8000/
 
 site-versions:
-	$(PYTHON) -I tools/site_versions.py build --base-url $(SITE_BASE_URL)
+	$(PYTHON) -I $(THEME)/tools/site_versions.py build --base-url $(SITE_BASE_URL)
 
 # The structure of each Spanish page against its English page; pages.yml also checks the built site (`check --built`).
 site-translations:
