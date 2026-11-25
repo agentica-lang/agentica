@@ -182,7 +182,7 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
   for (;;) {
     bool fits = true;
     if (++items > TERM_MAX_ITEMS) return limit_error(vm, stack, depth, "more than 4000000 values");
-    agc_optional_value(vm, &item);
+    agc_unwrap_optional(vm, &item);
     if (agc_is(item, AGC_T_NIL)) {
       fits = put_head(&b, 7, 22);
     } else if (agc_is(item, AGC_T_BOOL)) {
