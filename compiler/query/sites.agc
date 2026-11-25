@@ -91,6 +91,9 @@ end
 ## The target of a name that is a top-level declaration (its linked name) or a builtin.
 def named(name: String) -> Target = Target(key: "name|#{name}", kind: "name", owner: "", name: name)
 
+## The target of the module block with the key `key` of its module, which an import list names: it has no linked name.
+def block(key: String) -> Target = Target(key: "block|#{key}", kind: "block", owner: "", name: key)
+
 ## The target of the field or variant `name` of the struct or enum `owner` (a linked name); `kind` is `field` or
 ## `variant`.
 def member(kind: String, owner: String, name: String) -> Target
@@ -99,8 +102,9 @@ end
 
 ## The target of the imported name that the character at `offset` is on in the import lists of `module`: `make` or
 ## `create` of `import {make as create} from "models"`; or of the name of a re-export (`parse` of `export Url.parse`),
-## which is the original declaration. An import is not a reference, but it names a declaration, which a query can
-## select. `none` elsewhere, an alias import (`import Models from "models"`) included: it names a module.
+## which is the original declaration; a module block, which an import list binds as an alias, is a `block` target. An
+## import is not a reference, but it names a declaration, which a query can select. `none` elsewhere, an alias import
+## (`import Models from "models"`) included: it names a module.
 def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
   for declaration in module.parsed.declarations
     case declaration
@@ -109,6 +113,9 @@ def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
           on_name = holds?(entry.span, offset) or holds?(entry.local_span, offset)
           linked = module.named.get(entry.local)
           return some(named(linked.unwrap!)) if on_name and linked.some?
+
+          inner = module.aliases.get(entry.local)
+          return some(block(inner.unwrap!)) if on_name and inner.some?
         end
 
       Ast.Decl.Reexport(node) ->
@@ -134,6 +141,11 @@ def import_sites(module: Linker.LinkedModule) -> List[Site]
           linked = module.named.get(entry.local)
           if linked.some?
             out = out.push(listed(named(linked.unwrap!), "import", entry.span))
+          end
+
+          inner = module.aliases.get(entry.local)
+          if inner.some?
+            out = out.push(listed(block(inner.unwrap!), "import", entry.span))
           end
         end
 

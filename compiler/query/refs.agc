@@ -172,7 +172,7 @@ def of_name(
   declared = Sites.declared_names(linked.modules)
   root = linked.modules[0]
   case Sites.imported(root, offset)
-    some(target) -> return Diag.Outcome.Done(of_target(linked, checked, target, none))
+    some(target) -> return Diag.Outcome.Done(of_imported(linked, checked, target))
     none -> declared = declared
   end
 
@@ -193,6 +193,36 @@ def of_name(
 
       Diag.Outcome.Done(named_answer(linked, site.target, none, in_order(linked.modules, found)))
   end
+end
+
+# The uses of the declaration that an import list or a re-export names: of a module block, those of the block.
+def of_imported(linked: Linker.Linked, checked: Checker.Checked, target: Sites.Target) -> Answer
+  case block_declared(linked, target)
+    some(found) -> of_block(linked, checked, found)
+    none -> of_target(linked, checked, target, none)
+  end
+end
+
+# The declaration of the module block that `target` stands for (a `block` target, or the linked name of a re-exported
+# block), as `symbol` lists it.
+def block_declared(linked: Linker.Linked, target: Sites.Target) -> Optional[Symbol.Match]
+  for block in linked.modules
+    next if block.block == ""
+    next if block.key != target.name and Linker.block_name(linked.modules, block) != target.name
+
+    for file in linked.modules
+      next if file.key != Linker.home_key(block)
+
+      for declaration in file.parsed.declarations
+        case Declarations.unwrap(declaration)
+          Ast.Decl.Module(node) -> return Symbol.declared_at(file, node.name_span) if node.name == block.block
+          _ -> next
+        end
+      end
+    end
+  end
+
+  none
 end
 
 # The target that a match stands for: the linked name of the declaration, of its struct or its enum for a member.
@@ -276,8 +306,9 @@ def block_at(linked: Linker.Linked, offset: Int) -> Optional[Symbol.Match]
 end
 
 # A module block, `found`: the places that write its name in front of one of its own names (`Counter` of
-# `Counter.start(1)` and of `Agents.Counter.State`), kind `qualifier`, read from the sites of its declarations. A name
-# that the block writes bare and an import list that names the block are not references to it.
+# `Counter.start(1)` and of `Agents.Counter.State`), kind `qualifier`, read from the sites of its declarations, and its
+# name in an import list or a re-export (`import` and `export`). A name that the block writes bare is not a reference
+# to it.
 def of_block(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
   blocks = linked.modules.filter do |module: Linker.LinkedModule|
     Linker.home_key(module) == found.file and module.block == found.name
@@ -286,7 +317,10 @@ def of_block(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Matc
   uses: List[Reference] = []
   if blocks.size > 0
     declared = Sites.declared_names(linked.modules)
+    keys = [Sites.named(Linker.block_name(linked.modules, blocks[0])).key, Sites.block(blocks[0].key).key]
     for module in linked.modules
+      listed = Sites.import_sites(module).filter do |site: Sites.Site| keys.include?(site.target.key) end
+      uses = uses.concat(listed.map do |site: Sites.Site| reference(module, site) end)
       for site in Sites.of_module(module, checked, declared, "")
         case qualifier(module.text, site, blocks[0].prefix)
           some(span) ->
@@ -331,10 +365,11 @@ end
 def used(module: Linker.LinkedModule, sites: List[Sites.Site], key: String) -> List[Reference]
   found = sites.filter do |site: Sites.Site| site.target.key == key and site.kind != "definition" end
   listed = Sites.import_sites(module).filter do |site: Sites.Site| site.target.key == key end
-  found = found.concat(listed)
-  found.map do |site: Sites.Site|
-    Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
-  end
+  found.concat(listed).map do |site: Sites.Site| reference(module, site) end
+end
+
+def reference(module: Linker.LinkedModule, site: Sites.Site) -> Reference
+  Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
 end
 
 # The answer for `target`; its definition is `given`, or is looked up in the modules.
