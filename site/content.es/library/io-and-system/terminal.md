@@ -102,4 +102,4 @@ io.failed
 Un cambio de tamaño de la terminal es la señal `System.Signal.Winch`, que [`System.subscribe`](/library/io-and-system/system/#systemsubscribe) entrega en un canal. Lee el tamaño nuevo con `Terminal.size` cuando llega un valor. Sin una suscripción, un cambio de tamaño no hace nada.
 
 - En Linux y macOS es `SIGWINCH`, que el sistema envía a los programas del trabajo en primer plano de la terminal.
-- En Windows, mientras `Winch` está suscrita, la VM lee el tamaño de la ventana de la consola cada cuarto de segundo, más o menos, y envía `Winch` cuando cambió, así que un cambio de tamaño se ve en un cuarto de segundo, más o menos. `Winch` es la única señal a la que un programa de Windows puede suscribirse.
+- En Windows, mientras `Winch` está suscrita, la VM lee el tamaño de la ventana de la consola cada cuarto de segundo, más o menos, y envía `Winch` cuando cambió, así que un cambio de tamaño se ve en ese tiempo. `Winch` es la única señal a la que un programa de Windows puede suscribirse.

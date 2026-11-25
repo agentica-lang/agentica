@@ -157,11 +157,13 @@ class Pty:
         return self.process.returncode
 
     def close(self):
-        if self.process.poll() is None:
-            self.process.kill()
-            self.wait()
-        os.close(self.master)
-        os.close(self.slave)
+        try:
+            if self.process.poll() is None:
+                self.process.kill()
+                self.wait()
+        finally:
+            os.close(self.master)
+            os.close(self.slave)
 
 
 @pytest.fixture

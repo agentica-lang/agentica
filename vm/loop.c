@@ -1594,9 +1594,9 @@ static const int signal_numbers[AGC_SIGNAL_COUNT] = {15, 2, 1, 10, 12, 28, 3, 9}
 
 #define WINCH_BIT (1u << AGC_SIGNAL_WINCH)
 
-/* Windows sends no signal for a resize that every console gives (a pseudo console sends no layout event to libuv's
-   watch), so while Winch is subscribed the loop reads the console's size every WINCH_POLL_MS, as Terminal.size does,
-   and a size other than the last one is a Winch. */
+/* No Windows event reports a resize in every console (a pseudo console sends none to libuv's watch), so while Winch is
+   subscribed the loop reads the console's size every WINCH_POLL_MS, as Terminal.size does, and a size other than the
+   last one is a Winch. */
 #define WINCH_POLL_MS 250
 
 static void winch_tick(uv_timer_t *timer) {
@@ -1605,7 +1605,8 @@ static void winch_tick(uv_timer_t *timer) {
   if (agc_tty_size(&rows, &cols) != 0 || (rows == loop->winch_rows && cols == loop->winch_cols)) return;
   loop->winch_rows = rows;
   loop->winch_cols = cols;
-  if (atomic_load(&stop_status()->subscribed) & WINCH_BIT) atomic_fetch_or(&stop_status()->pending, WINCH_BIT);
+  if (!atomic_load(&stop_status()->signal) && (atomic_load(&stop_status()->subscribed) & WINCH_BIT))
+    atomic_fetch_or(&stop_status()->pending, WINCH_BIT);
 }
 
 /* A loop whose timer cannot be made leaves `winch` false, and System.subscribe refuses Winch. */
