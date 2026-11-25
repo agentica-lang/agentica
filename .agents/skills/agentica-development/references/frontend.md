@@ -99,6 +99,22 @@ copy).
   type, a JSON name, a function) can find both the old and the new definition,
   so key it by table index, and test a task started before the redefinition. A
   module is its resolved path, not its spelling.
+- A per-item helper that rescans a shared input (every item of a `:load`ed
+  file walking the whole token list) makes a linear pass quadratic: collect
+  what the items need in one pass and hand each its slice. When a change
+  touches per-item code of the REPL, time `:load` of a 1,000 to 4,000 line file
+  against the base binary. A re-parse of a lexer rule (a heredoc end line)
+  uses the lexer's exact rule, or reuses the token's own end.
+- A type rule that reuses the walk of JSON (encodable, decodable) checks that
+  the walk's stand-ins for a type parameter (`Int`, `Nil`) keep the traits the
+  new rule reads (Optional-ness, the key kind of a `Map`). Add spec cases
+  through generic structs and enums (`Box[Optional[Int]]`, `Index[UInt64]`).
+- A check that guards security or consistency (`native/` sources force a
+  build, an integrity check) gets a test on the users' path that fails when the
+  check is mutated: install, run, change the input, run again. An
+  always-passing stub must turn a test red. A cache-hit path (the bytecode
+  cache) runs the integrity checks of the cold run, or no doc says "checked
+  once a run".
 - Key a per-type table by `Types.json_name`, never `Types.to_text` (it drops
   the `@N::` module); test two modules that declare the same type name.
 - Parser tables are module constants (`NESTING_LIMIT`, `LEVELS`,

@@ -234,6 +234,12 @@ Design and ends per system: `docs/vm/10-io-processes.md` §10.4. Error texts:
   helpers. Handlers cannot reach their own `HttpWire.Server` (values are
   immutable, and the handler is fixed before the server exists), so the
   self-close case is a C test.
+- A check on an address string parses it exactly as its consumer does:
+  `TCP.connect` calls `getaddrinfo` without `AI_NUMERICHOST`, so a loose check
+  lets `127.0.0.010` reach 127.0.0.8 (octal) and `abc:def` resolve as a name.
+  Parse in `std/` (IPv4 as four decimal octets without leading zeros, IPv6 with
+  at most 8 groups and one `::`), pass on the canonical form, and add a refusal
+  test for leading zeros, octal, hex and a resolver name.
 
 ## OpenSSL and the build
 
