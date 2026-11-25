@@ -1,7 +1,8 @@
 /*
  * vm/input.c with hand-made tasks and a pipe as stdin, with one pool thread: a waiting read leaves the pool free,
- * readers share the read in flight, EOF reaches each task once, the loop closes with a read still waiting, and a read
- * that a scheduler thread starts ends on the loop's thread.
+ * readers share the read in flight, EOF reaches each task once, a cancelled read leaves the pipe alone and hands the
+ * read to the next reader, the loop closes with a read still waiting, and a read that a scheduler thread starts ends
+ * on the loop's thread.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -15,6 +16,7 @@
 #include <fcntl.h>
 #include <io.h>
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 
@@ -137,6 +139,38 @@ static void test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eo
   close(pipe_fds[0]);
 }
 
+#ifndef _WIN32
+static int bytes_in_pipe(void) {
+  int waiting = -1;
+  assert(ioctl(pipe_fds[0], FIONREAD, &waiting) == 0);
+  return waiting;
+}
+
+/* A cancelled task leaves its read: the bytes that come later stay in the pipe (for a child process, too), and a reader
+   that waited for that read starts its own. */
+static void test_a_cancelled_read_takes_no_byte_that_comes_later(void) {
+  fresh();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
+  agc_string *line;
+  assert(gets_as(a, &line) == AGC_INPUT_WAIT);
+  assert(gets_as(b, &line) == AGC_INPUT_WAIT);
+  agc_io_detach(&vm, a);
+  pump_until_ready(b);
+  put("late\n");
+  for (int round = 0; round < 50; round++) {
+    (void)agc_io_poll(&vm, false);
+    uv_sleep(1);
+  }
+  assert(bytes_in_pipe() == 5);
+  assert(gets_as(b, &line) == AGC_INPUT_WAIT);
+  pump_until_ready(b);
+  expect_line(b, "late");
+  assert(agc_io_close(&vm));
+  close(pipe_fds[0]);
+  close(pipe_fds[1]);
+}
+#endif
+
 static void test_the_loop_closes_while_a_read_waits(void) {
   fresh();
   agc_task *a = agc_test_task();
@@ -189,6 +223,9 @@ int main(void) {
   agc_gc_allow_threads();
   agc_io_init();
   test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eof_once();
+#ifndef _WIN32
+  test_a_cancelled_read_takes_no_byte_that_comes_later();
+#endif
   test_the_loop_closes_while_a_read_waits();
   test_a_read_started_by_another_thread_ends_on_the_loop();
   puts("input tests passed");
