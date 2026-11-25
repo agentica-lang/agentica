@@ -378,7 +378,7 @@ HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], op
 - `HTTP.Response` has `status`, `headers` (names in lowercase) and `body`, which is `Bytes`. `post` sends a `Bytes` body, as Ruby's `Net::HTTP.post(uri, data, header)` does, and `request` takes any method. Send text as `"text".bytes`, and no body as `"".bytes`. The body is at most `max_body_bytes`, and `headers` default to `[]`.
 - For one request use `get_response` and `post_response`, like Ruby's `Net::HTTP.get_response` and `Net::HTTP.post`: each makes a client with `options`, makes the call and closes the client and its connection before it returns, so it needs no `client` and no `close_client`. For many requests use one `HTTP.client()` with `get`, `post` and `request`, which reuses connections; calling `get_response` in a loop opens a connection each time, and over HTTPS also builds a new TLS context and loads the CA bundle each time.
 - When a task is cancelled while one of these calls waits for its answer, the call's connection closes, plain or TLS: the server sees the close, and a client's connection does not go back to the pool.
-- URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result.
+- URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result. The client does not check the length of the request line (method, target and version): a long target is sent as it is, and a server with a lower limit, such as `HTTP.serve` (8192 bytes), may refuse it.
 - The client adds `Host` and `Content-Length`; a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
 ```agentica {mode="check"}
@@ -778,7 +778,7 @@ Bad requests never reach the app: the server answers and closes the connection.
 | 400 | malformed |
 | 413 | a body over `max_body_bytes` |
 | 417 | an `Expect` other than `100-continue` |
-| 431 | headers too long or too many |
+| 431 | a request line over 8192 bytes (method, target and version), or headers too long or too many |
 | 501 | `CONNECT`, or an `Upgrade` other than a WebSocket handshake |
 | 505 | not `HTTP/1.1` |
 
