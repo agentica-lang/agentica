@@ -54,10 +54,12 @@ def main() -> Void
     "crash" ->
       Terminal.raw().unwrap!
       show("raw")
+      IO.read_bytes(1).unwrap!
       puts([1][streams.size])
     "heap" ->
       Terminal.raw().unwrap!
       show("raw")
+      IO.read_bytes(1).unwrap!
       grown = ["x"]
       while grown.size > 0
         grown = grown + grown
@@ -107,7 +109,7 @@ class Pty:
         self.termios = termios
         self.master, self.slave = pty.openpty()
         self.resize(rows, cols)
-        self.before = termios.tcgetattr(self.slave)
+        self.before = self.mode()
         self.text = b""
 
         def take_terminal():
@@ -123,7 +125,11 @@ class Pty:
         fcntl.ioctl(self.master, self.termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
     def mode(self):
-        return self.termios.tcgetattr(self.slave)
+        """The pty's modes, without PENDIN: macOS sets that kernel flag when ICANON comes back on and clears it at the
+        next read, so it says nothing about the mode the VM set."""
+        mode = self.termios.tcgetattr(self.slave)
+        mode[3] &= ~getattr(self.termios, "PENDIN", 0)
+        return mode
 
     def take(self, seconds):
         """What the VM wrote within SECONDS, added to the text; empty when nothing came."""
@@ -201,6 +207,7 @@ def test_a_crash_gives_the_mode_back(program, ptys):
     pty = ptys(program, "crash")
     pty.read_until(b"raw\r\n")
     assert_raw(pty)
+    pty.type(b"x")
     assert pty.wait() == 1
     assert b"RUNTIME-INDEX-OUT-OF-RANGE" in pty.read_until(b"RUNTIME-INDEX-OUT-OF-RANGE")
     assert pty.mode() == pty.before
@@ -210,6 +217,8 @@ def test_a_crash_gives_the_mode_back(program, ptys):
 def test_the_heap_limit_gives_the_mode_back(program, ptys):
     pty = ptys(program, "heap", flags=("--max-heap", "16M"))
     pty.read_until(b"raw\r\n")
+    assert_raw(pty)
+    pty.type(b"x")
     assert pty.wait() == 70
     assert pty.mode() == pty.before
 
@@ -219,6 +228,7 @@ def test_a_stop_signal_gives_the_mode_back(program, ptys):
     pty = ptys(program, "signal")
     pty.read_until(b"raw\r\n")
     assert_raw(pty)
+    pty.type(b"x")
     pty.process.send_signal(signal.SIGTERM)
     assert pty.wait() == -signal.SIGTERM
     assert pty.mode() == pty.before
