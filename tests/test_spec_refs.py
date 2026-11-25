@@ -683,6 +683,11 @@ def test_an_import_list_and_a_re_export_name_the_declaration_with_their_own_kind
     from_import = told(spot("orders.agc", ORDERS, "make as create", 1), ".", cwd=program)
     assert from_import["definition"] == report["definition"]
     assert sorted(places(from_import)) == sorted(places(report))
+    # A name through a re-export, and two entries of one name in one list: one row for each, none twice.
+    (program / "twice.agc").write_text('import {make} from "facade"\nimport {make as again, make as other} from "models"\n',
+                                       encoding="utf-8")
+    twice = [place[1:4] for place in places(told("make", ".", cwd=program)) if place[0] == "twice.agc"]
+    assert twice == [(1, 9, "import"), (2, 9, "import"), (2, 24, "import")]
     # The text form lists the kind.
     text = ask("make", ".", cwd=program, style="--ai")
     assert (text.code, text.stderr) == (0, "")
