@@ -52,12 +52,12 @@ program #170 0:1:1-1139:50:1
             value: call #46 352:13:12-365:13:25 name="puts" piped=false
               arg: literal #45 357:13:17-364:13:24 value=string:"float"
         arm: case-arm #53 370:14:5-400:15:1
-          pattern: literal-pattern #49 370:14:5-374:14:9 value=float:bits:-9223372036854775808
+          pattern: literal-pattern #49 370:14:5-374:14:9 value=float:bits:9223372036854775808
           body: expr-stmt #52 378:14:13-400:15:1
             value: call #51 378:14:13-399:14:34 name="puts" piped=false
               arg: literal #50 383:14:18-398:14:33 value=string:"negative zero"
         arm: case-arm #58 404:15:5-435:16:1
-          pattern: literal-pattern #54 404:15:5-408:15:9 value=float:bits:-4610560118520545280
+          pattern: literal-pattern #54 404:15:5-408:15:9 value=float:bits:13836183955189006336
           body: expr-stmt #57 412:15:13-435:16:1
             value: call #56 412:15:13-434:15:35 name="puts" piped=false
               arg: literal #55 417:15:18-433:15:34 value=string:"negative float"

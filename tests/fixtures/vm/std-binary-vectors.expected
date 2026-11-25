@@ -1,1 +1,10 @@
-742 vectors ok
+{
+  "exit": 0,
+  "code": null,
+  "steps": 347681,
+  "stdout": [
+    "742 vectors ok",
+    ""
+  ],
+  "stderr": []
+}

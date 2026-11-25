@@ -54,7 +54,7 @@ program #118 0:1:1-790:37:1
         arm: case-arm #52 343:20:5-385:21:1
           pattern: variant-pattern #49 343:20:5-363:20:25 enum="Shape" variant="Pair" bindings=[*,*]
             nested: literal-pattern #47 354:20:16-356:20:18 value=int:-2
-            nested: literal-pattern #48 358:20:20-362:20:24 value=float:bits:-4610560118520545280
+            nested: literal-pattern #48 358:20:20-362:20:24 value=float:bits:13836183955189006336
           body: return-stmt #51 367:20:29-385:21:1
             value: literal #50 374:20:36-384:20:46 value=string:"negative"
         arm: case-arm #58 389:21:5-434:22:1
