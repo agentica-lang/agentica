@@ -159,10 +159,21 @@ end
 def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
 
 ## True when Term.encode can write a value of the type: Nil, Bool, String, Bytes, the number types, lists, maps with
-## Int or String keys, an Optional of one of those (not of Nil or of another Optional), and the structs and user enums
-## of those (a generic one by its fields and payloads with the type arguments put in). A type variable, a Set, a
-## Result, a Json, a JSON.Field, a time and every handle are not.
-def term_encodable?(cx: State.Cx, type: ResolvedType) -> Bool = term_walk(cx, type, {}).passes
+## Int or String keys, an Optional of one of those (not of Nil or of another Optional), a JSON.Field (a plain enum) and
+## the structs and user enums of those (a generic one by its fields and payloads with the type arguments put in). A
+## type variable, a Set, a Result, a Json, a time and every handle are not.
+def term_encodable?(cx: State.Cx, type: ResolvedType) -> Bool = term_walk(cx, type, {}, 2).passes
+
+## True when Term.decode can build the type: term_encodable?, but a generic enum is not built (as for JSON.decode) and
+## a generic struct only to the depth of its instances (MAX_INSTANCE_DEPTH).
+def term_decodable?(cx: State.Cx, type: ResolvedType) -> Bool = term_walk(cx, type, {}, 3).passes
+
+## True when the type holds an instance of a generic enum. It only picks the help of Term.decode.
+def term_generic_enum_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  inside?(cx, type) do |current: ResolvedType|
+    Types.is?(current, "Enum") and Types.args(current).size > 0 and user_enum?(cx, current)
+  end
+end
 
 ## True when the type holds an Optional of Nil or of another Optional: Term writes none and nil alike, so they could
 ## not be told apart. It only picks the help of Term.encode when it refuses the type.
@@ -1226,25 +1237,30 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   refused(seen)
 end
 
-def term_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+# The walk of Term.encode (test 2) and Term.decode (test 3). A JSON.Field is a plain enum: its payload is the walk.
+def term_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   if primitive?(type) or Types.sized_int?(type) or Types.is?(type, "Float32") or Types.is?(type, "Bytes")
     return passed(seen)
   elsif Types.is?(type, "Optional")
     return refused(seen) if Types.is?(Types.item(type), "Nil") or Types.is?(Types.item(type), "Optional")
 
-    return term_walk(cx, Types.item(type), seen)
+    return term_walk(cx, Types.item(type), seen, test)
+  elsif json_field?(type)
+    return term_walk(cx, Types.args(type)[0], seen, test)
   elsif Types.is?(type, "List")
-    return term_walk(cx, Types.item(type), seen)
+    return term_walk(cx, Types.item(type), seen, test)
   elsif Types.is?(type, "Map")
     return refused(seen) if !(Types.is?(Types.key(type), "Int") or Types.is?(Types.key(type), "String"))
 
-    return term_walk(cx, Types.value(type), seen)
+    return term_walk(cx, Types.value(type), seen, test)
   elsif sealed?(type)
     return refused(seen)
   elsif Types.is?(type, "Struct")
-    return struct_walk(cx, type, seen, 2)
+    return refused(seen) if test == 3 and type_depth(type) > MAX_INSTANCE_DEPTH
+
+    return struct_walk(cx, type, seen, test)
   elsif Types.is?(type, "Enum")
-    return enum_walk(cx, type, seen, 2)
+    return enum_walk(cx, type, seen, test)
   end
 
   refused(seen)
@@ -1322,9 +1338,9 @@ end
 # arguments first (an encodable generic enum such as Option[Int] has them; a decodable enum has none), then every
 # payload once for each key, with a stand-in for each parameter. A builtin enum other than JSON.Field, which the
 # callers handle, has no JSON form.
-# Test 2 is Term.encode: the same walk with term_walk.
+# Test 2 is Term.encode: the same walk with term_walk, and test 3 Term.decode, which does not build a generic enum.
 def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
-  return refused(seen) if !user_enum?(cx, type)
+  return refused(seen) if !user_enum?(cx, type) or (test == 3 and Types.args(type).size != 0)
 
   for argument in Types.args(type)
     found = test_walk(cx, argument, seen, test)
@@ -1422,7 +1438,7 @@ def sealed?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and SEALED.i
 # entered before either passed or aborted the whole walk, and a key still being walked counts as passed, as the type is
 # recursive. A key has only two shapes for each parameter, so a recursion that changes its type arguments each time
 # (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
-# Test 2 is Term.encode: the same walk with term_walk.
+# Test 2 is Term.encode: the same walk with term_walk, and test 3 Term.decode.
 def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   if test != 1
     for argument in Types.args(type)
@@ -1447,10 +1463,10 @@ def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test:
   passed(seen)
 end
 
-# encode_walk for test 0, decode_walk for test 1, term_walk for test 2.
+# encode_walk for test 0, decode_walk for test 1, term_walk for tests 2 and 3.
 def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   return encode_walk(cx, type, seen) if test == 0
-  return term_walk(cx, type, seen) if test == 2
+  return term_walk(cx, type, seen, test) if test >= 2
 
   decode_walk(cx, type, seen)
 end
@@ -1466,7 +1482,7 @@ def walk_key(type: ResolvedType, test: Int) -> String
   for argument in Types.args(type)
     if Types.is?(argument, "Nil")
       marks += "N"
-    elsif test == 2 and Types.is?(argument, "Optional")
+    elsif test >= 2 and Types.is?(argument, "Optional")
       marks += "O"
     else
       marks += "I"
@@ -1550,7 +1566,7 @@ def stand_ins(parameters: List[String], args: List[ResolvedType], test: Int) -> 
     stand = Types.Type.Int
     if Types.is?(args[index], "Nil")
       stand = Types.Type.Nil
-    elsif test == 2 and Types.is?(args[index], "Optional")
+    elsif test >= 2 and Types.is?(args[index], "Optional")
       stand = Types.Type.Optional(Types.Type.Int)
     end
 

@@ -85,6 +85,7 @@ bool agc_json_to_float32(agc_vm *vm, const agc_json *j, double *out);
 /* A decodable type is a struct, an enum or a struct instance of the program: kind is AGC_TYPE_STRUCT, AGC_TYPE_ENUM or
    AGC_TYPE_INSTANCE and index its place. */
 agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t kind, uint32_t index);
+uint32_t agc_decode_target(agc_vm *vm, agc_value target, uint32_t span, uint32_t *kind);
 agc_value agc_json_schema(agc_vm *vm, uint32_t kind, uint32_t index);
 
 void agc_processes_stop(agc_vm *vm);
@@ -223,6 +224,16 @@ extern const agc_builtin agc_crypto_builtins[];
 extern const size_t agc_crypto_builtin_count;
 extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
+/* The limits of Term.encode and Term.decode (docs/vm/02-reference-behavior.md §2.9): levels of nesting, values and
+   bytes. */
+#define AGC_TERM_MAX_DEPTH 10000
+#define AGC_TERM_MAX_ITEMS 4000000
+#define AGC_TERM_MAX_BYTES ((size_t)64 << 20)
+/* A String key as the path of a Term error shows it: between double quotes, with the escapes of JSON, cut at 64 bytes
+   (on a character) with "..." after the cut. */
+void agc_term_path_key(agc_json_buffer *b, const uint8_t *key, size_t bytes);
+/* Term.decode of data into the type of the target (agc_decode_target): the Result. span is that of the call. */
+agc_value agc_term_decode(agc_vm *vm, const uint8_t *data, size_t len, uint32_t kind, uint32_t type);
 extern const agc_builtin agc_term_builtins[];
 extern const size_t agc_term_builtin_count;
 extern const agc_builtin agc_file_builtins[];

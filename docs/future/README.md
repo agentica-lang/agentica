@@ -10,7 +10,6 @@ what was decided against. They hold no recipes and nothing that shipped. When a
 feature lands, move its rules to `docs/grammar/`, `docs/vm/` or the site and
 delete its section; section numbers are never renumbered, so gaps stay.
 
-- `16-cbor.md`: typed `Term.encode` and `Term.decode` (#994).
 - `25-ruby-typed-idioms.md`: what was decided against.
 - `27-iteration-and-concurrency.md`: what was decided against in tasks and
   streams.

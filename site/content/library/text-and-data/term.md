@@ -1,13 +1,14 @@
 ---
 title: Term (CBOR)
 weight: 15
-description: Write an Agentica value as CBOR, a compact binary form that keeps Int keys, exact Float bits, nil, Bytes and enums.
+description: Write an Agentica value as CBOR and read it back into a struct or enum, a compact binary form that keeps Int keys, exact Float bits, nil, Bytes and enums.
 ---
 
-`Term.encode` writes a value as [CBOR](https://www.rfc-editor.org/rfc/rfc8949) bytes, the binary form of a value. JSON is for other programs; CBOR keeps what JSON loses or bends: a `Map` with `Int` keys, the exact bits of a `Float` (infinities included), `nil` as its own value, `Bytes`, and an enum as a plain array. It is also smaller. Typical uses are a disk cache and messages between Agentica programs. Reading the bytes back, `Term.decode`, is a later addition: for now `Term.encode` gives the bytes, and another program reads them as CBOR.
+`Term.encode` writes a value as [CBOR](https://www.rfc-editor.org/rfc/rfc8949) bytes, the binary form of a value. JSON is for other programs; CBOR keeps what JSON loses or bends: a `Map` with `Int` keys, the exact bits of a `Float` (infinities included), `nil` as its own value, `Bytes`, and an enum as a plain array. It is also smaller. Typical uses are a disk cache and messages between Agentica programs. `Term.decode` reads the bytes back into the type you name: the type is the schema, so nothing outside it is ever built.
 
 ```signature
 Term.encode(value: T) -> Result[Bytes]
+Term.decode(data: Bytes, type: T) -> Result[T]
 ```
 
 `Term` is a reserved type and module name, so a struct, an enum or an alias cannot take it (`CHECK-REDEFINED-NAME`).
@@ -22,11 +23,13 @@ def main() -> Void
   entry = Entry(hits: {2: 5, 1: 7}, score: 1.5)
   bytes = Term.encode(entry).unwrap!
   puts(OpenSSL.Digest.hexencode(bytes))
+  puts(Term.decode(bytes, Entry).unwrap!.hits)
 end
 ```
 
 ```text
 a26468697473a2020501076573636f7265fb3ff8000000000000
+{2: 5, 1: 7}
 ```
 
 The bytes are a map of two entries: the key `"hits"` with a map from `2` to `5` and `1` to `7` (in the order they were put), and the key `"score"` with an 8-byte float.
@@ -48,7 +51,7 @@ The bytes are a map of two entries: the key `"hits"` with a map from `2` to `5` 
 | enum | the array `[tag, [values...]]`: `tag` is the variant name without the enum name, and `values` has the payloads, `["Empty", []]` for a variant with none |
 | `Optional[T]` | `null` for `none`, the value for `some`. `Optional[Nil]` and an `Optional` of an `Optional` are refused: they could not be told apart |
 
-A generic struct or enum is written by its fields with the type arguments in place. Every other type is `CHECK-NOT-ENCODABLE`, with the span on the argument: a function, a `Set`, a `Result`, a `Void`, `JSON.Value` and `JSON.Field`, the dates and times of `Time`, a `Range`, and every handle (`File.Handle`, `Process`, `TCP.Socket`, a `Task`, a `Channel` and the rest), at any depth. The argument has a concrete type: a type variable of a generic function is refused too. A private field of a struct of another module is `CHECK-PRIVATE-FIELD`, as in `JSON.encode`.
+`JSON.Field[T]` is a plain enum here, `[tag, [values...]]` with the tags `Absent`, `Null` and `Value`, and it can sit anywhere a type can. A generic struct or enum is written by its fields with the type arguments in place. Every other type is `CHECK-NOT-ENCODABLE`, with the span on the argument: a function, a `Set`, a `Result`, a `Void`, `JSON.Value`, the dates and times of `Time`, a `Range`, and every handle (`File.Handle`, `Process`, `TCP.Socket`, a `Task`, a `Channel` and the rest), at any depth. The argument has a concrete type: a type variable of a generic function is refused too. A private field of a struct of another module is `CHECK-PRIVATE-FIELD`, as in `JSON.encode`.
 
 ## Same value, same bytes
 
@@ -70,3 +73,43 @@ $: larger than 67108864 bytes
 ```
 
 The kind of the error is `term.encode` (see [errors](/library/errors/error/)). For more data, encode it in chunks, each as its own value.
+
+## Term.decode
+
+`Term.decode(data, Name)` reads the bytes into the struct or enum `Name` and returns `ok(value)`, or an `error` with the path of the first bad value. The second argument is a type name, as in `JSON.decode(text, User)`: a bare struct or enum, so a `List`, a `Map` or an instance of a generic struct such as `Box[Int]` is not a target (`CHECK-TYPE-MISMATCH`); put it in a field of a struct. Everything inside the target follows the table above, and a generic struct instance works as a field.
+
+`Term.encode` accepts more than `Term.decode` can target, as `JSON.encode` does against `JSON.decode`: it writes a `List`, a `Map` or an instance of a generic enum as the whole value, and a struct with a generic enum inside. `Term.decode` takes only a bare struct or enum as the target, and a generic enum anywhere inside it is `CHECK-NOT-DECODABLE`, with the span on the type name. To read such data back, use a plain enum or a struct, and put a `List` or a `Map` in a field.
+
+```agentica
+enum Shape
+  Circle(Float)
+  Empty
+end
+
+def main() -> Void
+  bytes = Term.encode(Shape.Circle(1.5)).unwrap!
+  case Term.decode(bytes, Shape)
+    ok(shape) -> puts(shape)
+    error(e) -> puts(e.message)
+  end
+end
+```
+
+There is never a decode without a type: the bytes cannot name a type to build, and a function, a handle or an unbounded structure cannot be asked for.
+
+- **Same value back:** `Term.decode(Term.encode(v), T)` gives `v` for every type that `Term.encode` writes. `Term.encode(Term.decode(bytes, T))` gives `bytes` back only when `bytes` is what `Term.encode` writes.
+- **Only what `Term.encode` writes:** a head longer than needed, an indefinite length, a tag, a half float, a float with the width of another type (`Float` reads 8 bytes, `Float32` 4), a NaN with a payload, text that is not UTF-8, a `Map` key twice, and bytes after the value are errors. An `Int` outside 64 bits is an error, and so is a value outside the range of an `Int8` to `UInt32`.
+- **Structs:** the keys may come in any order and a key that names no field is read and ignored (with the same checks, and the same limits). A field named twice, and a field that is missing, are errors: a default value of a field only fills a constructor, so **adding a field breaks old data**. Removing or reordering fields is safe.
+- **Enums:** an unknown tag, a payload list of another length, and an outer array that is not of two items are errors.
+
+The limits are those of `Term.encode`: 10,000 levels, 4,000,000 values and 64 MiB, and a value past one returns an error as it does there. The input is read with the same care as a file of bytecode: every length is checked against the bytes left before anything is built, so a few bytes cannot ask for a large amount of memory. The kind of the error is `term.decode`, and the path has the same form: `users[2].name: expected String`, `shapes[1]: unknown tag "Triangle"`, `$: trailing bytes after the value`, `x: expected signed 64-bit Int`. Where the type is an `Optional`, the expected type is followed by `or nil`.
+
+## Versioning and framing
+
+The bytes carry no version and no type: the type is the schema. Put a `version: Int` field in the top struct from the first release. To add a field, keep the old struct (`CacheV1`) next to the new one (`CacheV2`): decode with `CacheV2`, and on error decode again with `CacheV1` and convert.
+
+`Term.decode` rejects bytes after the value, so a stream needs framing: a 4-byte big-endian length (`std/binary`), then the bytes in slices of at most 1 MiB (the limit of `Process.send_bytes` and `TCP.send_bytes`). The receiver rejects a length above its limit before it reads the body.
+
+## Not supported
+
+A `Fn` and a handle (a handle is only valid inside the run that made it), a decode without a type, and the transparent messages of Erlang's distribution: programs talk through pipes or TCP with explicit `Term.encode` and `Term.decode`, so a failure is a `Result` that the program sees.

@@ -73,7 +73,7 @@ Los errores de los integrados tienen estas clases. Una clase nunca se renombra, 
 | `json`, `number`, `text` | `json.parse`, `json.decode`, `number.parse`, `number.range`, `text.encoding` |
 | `zlib`, `crypto` | `zlib.data`, `zlib.too_large`, `crypto.auth`, `crypto.key`, `crypto.failed` |
 | `system`, `native`, `test` | `system.env`, `system.signal`, `native.failed`, `native.timeout`, `test.failed` |
-| `term` | `term.encode` |
+| `term` | `term.encode`, `term.decode` |
 | `denied` | `denied.env`, `denied.fs`, `denied.net`, `denied.run`: una llamada que un flag rechaza, una clase por flag (ver abajo) |
 
 Las llamadas que apaga un flag `--deny-*` devuelven un error de la familia `denied`: `denied.env` para `--deny-env` (`System.env`), `denied.fs` para `--deny-fs` (llamadas de `File`, `Dir` y `Path` que tocan el disco, un contexto `TLS` creado desde archivos, `Process.spawn` con archivos `out:` o `err:`), `denied.net` para `--deny-net` (`TCP`, `TLS`, `HttpWire`, `DNS` y `std/http`) y `denied.run` para `--deny-run` (`Process`, `System.signal`). `--sandbox` equivale a todos estos flags, así que cada llamada recibe la clase de su propio flag, y `e.is_a?("denied")` coincide con todos ellos. El mensaje conserva su texto (`denied: --deny-fs turns off file access`). Un programa que usa código nativo con `--deny-native` (que activa cada flag `--deny-*`) no se ejecuta: se detiene al empezar con `RUNTIME-NATIVE-DENIED`, así que no hay error según el cual decidir.

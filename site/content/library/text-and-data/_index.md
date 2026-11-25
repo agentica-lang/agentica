@@ -9,7 +9,7 @@ description: Work with text and numbers, search and replace text with regular ex
 - Use [Int and Float](/library/text-and-data/numbers/) to convert between `Int`, `Float` and `String`, to round, clamp and take square roots, and to work on bits.
 - Use [JSON](/library/text-and-data/json/) to move data in and out of programs, for a known shape (structs) or not.
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a `Bytes`, and to frame messages.
-- Use [Term](/library/text-and-data/term/) (`Term.encode`) to write a value as CBOR, a compact binary form that keeps `Int` keys, exact `Float` bits, `nil` and `Bytes`.
+- Use [Term](/library/text-and-data/term/) (`Term.encode`, `Term.decode`) to write a value as CBOR and read it back, a compact binary form that keeps `Int` keys, exact `Float` bits, `nil` and `Bytes`.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.
 - Use [HTML](/library/text-and-data/html/) (`std/html`) to escape and unescape HTML text.
 - Use [EAG templates](/library/text-and-data/eag/) (`<<~EAG` and `std/eag`) to build text from a template with ERB tags.

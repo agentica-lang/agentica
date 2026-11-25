@@ -480,16 +480,20 @@ typedef struct {
    variants (agc_enum_def.payload_types). AGC_TYPE_INSTANCE is an instance of a generic struct (arg is its index in
    agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. AGC_TYPE_INT8 to
    AGC_TYPE_UINT32 are the narrow integer types, scalars like INT: their values are Ints in the VM. AGC_TYPE_UINT64 and
-   AGC_TYPE_FLOAT32 are scalars too, each with a tag of its own. */
+   AGC_TYPE_FLOAT32 are scalars too, each with a tag of its own. AGC_TYPE_BYTES and AGC_TYPE_NIL are scalars that only
+   Term.decode builds (JSON has neither), and AGC_TYPE_INT_MAP is a Map from Int (arg is the value type), which only
+   Term.decode builds too: JSON.decode fails on all three. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
   AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE, AGC_TYPE_INT8, AGC_TYPE_INT16,
-  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32, AGC_TYPE_UINT64, AGC_TYPE_FLOAT32
+  AGC_TYPE_INT32, AGC_TYPE_UINT8, AGC_TYPE_UINT16, AGC_TYPE_UINT32, AGC_TYPE_UINT64, AGC_TYPE_FLOAT32,
+  AGC_TYPE_BYTES, AGC_TYPE_NIL, AGC_TYPE_INT_MAP
 } agc_type_kind;
 
-/* True for a kind of the type table with no operand: Int, Float, Bool, String, the sized integers and Float32. */
+/* True for a kind of the type table with no operand: Int, Float, Bool, String, the sized integers, Float32, Bytes and
+   Nil. */
 static inline bool agc_type_scalar(uint32_t kind) {
-  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_FLOAT32);
+  return kind < AGC_TYPE_LIST || (kind >= AGC_TYPE_INT8 && kind <= AGC_TYPE_NIL);
 }
 
 /* True for a narrow integer kind; *least and *greatest are its range. */

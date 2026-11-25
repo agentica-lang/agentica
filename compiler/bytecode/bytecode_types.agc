@@ -125,8 +125,9 @@ private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
 # 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum, 10 struct instance, 11 to 16 Int8,
-# Int16, Int32, UInt8, UInt16 and UInt32, 17 UInt64, 18 Float32) and, for tags 4 to 10, the number of the item type,
-# the struct, the type inside the JSON.Field or the Optional, the enum, or the instance.
+# Int16, Int32, UInt8, UInt16 and UInt32, 17 UInt64, 18 Float32, 19 Bytes, 20 Nil, 21 Map from Int) and, for tags 4 to
+# 10 and 21, the number of the item type, the struct, the type inside the JSON.Field or the Optional, the enum, or the
+# instance.
 def type_id(
   program: Ir.Program,
   struct_index: Map[String, Int],
@@ -149,15 +150,19 @@ def type_id(
     Types.Type.UInt32 -> ok(Pool.intern(pool, "16", [16]))
     Types.Type.UInt64 -> ok(Pool.intern(pool, "17", [17]))
     Types.Type.Float32 -> ok(Pool.intern(pool, "18", [18]))
+    Types.Type.Bytes -> ok(Pool.intern(pool, "19", [19]))
+    Types.Type.Nil -> ok(Pool.intern(pool, "20", [20]))
     Types.Type.List(item) ->
       inner = try type_id(program, struct_index, enum_index, pool, item)
       ok(entry_of(inner.pool, 4, inner.id))
     Types.Type.Map(key, value) ->
-      if !Types.is?(key, "String")
-        return error(unsupported(program, "a Map with a key that is not a String in a JSON field type"))
+      if !Types.is?(key, "String") and !Types.is?(key, "Int")
+        return error(unsupported(program, "a Map with a key that is not a String or an Int in a field type"))
       end
 
       inner = try type_id(program, struct_index, enum_index, pool, value)
+      return ok(entry_of(inner.pool, 21, inner.id)) if Types.is?(key, "Int")
+
       ok(entry_of(inner.pool, 5, inner.id))
     Types.Type.Enum(name, args) ->
       if name == "JSON.Field" and args.size == 1

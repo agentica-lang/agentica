@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Term.decode(bytes, Type)` reads what `Term.encode` writes back into a struct or enum: heads, lengths, floats, text and limits are checked, an error has the path of the first bad value, and `JSON.Field` is a plain enum in the bytes (#994).
 - `Term.encode(value)` writes a value as CBOR (RFC 8949) in a deterministic form: `Map`s with `Int` keys, the exact bits of a `Float` and a `Float32`, `Bytes`, `nil`, enums, structs and `Optional`; a value past 10,000 levels, 4,000,000 values or 64 MiB is an error with its path (#994).
 - `Float32`, IEEE 754 binary32: a float literal takes it where its place expects it, rounded once, `+ - * /` and the comparisons round each result to the nearest `Float32`, `to_s` gives the shortest text (`0.1`), `x.to_f`, `f.to_float32`, `n.to_float32`, `x.to_bits` and `Float32.from_bits` convert, and JSON encodes and decodes it (#984).
 - `UInt64`, the unsigned 64-bit integer: literals from `0` to `18446744073709551615`, `+ - * / %` and the comparisons in unsigned arithmetic (a result outside the type halts with `RUNTIME-INTEGER-OVERFLOW`, a zero divisor with `RUNTIME-DIVISION-BY-ZERO`), `n.to_uint64`, `n.wrap_uint64`, `x.to_i` (a `Result`), `x.to_f`, the bit and wrapping methods, widenings from `UInt8`, `UInt16` and `UInt32`, JSON, `Map` keys, `Set` elements and `List.sort`; the sized integer types sort too (#984).
