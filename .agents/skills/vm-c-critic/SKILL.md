@@ -72,7 +72,9 @@ A change that breaks a rule is a finding; older code is not.
   whose source may hold fewer (release builds hide these; ASan finds them);
   sizes, shifts, casts, unions; a signed value decoded from bytes (a long
   varint) that is negative yet passes a `>= size` check; an `agc_string`
-  passed to libc; `malloc` memory on each way out of the function,
+  passed to libc; a frame of an explicit stack pushed before the checks of its
+  head pass (test each limit error at each container kind); `malloc` memory on
+  each way out of the function,
   `agc_fail` included, and libuv requests without their
   `uv_*_req_cleanup`.
 - **Hostile bytecode** (`vm.md`, "Trust model"; `vm-c.md`): each new section,
@@ -94,7 +96,9 @@ A change that breaks a rule is a finding; older code is not.
   read before the owner or lock check is a race.
 - **Costs** (`vm-builtins.md`): any path that does work growing with its input
   for a constant charge, or a CPU builtin that holds the scheduler well past a
-  turn; a size cap that skips some value kinds, or counts after encoding.
+  turn; a size cap that skips some value kinds, or counts after encoding; an
+  error path that copies unbounded user data into a message or skips the
+  charge of the work done before the error.
 - **Diagnostics** (`vm-core.md`, "Diagnostics"): one code with a span; a new
   JSON key or line still reads in `stdlib/test/child.agc` (`vm_shape?`),
   `compiler/bdd/bdd_runner.agc` and the tests that parse `--json`.

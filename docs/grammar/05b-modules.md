@@ -443,13 +443,10 @@ import Sqlite from "pkg/sqlite/db"
   which counts as that exact version, are met together. `add` and `update` take
   the highest tag that meets them all. Two spellings of a requirement with the
   same bounds are one (`~>0.8`, `~> 0.8` and `>= 0.8.0, < 1.0.0`). The tree is
-  walked in passes from the project: each pass reads the asks of the manifests
-  that the last pass reached, takes for each name the highest tag that meets
-  them and the asks it sees itself (when the earlier and the current asks cannot
-  be met together, the current ones decide, and the check at the end of the
-  pass catches a real conflict), and records the asks of the manifests it
-  reaches. The tags are right when a pass records the asks it started with. A
-  tree that keeps moving (a pass that starts with asks of an earlier one, or
+  walked in passes from the project: each pass takes for each name the highest
+  tag that meets the asks it sees, and records the asks of the manifests that
+  tag reaches; the tags are right when a pass records the asks it started with.
+  A tree that keeps moving (a pass that starts with asks of an earlier one, or
   the last of 32) is `PKG-VERSION-UNSATISFIED` at `dependencies.<name>` of the
   last manifest that asked of the name that moved. There is no search over
   other combinations of tags. A name that the project overrides takes no asks.

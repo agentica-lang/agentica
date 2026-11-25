@@ -111,7 +111,9 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   4xx and 5xx still return `ok` with their status and written body.
 - `max_body_bytes` (at most 64 MiB) caps only the bodies held in memory
   (`get`, `post`, `request`, `upload`'s response); a bigger body goes
-  through `download`, `read_body` or `open`.
+  through `download`, `read_body` or `open`. A call whose reply grows with
+  user data (an export, a history, a log) sets its own `max_body_bytes` and
+  `timeout_ms`, and has a test with a reply over the 1 MiB default.
 - A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
   it with `HTTP.text(response.body, response.headers)`, which decodes the
   `charset` of `Content-Type` (UTF-8 without one) when `b.decode` knows it
