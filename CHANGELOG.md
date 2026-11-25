@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
+
 ## [0.39.0] - 2026-11-25
 
 ### Added

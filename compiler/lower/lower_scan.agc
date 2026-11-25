@@ -95,6 +95,13 @@ def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bo
   found
 end
 
+def type_name?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.TypeName(_) -> true
+    _ -> false
+  end
+end
+
 # The children of a node, except the type name of Type.members, which is no type used as a value.
 def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
   case node
@@ -110,6 +117,11 @@ def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
             _ -> AstWalk.children(node)
           end
 
+        Ast.Expr.MethodCall(call) ->
+          # Type.parse(text): the type name is no type used as a value either; the text is walked.
+          return AstWalk.children(node).drop(1) if call.name == "parse" and type_name?(call.target)
+
+          AstWalk.children(node)
         _ -> AstWalk.children(node)
       end
 

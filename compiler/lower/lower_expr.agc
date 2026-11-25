@@ -22,8 +22,8 @@ import Program from "lower_program"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
-  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, CONCAT_PARTS, FLOAT_OPS, INTERPOLATED_PARTS, INT_MIN, INT_MIN_DIGITS,
-  INT_OPS, NATIVE_LAYOUTS, STRING_OPS, UINT64_OPS, VM_BUILTINS,
+  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, CONCAT_PARTS, ENUM_NAME, ENUM_PARSE, FLOAT_OPS, INTERPOLATED_PARTS,
+  INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS, UINT64_OPS, VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -1394,6 +1394,9 @@ def lower_resolved(
     State.Resolved.Inspect(type) -> lower_inspect(cx, fx, receiver, type, span, want)
     State.Resolved.Members(fields) -> Data.lower_members(cx, fx, fields, span, want)
     State.Resolved.Codec(name, fields) -> Data.lower_codec(cx, fx, name, fields, span, want)
+    State.Resolved.Values(name, variants) -> Data.lower_values(cx, fx, name, variants, span, want)
+    State.Resolved.VariantName -> lower_variant_name(cx, fx, receiver, span, want)
+    State.Resolved.Parse(name, first) -> lower_parse(cx, fx, name, first, args.concat(named_values(named)), span, want)
     State.Resolved.FieldCall -> error(Lowering.internal(cx, "a field call is lowered with its method call", span))
     State.Resolved.Call(name, type) ->
       literal = literal_text(receiver)
@@ -1425,6 +1428,64 @@ def lower_resolved(
 
       lower_call(cx, fx, call, want, void, true, false)
   end
+end
+
+# `value.name` on an enum value: the name of its variant, which Enum.name reads off the value.
+def lower_variant_name(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  receiver: Ast.Expr,
+  span: Source.Span,
+  want: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.step(fx, span)
+  saved = fx.next
+  made = Lowering.window(fx, want)
+  base = made.slot
+  fx = Lowering.alloc(made.fx.with(next: base))
+  value = try lower_expression(cx, fx, receiver, base, false, false)
+  fx = Lowering.emit_builtin(value.fx, base, ENUM_NAME, 1, [span, Ast.expr_span(receiver)])
+  ok(window_result(fx, saved, base, want, span))
+end
+
+# `Type.parse(text)`: Enum.parse takes the id of a variant of the enum (which tells the variants), the written name of
+# the enum for the message, and the text.
+def lower_parse(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  enum_name: String,
+  first: String,
+  args: List[Ast.Expr],
+  span: Source.Span,
+  want: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.step(fx, span)
+  saved = fx.next
+  made = Lowering.window(fx, want)
+  base = made.slot
+  fx = Lowering.alloc(Lowering.alloc(Lowering.alloc(made.fx.with(next: base))))
+  fx = Lowering.emit_const(fx, base, Ir.Imm.Int(cx.variants["#{enum_name}.#{first}"]), span)
+  fx = Lowering.emit_const(fx, base + 1, Ir.Imm.Text(Types.display_name(enum_name)), span)
+  text = try lower_expression(cx, fx, args[0], base + 2, false, false)
+  spans = [span, span, span, Ast.expr_span(args[0])]
+  ok(window_result(Lowering.emit_builtin(text.fx, base, ENUM_PARSE, 3, spans), saved, base, want, span))
+end
+
+# The values of the named arguments, in the order written.
+def named_values(named: List[Ast.NamedArg]) -> List[Ast.Expr] = named.map do |arg: Ast.NamedArg| arg.value end
+
+# The result of a builtin called in a window of registers that starts at base: in want when the caller gave a register,
+# else in base.
+def window_result(fx: Lowering.Fx, saved: Int, base: Int, want: Int, span: Source.Span) -> Lowering.Out
+  if want >= 0
+    if base != want
+      fx = Lowering.emit_at(fx, "move", [want, base], span)
+    end
+
+    return Lowering.Out(fx: fx.with(next: saved), slot: want)
+  end
+
+  Lowering.Out(fx: fx.with(next: base + 1), slot: base)
 end
 
 # The literal node when the expression is a string literal with no interpolation, whose text lowering knows.

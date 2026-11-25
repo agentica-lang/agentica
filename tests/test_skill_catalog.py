@@ -21,6 +21,7 @@ IGNORED_NAMESPACES = {
     "Alias",  # Alias.f, the form of a call through an import alias
     "CGI",  # Ruby's CGI.escape_html, shown as what the builtin replaces
     "Checked",  # fields of std/analysis results in prose
+    "Color",  # an enum of a prose example (Color.values)
     "Enumerator",  # Ruby's Enumerator.new, shown as what to avoid
     "FILE",  # a placeholder of a command line, FILE.agc
     "Hash",  # Ruby's Hash.new, shown as what to avoid

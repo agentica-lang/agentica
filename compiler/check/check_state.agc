@@ -68,7 +68,9 @@ end
 ## on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call.
 ## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct. Codec is
 ## Type.codec: the linked name of the type and its fields (none for an enum). FieldCall is `receiver.name(args)` where
-## name is an Fn field of the struct: the call of the function the field holds.
+## name is an Fn field of the struct: the call of the function the field holds. VariantName is `value.name` on an enum
+## value. Values is `E.values`: the linked name of the enum and its variants in declaration order. Parse is
+## `E.parse(text)`: the linked name of the enum and its first variant.
 enum Resolved
   Self(Types.Type)
   Text(Types.Type)
@@ -77,6 +79,9 @@ enum Resolved
   Members(List[Model.Named])
   Codec(String, List[Model.Named])
   FieldCall
+  VariantName
+  Values(String, List[String])
+  Parse(String, String)
 end
 
 ## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape). A

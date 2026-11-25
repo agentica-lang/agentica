@@ -198,6 +198,7 @@ static void test_leaf_direct_and_parking_rows(void) {
       {"Task.spawn", 1, false, false, false},    {"Native.closed?", 1, true, false, false},
       {"LogRegistry.floor", 0, true, false, false}, {"LogRegistry.set_level", 1, false, false, false},
       {"Value.equal", 2, false, true, false},    {"Optional.equal", 2, false, true, false},
+      {"Enum.name", 1, true, false, false},      {"Enum.parse", 3, false, true, false},
       {"Channel.recv", 2, false, false, true},   {"Channel.close", 1, false, false, false},
       {"Task.await", 2, false, false, true},     {"TCP.send", 3, false, false, true},
       {"TLS.connect", 4, false, false, true},    {"File.each_line", 4, false, false, false},

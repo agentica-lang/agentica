@@ -550,6 +550,35 @@ def label(option: Option[Int]) -> String
 end
 ```
 
+Three forms read the variants of an enum, so a program needs no table that
+lists them or maps them to their names:
+
+- `Type.values` is the `List[Type]` of the variants, in declaration order. The
+  enum must have no type parameters and no payload on any variant.
+- `Type.parse(text)` is a `Result[Type]`: the variant whose name is `text`
+  (`Color.parse("Red")`, case sensitive), or an error that names the text and
+  lists the valid names. It takes the same enums as `values`.
+- `value.name` is the name of the variant of any enum value, payload variants
+  included, as the variant is declared and without the enum
+  (`Shape.Circle(3).name` is `"Circle"`; `to_s` gives `Shape.Circle(3)`). It
+  takes no arguments. `Type.parse(value.name)` gives back a value of an enum
+  that has values.
+
+`Type` is an enum you declare, one you import by name or through an import
+alias (`Models.Color.values`), or a builtin enum with no payloads
+(`System.Signal.values`). `values` is written without parentheses, as `members`
+is, and `parse` takes parentheses and is not piped (`x |> Color.parse()`,
+`Color.parse` and `Color.values()` are `CHECK-UNKNOWN-NAME`, with the written
+form in `help`). The one parameter of `parse` is called `text`, so
+`Color.parse(text: "Red")` is the same call, and another name is
+`CHECK-UNKNOWN-ARGUMENT`. Any other type name is an error: a struct, a
+resource, a generic enum or an enum with a payload variant is
+`CHECK-UNKNOWN-METHOD`, a type alias is `CHECK-UNKNOWN-TYPE`, `parse` with
+another number of arguments is `CHECK-ARITY`, and one that is not a `String`
+is `CHECK-TYPE-MISMATCH`. The error of an unknown name has the kind `argument`
+and lists at most 20 names, then `...`. Each `Type.values` builds its list
+again, so hoist it out of a hot loop.
+
 ### Structs and lists
 
 A struct constructor gives each field at most once, by name, in any order. A

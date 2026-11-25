@@ -169,6 +169,9 @@ def resolved(
         State.Resolved.Inspect(_) -> direct
         State.Resolved.Members(_) -> direct
         State.Resolved.Codec(_, _) -> direct
+        State.Resolved.VariantName -> direct
+        State.Resolved.Values(_, _) -> direct
+        State.Resolved.Parse(_, _) -> direct
       end
 
     none ->

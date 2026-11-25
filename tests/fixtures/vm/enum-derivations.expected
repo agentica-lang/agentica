@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 121,
+  "stdout": [
+    "Red,Green,Blue",
+    "3",
+    "[Color.Red, Color.Green, Color.Blue]",
+    "Dot",
+    "Circle",
+    "Line",
+    "Color.Green",
+    "unknown name \"green\" for Color; valid names: Red, Green, Blue",
+    "unknown name \"a\\\"b\\n\" for Color; valid names: Red, Green, Blue",
+    "Blue",
+    "Red",
+    "argument",
+    "8",
+    "Hup",
+    "unknown name \"Nope\" for System.Signal; valid names: Term, Int, Hup, Usr1, Usr2, Winch, Quit, Kill",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

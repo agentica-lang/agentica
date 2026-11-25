@@ -49,6 +49,8 @@ DNS.lookup
 Dir.list
 Dir.mkdir
 Dir.mkdir_private
+Enum.name
+Enum.parse
 Error.is_a?
 File.append_text
 File.close

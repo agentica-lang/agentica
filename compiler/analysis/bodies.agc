@@ -382,6 +382,9 @@ def expression(walk: Purity.Program, expr: Ast.Expr) -> Model.Node
             State.Resolved.Inspect(_) -> method_node(walk, node.name, type, span, given)
             State.Resolved.Members(_) -> method_node(walk, node.name, type, span, given)
             State.Resolved.Codec(_, _) -> method_node(walk, node.name, type, span, given)
+            State.Resolved.VariantName -> method_node(walk, node.name, type, span, given)
+            State.Resolved.Values(_, _) -> method_node(walk, node.name, type, span, given)
+            State.Resolved.Parse(_, _) -> method_node(walk, node.name, type, span, given)
           end
 
         none -> method_node(walk, node.name, type, span, given)
@@ -484,8 +487,8 @@ def call_leaf(walk: Purity.Program, id: Int, type: Types.Type, span: Source.Span
   leaf("call", type, span).with(target: target, type_args: type_args, prelude: prelude_of(walk, id))
 end
 
-# A method that every type has and that is not a builtin row (`to_s`, `inspect`, `T.members`): the receiver, then the
-# arguments.
+# A method that every type has and that is not a builtin row (`to_s`, `inspect`, `T.members`, `E.values`, `E.parse`,
+# `name` of an enum value): the receiver, then the arguments.
 def method_node(
   walk: Purity.Program,
   name: String,
