@@ -84,6 +84,14 @@ REPEATED_NAME = Rule(
   help: "import the type by name",
 )
 
+## A type that the author wrote with a Result in a Result, or an Optional in an Optional, in a signature, a field or an
+## alias. The message and the help are set for the wrapper that was found.
+NESTED_WRAPPER = Rule(
+  code: "LINT-NESTED-WRAPPER",
+  message: "this type nests a wrapper in itself",
+  help: "write one layer",
+)
+
 ## An is_a? literal in a builtin family that names no kind of it. The message and the help are set per literal.
 ERROR_KIND = Rule(
   code: "LINT-ERROR-KIND",
