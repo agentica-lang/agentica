@@ -176,6 +176,7 @@ static agc_value child_of(agc_vm *vm, const term_frame *f) {
   switch (f->kind) {
     case FRAME_LIST: return agc_list_get(agc_as_list(vm, f->value), k);
     case FRAME_MAP: {
+      if (!f->keys) agc_fail(vm, "RUNTIME-INTERNAL", "a map frame without keys", 0);
       if (k % 2 == 0) return f->keys[k / 2];
       agc_value item;
       if (!agc_map_get(vm, agc_as_map(vm, f->value), f->keys[k / 2], &item))
