@@ -44,7 +44,7 @@ def cancel_rounds(reader: Fn[Void]) -> Void
   round = 0
   while round < 4
     waiting = Task.spawn(reader)
-    Task.sleep(30)
+    Task.sleep(150)
     Task.cancel(waiting)
     show("cancelled #{round}")
     go.recv(10000).unwrap!

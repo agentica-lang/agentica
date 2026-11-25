@@ -159,6 +159,11 @@ is `RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel. A
 task parked in the FIFO of stdout or stderr leaves it (`agc_output_leave`,
 called from `unlink_task`), and the next writer is woken if its text now fits.
 
+A `cancel` half returns true when the job can be dropped (`drop` frees its
+data). Stdin on the loop (`vm/input.c`) is the second way: its half stops the
+poll, returns false and calls `agc_io_ready`, so the job ends through `done`,
+which keeps the bytes of a read that ended and wakes the readers that waited.
+
 ### 14.4 Ending
 
 **Rule.** One exit path. The file flush has a limit that is always on, 30
