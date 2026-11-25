@@ -20,8 +20,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 - Typed decoding uses a type-expression AST node accepted only in JSON type
   argument positions. JSON.decode returns located-path Result errors, validates
-  signed Int, narrow integer (type kinds 11 to 16) and finite Float bounds, and
-  ignores extra fields. Recursive type validation visits each struct once. The
+  signed Int, narrow integer (type kinds 11 to 16) and finite Float and Float32
+  (type kind 18) bounds, and ignores extra fields. Recursive type validation
+  visits each struct once. The
   source may be a String or a JSON.Value (two catalog forms, one rule and one VM
   builtin that skips the parse for a JSON.Value). JSON.schema uses the same
   eligibility check, emits the bounds of each integer type and $defs/$ref for

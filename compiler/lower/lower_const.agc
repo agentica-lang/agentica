@@ -86,7 +86,7 @@ def literal_value(types: List[Types.Type], value: Ast.Expr) -> Optional[Ir.Imm]
     Ast.Expr.Literal(node) ->
       return uint64_value(node.value, false) if Types.uint64?(types[node.id])
 
-      plain(node.value)
+      plain(node.value, types[node.id])
     Ast.Expr.Unary(node) ->
       return none if node.op != "minus"
 
@@ -94,7 +94,7 @@ def literal_value(types: List[Types.Type], value: Ast.Expr) -> Optional[Ir.Imm]
         Ast.Expr.Literal(inner) ->
           return uint64_value(inner.value, true) if Types.uint64?(types[node.id])
 
-          negated(inner.value)
+          negated(inner.value, types[inner.id])
         _ -> none
       end
 
@@ -176,10 +176,10 @@ def kept_names(
   kept
 end
 
-def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
+def plain(value: Ast.LitValue, type: Types.Type) -> Optional[Ir.Imm]
   case value
     Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(number))
-    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(number))
+    Ast.LitValue.Real(number, text) -> some(Ir.real(number, text, type))
     Ast.LitValue.Text(text) -> some(Ir.Imm.Text(text))
     Ast.LitValue.Flag(flag) -> some(Ir.Imm.Bool(flag))
     Ast.LitValue.Nothing -> some(Ir.Imm.Nil)
@@ -187,10 +187,10 @@ def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
   end
 end
 
-def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
+def negated(value: Ast.LitValue, type: Types.Type) -> Optional[Ir.Imm]
   case value
     Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(0 - number))
-    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(-number))
+    Ast.LitValue.Real(number, text) -> some(Ir.real(-number, "-#{text}", type))
     Ast.LitValue.Huge(digits) ->
       return some(Ir.Imm.Int(INT_MIN)) if digits == INT_MIN_DIGITS
 

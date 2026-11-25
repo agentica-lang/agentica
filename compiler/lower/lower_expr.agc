@@ -712,7 +712,7 @@ def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int
         value = Ir.Imm.UInt64(number)
       end
 
-    Ast.LitValue.Real(number) -> value = Ir.Imm.Float(number)
+    Ast.LitValue.Real(number, text) -> value = Ir.real(number, text, cx.types[node.id])
     Ast.LitValue.Text(text) -> value = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> value = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> value = Ir.Imm.Nil
@@ -824,15 +824,16 @@ def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) ->
   made = Lowering.target(fx, want)
   fx = made.fx
   operand = try lower_expression(cx, fx, node.operand, -1, false, false)
+  type = Lowering.type_of(cx, node.operand)
   op = "neg-i"
   if node.op == "not"
     op = "not"
-  elsif Types.is?(Lowering.type_of(cx, node.operand), "Float")
+  elsif Types.is?(type, "Float") or Types.is?(type, "Float32")
     op = "neg-f"
   end
 
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.op_span)
-  fx = narrowed(fx, made.slot, Lowering.type_of(cx, node.operand), node.op_span)
+  fx = narrowed(fx, made.slot, type, node.op_span)
   ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
@@ -893,7 +894,8 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
   else
     ops = INT_OPS
     side = Lowering.type_of(cx, node.left)
-    if Types.is?(side, "Float")
+    if Types.is?(side, "Float") or Types.is?(side, "Float32")
+      # A Float32 runs the Float opcodes: the VM rounds the result of two Float32s to binary32 (vm/interp.c).
       ops = FLOAT_OPS
     elsif Types.uint64?(side)
       ops = UINT64_OPS
@@ -968,7 +970,7 @@ end
 # True for a type whose == is the deep equality of the VM: anything but a primitive or a Range, which `eq` compares
 # (Bytes and Optional have their own builtins). The checker lets only types with equality reach here.
 def deep_equality?(type: Types.Type) -> Bool
-  for flat in ["Int", "Float", "Bool", "String", "Nil", "Range"]
+  for flat in ["Int", "Float", "Float32", "Bool", "String", "Nil", "Range"]
     return false if Types.is?(type, flat)
   end
 

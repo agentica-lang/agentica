@@ -16,6 +16,7 @@ import {ROWS as DNS_ROWS} from "builtins_dns"
 import {ROWS as ERROR_ROWS} from "builtins_error"
 import {ROWS as FILE_ROWS} from "builtins_file"
 import {ROWS as FLOAT_ROWS} from "builtins_float"
+import {ROWS as FLOAT32_ROWS} from "builtins_float32"
 import {ROWS as FRONTEND_ROWS} from "builtins_frontend"
 import {ROWS as HTTPWIRE_ROWS} from "builtins_httpwire"
 import {ROWS as INT_ROWS} from "builtins_int"
@@ -62,6 +63,7 @@ BUILTIN_ROWS: List[Model.Builtin] = (
     .concat(ERROR_ROWS)
     .concat(FILE_ROWS)
     .concat(FLOAT_ROWS)
+    .concat(FLOAT32_ROWS)
     .concat(FRONTEND_ROWS)
     .concat(HTTPWIRE_ROWS)
     .concat(INT_ROWS)

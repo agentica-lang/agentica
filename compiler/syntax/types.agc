@@ -28,6 +28,9 @@ NARROW_INTS: Map[String, List[Int]] = {
 
 ## The decimal digits of the greatest UInt64. It has its own tag in the VM, and its range does not fit an Int.
 UINT64_MAX_DIGITS = "18446744073709551615"
+## 2^128 - 2^103 as a Float and as its digits: a float literal from it up rounds to an infinity in Float32.
+FLOAT32_HALFWAY = 340282356779733661637539395458142568448.0
+FLOAT32_HALFWAY_DIGITS = "340282356779733661637539395458142568448"
 
 ## The narrow integer types by name.
 NARROW_TYPES: Map[String, Type] = {
@@ -59,6 +62,7 @@ enum Type
   UInt16
   UInt32
   UInt64
+  Float32
   Bool
   String
   Nil
@@ -104,6 +108,7 @@ def tag(type: Type) -> String
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
     Type.UInt64 -> "UInt64"
+    Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"
@@ -181,6 +186,59 @@ def narrow_outside(type: Type, text: String) -> String
 
   bounds = NARROW_INTS[tag(type)]
   "#{text} is outside #{tag(type)}, #{bounds[0]} to #{bounds[1]}"
+end
+
+## True for a Float halfway between two Float32s: the texts on either side of it, which it stands for, give two.
+def float32_halfway?(x: Float) -> Bool
+  magnitude = x.abs
+  bits = Float.to_bits32(magnitude)
+  near = Float.from_bits32(bits)
+  return false if near == magnitude
+
+  other = Float.from_bits32(bits + 1)
+  if near > magnitude
+    other = Float.from_bits32(bits - 1)
+  end
+
+  (near + other) / 2.0 == magnitude
+end
+
+## The bits of the Float32 that a float literal gives, its value and its text, or none when its Float is halfway
+## between two Float32s and the text is not that Float exactly (or that cannot be told in 62 bits).
+def float32_bits(x: Float, text: String) -> Optional[Int]
+  return some(Float.to_bits32(x)) if !float32_halfway?(x) or exact_text?(x.abs, text)
+
+  none
+end
+
+## True when a float literal, its value and its text, rounds to an infinity in the type, Float or Float32. In Float32
+## that is from 2^128 - 2^103 up, halfway between the largest Float32 and 2^128; that bound is a Float, so only a text
+## whose Float is the bound itself needs its digits: the part before the point decides, as the text is that close.
+def float_overflow?(type: Type, number: Float, text: String) -> Bool
+  magnitude = number.abs
+  return Float.to_bits(magnitude) == 0x7FF0000000000000 if !is?(type, "Float32")
+  return magnitude > FLOAT32_HALFWAY if magnitude != FLOAT32_HALFWAY
+
+  digits = integer_digits(text)
+  return digits.size > FLOAT32_HALFWAY_DIGITS.size if digits.size != FLOAT32_HALFWAY_DIGITS.size
+
+  for at in 0...digits.size
+    mine = digits.slice(at, 1).to_i!
+    bound = FLOAT32_HALFWAY_DIGITS.slice(at, 1).to_i!
+    return mine > bound if mine != bound
+  end
+
+  true
+end
+
+## The message of a float literal (its text) that rounds to an infinity in the type.
+def float_outside(type: Type, text: String) -> String
+  largest = "1.7976931348623157e308"
+  if is?(type, "Float32")
+    largest = "3.4028235e38"
+  end
+
+  "#{text} is past the largest #{tag(type)}, #{largest}, and would be an infinity"
 end
 
 ## The narrow integer type of that name (a key of NARROW_INTS), or UInt64.
@@ -458,6 +516,7 @@ def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.UInt16 -> "UInt16"
     Type.UInt32 -> "UInt32"
     Type.UInt64 -> "UInt64"
+    Type.Float32 -> "Float32"
     Type.Bool -> "Bool"
     Type.String -> "String"
     Type.Nil -> "Nil"
@@ -596,4 +655,101 @@ end
 def digit?(character: String) -> Bool
   code = character.code
   code >= 48 and code <= 57
+end
+
+# The digits before the point of a decimal text, without its sign or leading zeros: "-1.25e2" gives "125".
+def integer_digits(text: String) -> String
+  unsigned = text
+  if text.start_with?("-")
+    unsigned = text.slice(1, text.size - 1)
+  end
+
+  parts = unsigned.replace("E", "e").split("e")
+  exponent = 0
+  if parts.size > 1
+    exponent = parts[1].replace("+", "").to_i!
+  end
+
+  halves = parts[0].split(".")
+  digits = halves[0]
+  if halves.size > 1
+    digits += halves[1]
+  end
+
+  point = halves[0].size + exponent
+  whole = "0"
+  if point >= digits.size
+    whole = digits + "0" * (point - digits.size)
+  elsif point > 0
+    whole = digits.slice(0, point)
+  end
+
+  while whole.size > 1 and whole.start_with?("0")
+    whole = whole.slice(1, whole.size - 1)
+  end
+
+  whole
+end
+
+# True when the digits of TEXT times 10^q are X > 0 (M * 2^k, M odd) exactly, compared in 62 bits; false past them.
+def exact_text?(x: Float, text: String) -> Bool
+  bits = Float.to_bits(x)
+  m = bits.bit_and(0xFFFFFFFFFFFFF).bit_or(0x10000000000000)
+  k = bits.shift_right(52) - 1075
+  while m % 2 == 0
+    m = m / 2
+    k += 1
+  end
+
+  unsigned = text
+  if text.start_with?("-")
+    unsigned = text.slice(1, text.size - 1)
+  end
+
+  parts = unsigned.replace("E", "e").split("e")
+  q = 0
+  if parts.size > 1
+    q = parts[1].replace("+", "").to_i!
+  end
+
+  number = parts[0].split(".")
+  digits = number[0]
+  if number.size > 1
+    digits = digits + number[1]
+    q -= number[1].size
+  end
+
+  digits = digits.replace("_", "")
+  while digits.size > 1 and digits.start_with?("0")
+    digits = digits.slice(1, digits.size - 1)
+  end
+
+  while digits.size > 1 and digits.end_with?("0")
+    digits = digits.slice(0, digits.size - 1)
+    q += 1
+  end
+
+  return false if digits.size > 18
+
+  left = scaled(digits.to_i!, q, 0 - k)
+  right = scaled(m, 0 - q, k)
+  left >= 0 and left == right
+end
+
+# n times 10^tens (tens >= 0) times 2^twos (twos >= 0), or -1 past 62 bits. A negative count leaves its factor out.
+def scaled(n: Int, tens: Int, twos: Int) -> Int
+  value = n
+  for _ in 0...tens
+    return -1 if value > 0x3FFFFFFFFFFFFFFF / 10
+
+    value *= 10
+  end
+
+  for _ in 0...twos
+    return -1 if value > 0x3FFFFFFFFFFFFFFF / 2
+
+    value *= 2
+  end
+
+  value
 end

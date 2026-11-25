@@ -243,6 +243,10 @@ static void put_scalar(agc_vm *vm, agc_json_buffer *b, agc_value v, uint32_t spa
     double x = agc_as_float(vm, v);
     if (!isfinite(x)) not_finite(vm, span);
     agc_json_put(b, text, agc_float_text(x, text));
+  } else if (agc_is(v, AGC_T_FLOAT32)) {
+    double x = agc_as_float32(vm, v);
+    if (!isfinite(x)) not_finite(vm, span);
+    agc_json_put(b, text, agc_float32_text(x, text));
   } else if (agc_is(v, AGC_T_BYTES)) {
     not_encodable(vm, span);
   } else if (agc_is(v, AGC_T_UINT64)) {
@@ -434,6 +438,11 @@ static agc_value scalar_json(agc_vm *vm, agc_value v, uint32_t span) {
   if (agc_is(v, AGC_T_FLOAT)) {
     if (!isfinite(agc_as_float(vm, v))) not_finite(vm, span);
     return agc_json_leaf(AGC_JSON_FLOAT, v);
+  }
+  /* A JSON float holds a Float: the Float32 widens to it, exactly. */
+  if (agc_is(v, AGC_T_FLOAT32)) {
+    if (!isfinite(agc_as_float32(vm, v))) not_finite(vm, span);
+    return agc_json_leaf(AGC_JSON_FLOAT, agc_float(agc_as_float32(vm, v)));
   }
   if (agc_is(v, AGC_T_BYTES)) not_encodable(vm, span);
   agc_as_string(vm, v);

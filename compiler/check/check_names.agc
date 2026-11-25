@@ -26,6 +26,7 @@ METHOD_KINDS = [
   "UInt16",
   "UInt32",
   "UInt64",
+  "Float32",
   "Range",
   "Bytes",
   "Channel",

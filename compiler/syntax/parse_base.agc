@@ -336,7 +336,7 @@ def literal_value(token: Tokens.Token) -> Ast.LitValue
   case token.value
     Tokens.Value.Whole(number) -> Ast.LitValue.Whole(number)
     Tokens.Value.Huge(digits) -> Ast.LitValue.Huge(digits)
-    Tokens.Value.Real(number) -> Ast.LitValue.Real(number)
+    Tokens.Value.Real(number) -> Ast.LitValue.Real(number, token.lexeme.replace("_", ""))
     Tokens.Value.Text(text) -> Ast.LitValue.Text(text)
     _ -> Ast.LitValue.Nothing
   end
@@ -602,7 +602,7 @@ def negated(value: Ast.LitValue) -> Ast.LitValue
   case value
     Ast.LitValue.Whole(number) -> Ast.LitValue.Whole(0 - number)
     Ast.LitValue.Huge(digits) -> Ast.LitValue.Huge("-#{digits}")
-    Ast.LitValue.Real(number) -> Ast.LitValue.Real(-number)
+    Ast.LitValue.Real(number, text) -> Ast.LitValue.Real(-number, "-#{text}")
     _ -> value
   end
 end

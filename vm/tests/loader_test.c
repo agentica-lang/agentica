@@ -186,7 +186,7 @@ static buffer build(spec s) {
   if (s.extra_kind >= 0) u8(&b, (uint8_t)s.extra_kind);
   if (s.extra_kind == 5) float_bits(&b, s.extra_float);
   if (s.extra_kind == 6) str(&b, s.extra_string);
-  if (s.extra_kind == 7) {
+  if (s.extra_kind == 7 || s.extra_kind == 9) {
     u32(&b, (uint32_t)strlen(s.extra_string) + s.extra_bytes_over);
     memcpy(b.data + b.len, s.extra_string, strlen(s.extra_string));
     b.len += strlen(s.extra_string);
@@ -546,7 +546,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 18 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 19 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -683,6 +683,84 @@ static void bytes_constant_tests(void) {
   s.extra_string = "ab";
   s.extra_bytes_over = UINT32_MAX - 2;
   assert(!loads(s, "truncated file"));
+}
+
+/* Constant kind 9 is a Float32 literal as its decimal text, rounded once when the file loads. Text that is not a whole
+   decimal, or that rounds past the largest Float32, is refused: hand-made bytecode never makes an infinity or a NaN
+   this way. */
+static void float32_constant_tests(void) {
+  static const struct {
+    const char *text;
+    double value;
+  } read[] = {
+    {"1.5", 1.5},
+    {"0.1", (double)0.1f},
+    {"-0.0", -0.0},
+    {"1e-50", 0.0},
+    {"1.0000000596046447753906250000000001", 1.0 + 0x1p-23},
+    {"340282356779733661637539395458142568447.9", 0x1.fffffep127},
+  };
+  for (size_t k = 0; k < sizeof read / sizeof read[0]; k++) {
+    spec s = base();
+    s.extra_kind = 9;
+    s.extra_string = read[k].text;
+    agc_value c = loaded_constant(s);
+    assert(c.tag == AGC_T_FLOAT32 && c.as.f == read[k].value && !signbit(c.as.f) == !signbit(read[k].value));
+  }
+  static const char *const refused[] = {"", "-", "1.", ".5", "1e", "nan", "inf", "+inf.0", "1.5x", " 1", "+1", "0x1p3"};
+  for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) {
+    spec s = base();
+    s.extra_kind = 9;
+    s.extra_string = refused[k];
+    assert(!loads(s, "Float32 constant is not a decimal"));
+  }
+  static const char *const past[] = {"1e39", "-1e39", "340282356779733661637539395458142568448", "1e99999999999"};
+  for (size_t k = 0; k < sizeof past / sizeof past[0]; k++) {
+    spec s = base();
+    s.extra_kind = 9;
+    s.extra_string = past[k];
+    assert(!loads(s, "Float32 constant is past the largest Float32"));
+  }
+  spec s = base();
+  s.extra_kind = 9;
+  s.extra_string = "1.5";
+  s.extra_bytes_over = UINT32_MAX - 3;
+  assert(!loads(s, "truncated file"));
+}
+
+/* The Float opcodes of the turn loop on Float32s (K2, a Float32 constant; K3, a Float): two Float32s run on, a zero
+   Float32 divisor fails at the operator, and a Float with a Float32 is a wrong tag, never a widening. */
+static agc_outcome float32_turn(const agc_instr *code, uint32_t count) {
+  static const uint32_t spans[] = {1, 0, 0, 2, 0, 0, 0, 0};
+  spec s = base();
+  s.extra_kind = 9;
+  s.extra_string = "1.5";
+  s.second_float = 2.5;
+  s.code = code;
+  s.code_spans = spans;
+  s.count = count;
+  s.registers = 3;
+  return run_spec(s, stdout);
+}
+
+static void float32_turn_tests(void) {
+  static const agc_instr runs[] = {STEP1,
+                                   {AGC_OP_CONST, 0, 2, 0},
+                                   {AGC_OP_ADD_F, 1, 0, 0},
+                                   {AGC_OP_NEG_F, 1, 1, 0},
+                                   {AGC_OP_LT_F, 2, 1, 0},
+                                   {AGC_OP_DIV_F, 2, 0, 1},
+                                   {AGC_OP_SAME, 2, 0, 0},
+                                   RETURN0};
+  assert(float32_turn(runs, 8).kind == AGC_DONE);
+  static const agc_instr zero[] = {
+    STEP1, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_SUB_F, 1, 0, 0}, {AGC_OP_DIV_F, 2, 0, 1}, RETURN0};
+  agc_outcome divided = float32_turn(zero, 5);
+  assert(divided.kind == AGC_FAILED && strcmp(divided.code, "RUNTIME-DIVISION-BY-ZERO") == 0 && divided.span == 2);
+  static const agc_instr mixed[] = {
+    STEP1, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CONST, 1, 3, 0}, {AGC_OP_ADD_F, 2, 0, 1}, RETURN0};
+  agc_outcome widened = float32_turn(mixed, 5);
+  assert(widened.kind == AGC_FAILED && strcmp(widened.code, "RUNTIME-INTERNAL") == 0);
 }
 
 /* TRY_STEP in the block (function 1) of the builtin that main calls: the block makes error(K[2]) and fails through
@@ -1558,7 +1636,7 @@ static void json_instance_tests(void) {
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
   buffer good = instance_tail(1, 0, one, 0);
   assert(loads_instances(AGC_TYPE_INSTANCE, 0, &good, NULL));
-  assert(!loads_instances(AGC_TYPE_UINT64 + 1, 0, &good, "unknown type kind"));
+  assert(!loads_instances(AGC_TYPE_FLOAT32 + 1, 0, &good, "unknown type kind"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 1, &good, "instance index out of range"));
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, NULL, "instance index out of range"));
   buffer range = instance_tail(1, 1, one, 0);
@@ -1676,9 +1754,10 @@ static void narrow_default_tests(void) {
   }
 }
 
-/* The sized integer kinds (11 to 17) are scalars with no operand in a file of this format; 18 is unknown. */
+/* The sized integer kinds (11 to 17) and Float32 (18) are scalars with no operand in a file of this format; 19 is
+   unknown. The Int default reaches the fit check of a Float32 field, past the operand. */
 static void narrow_kind_tests(void) {
-  for (uint32_t kind = AGC_TYPE_INT8; kind <= AGC_TYPE_UINT64 + 1; kind++) {
+  for (uint32_t kind = AGC_TYPE_INT8; kind <= AGC_TYPE_FLOAT32 + 1; kind++) {
     bool wide = kind == AGC_TYPE_UINT64;
     buffer t = field_tables((uint8_t)kind, AGC_TYPE_INSTANCE, 0);
     buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, wide ? 2 : 0);
@@ -1686,7 +1765,9 @@ static void narrow_kind_tests(void) {
     s.tables = &t;
     s.tail = &tail;
     s.extra_kind = wide ? 8 : -1;
-    const char *reason = kind > AGC_TYPE_UINT64 ? "unknown type kind 18" : NULL;
+    const char *reason = kind == AGC_TYPE_FLOAT32 ? "field default does not fit its type"
+                         : kind > AGC_TYPE_FLOAT32 ? "unknown type kind 19"
+                                                   : NULL;
     assert(loads(s, reason) == (reason == NULL));
     free(t.data);
     free(tail.data);
@@ -2188,9 +2269,11 @@ int main(void) {
   s.extra_int = -2;
   agc_value u64 = loaded_constant(s);
   assert(agc_is(u64, AGC_T_UINT64) && agc_as_uint64(NULL, u64) == UINT64_MAX - 1);
-  s.extra_kind = 9;
-  assert(!loads(s, "unsupported constant kind 9"));
+  s.extra_kind = 10;
+  assert(!loads(s, "unsupported constant kind 10"));
   bytes_constant_tests();
+  float32_constant_tests();
+  float32_turn_tests();
   s = base();
   s.extra_kind = 6;
   s.extra_string = "\xE2\x82";
@@ -2519,7 +2602,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 18"));
+  assert(!loads_types(1, "unknown type kind 19"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));

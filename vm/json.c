@@ -170,6 +170,9 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
     if (isinf(x)) return false;
   }
   *out = agc_json_leaf(AGC_JSON_FLOAT, agc_float(x));
+  double nearest;
+  if (agc_f32_midpoint(x) && agc_read_float32((const char *)s, len, &nearest) && nearest != agc_round_f32(x))
+    ((agc_json *)out->as.p)->count = nearest > agc_round_f32(x) ? AGC_JSON_ABOVE : AGC_JSON_BELOW;
   return true;
 }
 
@@ -504,6 +507,24 @@ bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out) {
   const agc_string *s = agc_as_string(vm, j->scalar);
   *out = agc_read_double(s->data, s->bytes);
   return isfinite(*out);
+}
+
+bool agc_json_to_float32(agc_vm *vm, const agc_json *j, double *out) {
+  double x;
+  if (j->kind == AGC_JSON_INT) {
+    x = (double)(float)agc_as_int(vm, j->scalar);
+  } else if (j->kind == AGC_JSON_BIG) {
+    const agc_string *s = agc_as_string(vm, j->scalar);
+    if (!agc_read_float32(s->data, s->bytes, &x)) return false;
+  } else if (j->kind == AGC_JSON_FLOAT) {
+    x = agc_as_float(vm, j->scalar);
+    if (j->count) x = nextafter(x, j->count == AGC_JSON_ABOVE ? INFINITY : -INFINITY);
+    x = agc_round_f32(x);
+  } else {
+    return false;
+  }
+  *out = x;
+  return isfinite(x);
 }
 
 static agc_value builtin_float(agc_vm *vm, agc_value *args, uint32_t span) {

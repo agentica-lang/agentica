@@ -289,6 +289,7 @@ def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.UInt16 -> true
     Types.Type.UInt32 -> true
     Types.Type.UInt64 -> true
+    Types.Type.Float32 -> true
     Types.Type.Float -> true
     Types.Type.Bool -> true
     Types.Type.Nil -> true

@@ -116,6 +116,7 @@ VM_BUILTINS = Set.new([
   "Time.NaiveDateTime.us_between", "Time.compare", "Time.compare_naive", "Time.compare_date", "Time.compare_time",
   "Time.Date.cwday", "Time.Date.yday", "Time.Date.strftime", "Time.TimeOfDay.strftime", "Time.NaiveDateTime.strftime",
   "Time.DateTime.strftime", "Path.replace", "Process.pid", "System.program_name", "Ref.new", "Task.spawn_link",
+  "Float.to_float32", "Int.to_float32", "Float32.to_f", "Float32.to_bits", "Float32.from_bits",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
