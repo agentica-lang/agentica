@@ -37,6 +37,9 @@ Each rule names one place in the VM that follows it.
   (`agc_list_set`, `vm/list.c`). Out of memory and a thread that cannot
   start end with one line and status 70 (`agc_out_of_memory`,
   `agc_thread_start_failed`).
+- **Error paths stay bounded.** User data copied into a message or a detail
+  has a cap, and the work done before the error is charged like the work that
+  succeeds (`references/vm-builtins.md`).
 - **An error value has a kind.** `agc_error` takes an `agc_error_kind`
   (`vm/error_kinds.h`); a new kind goes in that enum, its name in
   `kind_names` (`vm/value.c`) and the table of
@@ -56,7 +59,10 @@ Each rule names one place in the VM that follows it.
   (`compound_debug`, `vm/text.c`;
   `docs/vm/05-values-execution-builtins.md` §7.3). Depth bounded by a constant
   or `log n` takes `// NOLINT(misc-no-recursion)` on the function line (`put`,
-  `vm/map.c`). The lint sees recursion within one file only.
+  `vm/map.c`). The lint sees recursion within one file only. An explicit
+  stack pushes a frame only after every check of its head passes (the byte
+  cap, the depth), or the error path walks a half-made frame. Test each limit
+  error at each container kind: empty map, struct field, list, enum.
 - **Hold no `malloc` memory across a raise.** `agc_fail` `longjmp`s past every
   `free`. Run each check that can raise before the first `malloc`, and while
   you hold one call only helpers that never raise (`guard_of`,

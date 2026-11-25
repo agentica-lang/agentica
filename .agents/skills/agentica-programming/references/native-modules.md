@@ -54,7 +54,12 @@ end
   `{"summary", "(List[Float]) -> Optional[Summary]", summary, AN_SHORT}` and
   type rows such as `{"Summary", AN_STRUCT, "count: Int, mean: Float"}`. Each
   getter returns `false` for another type; terms last until the C function
-  returns. A short function is thread-safe and never blocks or sleeps.
+  returns. A short function is thread-safe and never blocks or sleeps. A call
+  over user input (a parser, a decoder) is `compute`, not short, unless its
+  time is provably bounded; give it its own deadline (a progress callback of
+  the library) that returns an error value, not a raise. Walk a tree with the
+  library's cursor: a call per node that climbs or counts siblings
+  (`ts_node_parent`, `ts_node_child(i)`) is quadratic on a deep input.
 - `AN_FRESH` added to a row's mode (`AN_SHORT | AN_FRESH`, API 1.5): the
   resources the function makes do not come from its resource arguments (a
   tensor that owns its data), so a `Native.arena` that keeps one keeps it

@@ -60,8 +60,11 @@ JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
   `JSON.Field` in a payload is `CHECK-JSON-FIELD-PLACE`.
 - `JSON.decode` returns errors, with field or index paths
   (`shapes[0].values[1]`), for malformed JSON, missing fields, wrong types, Int
-  overflow and non-finite Floats. Extra object keys are ignored. An integer may
-  decode as Float; a decimal or exponent value never decodes as Int.
+  overflow and non-finite Floats. Extra object keys are ignored, so a reader
+  of a foreign format refuses by name each key that changes the result (check
+  the list against the upstream source), or the file loads with other math.
+  An integer may decode as Float; a decimal or exponent value never decodes as
+  Int.
 - A missing key of a field with a default (`wire: String = ""`) gives the
   default (codecs too); `null` stays an error unless the field is `Optional`.
   `JSON.schema` leaves such a field out of `required`.

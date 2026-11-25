@@ -354,6 +354,29 @@ shared mutable state, and there is no `Agent`, `Mutex`, `Thread`, `SizedQueue`,
 task, not a producer. A producer task sending into a channel is the generator:
 its capacity gives backpressure and `recv` is `next`.
 
+## Relays and streams
+
+A task that copies a body or a feed into a channel for a consumer (an SSE or
+streaming relay) follows these rules:
+
+- Prefer one owner task per connection to flags that coordinate several tasks:
+  each flag added to fix a hang brings a new hang.
+- Check that the consumer closed the channel on every input, not only when
+  there is an item to send: a heartbeat-only stream never sends, and holds its
+  connection for ever.
+- A per-item timeout over a buffered channel measures the whole buffer
+  ("16 queued items within `read_timeout_ms`"). Hand over one item at a time
+  (capacity 1 or 2).
+- A task that turns off its own timeout because another task owns the wait
+  monitors that task (`Task.monitor`) and treats its end as a close. Test a
+  cancel and a crash of the other task.
+- A stream held for a long time is a lease that every idle sweeper and timer
+  must count, or each stream is cut at the idle limit.
+- A polling loop backs off when idle (a long receive timeout when nothing is
+  pending). Check the CPU with about 100 idle streams.
+- Specs: a stream that outlives the idle limit, a heartbeat-only stream closed
+  by the reader, and a steady reader slower than the producer.
+
 ## One form per job
 
 - Change, select or combine list items: `map`, `select`, `reduce` (eager).
@@ -409,3 +432,8 @@ value even when two tasks miss at once. `keys` and `to_map` are snapshots; a key
 deleted and put again goes to the end. Sort `keys` before printing when tasks
 fill the table, since their order follows the schedule. In BDD, a table made in
 `main` and captured by step blocks starts fresh in each scenario.
+
+A lock made of `put_new` and `delete` stays held when its holder is cancelled
+or crashes, so every later taker waits for ever. Store the holder's task id and
+a deadline in the value, and let a taker replace an expired one, or have an
+owner task `Task.monitor` the holder and delete the key.
