@@ -34,6 +34,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `std/binary` uses the sized types: `read_u16_be` and the other readers give `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64` (all 64 bits, no error above `Int`) or `Int` (`i64`), and the writers take that type and return a plain `Bytes` (no `Result`: a value that may not fit is converted first, `try n.to_uint16`) (#984).
 - **Breaking:** `Float.to_bits` returns a `UInt64` and `Float.from_bits` takes one, and `std/binary` reads and writes `f32` as a `Float32` (#984).
 - **Breaking:** `Float.to_bits32` and `Float.from_bits32` are removed: use `Float32.to_bits` and `Float32.from_bits` (`x.to_float32` rounds a `Float`) (#984).
+- With the JIT, loops of `UInt64` arithmetic and comparisons are compiled instead of running in the interpreter (#1976).
 - `Result.unwrap_or(n.to_uint8, 0)` and `.unwrap_or(0)` type an integer or float literal default by the Result's value (#984).
 
 ### Fixed

@@ -1104,6 +1104,24 @@ static AGC_JIT_CALLER void helpers(void) {
   binary(AGC_OP_LE_F, two, two, AGC_STATUS_OK, agc_bool(true));
   binary(AGC_OP_ADD_F, two, agc_int(1), AGC_STATUS_WRONG_TAG, any);
   binary(AGC_OP_SAME, agc_int(1), agc_int(1), AGC_STATUS_OK, agc_bool(true));
+  /* UInt64: values above 2^63 stay unsigned, overflow and a zero divisor keep their statuses, and an Int operand is a
+     wrong tag. */
+  agc_value top = agc_uint64(UINT64_MAX), half = agc_uint64((uint64_t)1 << 63), three = agc_uint64(3);
+  binary(AGC_OP_ADD_U, half, agc_uint64(5), AGC_STATUS_OK, agc_uint64(((uint64_t)1 << 63) + 5));
+  binary(AGC_OP_ADD_U, top, agc_uint64(1), AGC_STATUS_OVERFLOW, any);
+  binary(AGC_OP_SUB_U, three, agc_uint64(4), AGC_STATUS_OVERFLOW, any);
+  binary(AGC_OP_SUB_U, top, half, AGC_STATUS_OK, agc_uint64(((uint64_t)1 << 63) - 1));
+  binary(AGC_OP_MUL_U, half, agc_uint64(2), AGC_STATUS_OVERFLOW, any);
+  binary(AGC_OP_MUL_U, agc_uint64(UINT64_MAX / 3), three, AGC_STATUS_OK, top);
+  binary(AGC_OP_DIV_U, top, three, AGC_STATUS_OK, agc_uint64(UINT64_MAX / 3));
+  binary(AGC_OP_DIV_U, three, agc_uint64(0), AGC_STATUS_DIVISION_BY_ZERO, any);
+  binary(AGC_OP_MOD_U, top, agc_uint64(10), AGC_STATUS_OK, agc_uint64(UINT64_MAX % 10));
+  binary(AGC_OP_MOD_U, three, agc_uint64(0), AGC_STATUS_DIVISION_BY_ZERO, any);
+  binary(AGC_OP_LT_U, three, half, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_LT_U, half, three, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_LE_U, top, top, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_ADD_U, three, agc_int(1), AGC_STATUS_WRONG_TAG, any);
+  binary(AGC_OP_LT_U, agc_int(1), three, AGC_STATUS_WRONG_TAG, any);
   /* CONCAT joins, TO_TEXT prints: results, a wrong tag and Void leaving R3 alone. */
   text_binary(AGC_OP_CONCAT, hello, world, "hello, world");
   binary(AGC_OP_CONCAT, hello, agc_int(1), AGC_STATUS_WRONG_TAG, any);
