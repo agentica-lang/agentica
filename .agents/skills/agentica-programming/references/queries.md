@@ -136,10 +136,14 @@ JSON: `{version, command, query, definition, builtin, references, skipped}`.
   `span` is the name alone. `kind` is `call`, `value` (`&f`, a constant), `type`
   (an annotation), `construct` (a struct construction, a `with`, or a variant
   constructor), `read` (a field read), `pattern` (a variant in a `case` arm),
-  `binding` (a use of a local, `x += 1` included), `argument` (the name of a
+  `binding` (a use of a local, `x += 1` included), `import` and `export` (the
+  name in an import list or a re-export), `argument` (the name of a
   named argument at a call, which `type-at` answers as its parameter: `verbose`
   of `check(gen, verbose: true)`) or `qualifier` (the name of a module block
-  before one of its names: `Counter` of `Counter.start(1)`); an open set. No
+  before one of its names: `Counter` of `Counter.start(1)`); an open set. The uses of an alias
+  (`create(` after `import {make as create}`) are calls of `make`; the import
+  name is `make`, so a rename compares the span text with the old name and
+  leaves alias uses alone. No
   references is an empty list, exit 0.
 - `skipped`: files of `PATH...` that do not link, as for `symbol`.
 

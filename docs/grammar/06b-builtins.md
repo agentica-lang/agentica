@@ -293,6 +293,9 @@ None of them runs the program. The contract that page leaves out:
   an import list (`make` of `import {make} from "models"`), which selects the
   imported declaration; a position on the module alias of `Models.total(u)`
   selects the function `total`, not the module.
+  The name in an import list (`make` of `import {make as create}`, not the
+  alias) and in a re-export (`export Models.make`) are references too, of kind
+  `import` and `export`.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks (N a positive integer; runs are unlimited by default,

@@ -172,8 +172,9 @@ struct Symbols
   skipped: List[Skipped]
 end
 
-## One use of a declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`), the
-## `function` it is in ("" at the top level), and the `range` of the name in `file`.
+## One use of a declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern`, `binding`,
+## `argument`, `qualifier`, `import` or `export`), the `function` it is in ("" at the top level), and the `range`
+## of the name in `file`.
 struct Reference
   kind: String
   function: String
