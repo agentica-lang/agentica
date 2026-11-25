@@ -95,9 +95,12 @@ def test_without_a_terminal_every_call_says_so(program):
 
 
 class Pty:
-    """The VM on a new pty that is its controlling terminal, so a resize sends it SIGWINCH."""
+    """The VM on a new pty. With `controlling` the pty is its controlling terminal, so a resize sends it SIGWINCH; the
+    other cases leave it not controlling, because macOS revokes a controlling terminal when its session leader ends,
+    and the test reads the pty's mode after the VM ended. The test reads what the VM writes while it waits for the
+    end: macOS holds a process's exit until its output to a tty is read."""
 
-    def __init__(self, program, mode, rows=33, cols=77, flags=()):
+    def __init__(self, program, mode, rows=33, cols=77, flags=(), controlling=False):
         import fcntl
         import pty
         import termios
@@ -107,13 +110,13 @@ class Pty:
         self.before = termios.tcgetattr(self.slave)
         self.text = b""
 
-        def controlling():
+        def take_terminal():
             os.setsid()
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
         self.process = subprocess.Popen([*vm_command(), *flags, "--", str(program), mode], stdin=self.slave,
                                         stdout=self.slave, stderr=self.slave, env=vm_environment(),
-                                        preexec_fn=controlling)
+                                        preexec_fn=take_terminal if controlling else None)
 
     def resize(self, rows, cols):
         import fcntl
@@ -122,31 +125,41 @@ class Pty:
     def mode(self):
         return self.termios.tcgetattr(self.slave)
 
+    def take(self, seconds):
+        """What the VM wrote within SECONDS, added to the text; empty when nothing came."""
+        import select
+        if not select.select([self.master], [], [], seconds)[0]:
+            return b""
+        try:
+            chunk = os.read(self.master, 4096)
+        except OSError:  # Linux: EIO once nothing holds the slave side open
+            chunk = b""
+        self.text += chunk
+        return chunk
+
     def read_until(self, marker):
         """The text the VM wrote up to and with MARKER; fails after WAIT_SECONDS."""
-        import select
         deadline = time.monotonic() + WAIT_SECONDS
         while marker not in self.text:
             left = deadline - time.monotonic()
-            assert left > 0 and select.select([self.master], [], [], left)[0], self.text
-            try:
-                chunk = os.read(self.master, 4096)
-            except OSError:  # Linux: EIO once the VM, the last holder of the pty, has ended
-                chunk = b""
-            assert chunk, self.text
-            self.text += chunk
+            assert left > 0 and self.take(left), self.text
         return self.text
 
     def type(self, keys):
         os.write(self.master, keys)
 
     def wait(self):
-        return self.process.wait(WAIT_SECONDS)
+        """The exit status, reading the output meanwhile."""
+        deadline = time.monotonic() + WAIT_SECONDS
+        while self.process.poll() is None:
+            assert time.monotonic() < deadline, self.text
+            self.take(0.05)
+        return self.process.returncode
 
     def close(self):
         if self.process.poll() is None:
             self.process.kill()
-            self.process.wait()
+            self.wait()
         os.close(self.master)
         os.close(self.slave)
 
@@ -211,7 +224,7 @@ def test_a_stop_signal_gives_the_mode_back(program, ptys):
 
 @host_only(WINDOWS, POSIX)
 def test_a_resize_is_a_winch_value_and_the_new_size(program, ptys):
-    pty = ptys(program, "resize")
+    pty = ptys(program, "resize", controlling=True)
     pty.read_until(b"ready\r\n")
     pty.resize(40, 100)
     assert pty.read_until(b"100\r\n").endswith(b"System.Signal.Winch 40x100\r\n")
