@@ -16,7 +16,6 @@
 
 #define AGC_CANONICAL_NAN64 UINT64_C(0x7FF8000000000000)
 #define AGC_CANONICAL_NAN32 UINT32_C(0x7FC00000)
-#define AGC_FLOAT32_OVERFLOW 0x1.ffffffp127
 
 static agc_value builtin_random_int(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t value;
@@ -458,21 +457,6 @@ static uint64_t float64_to_bits(double x) {
   return bits;
 }
 
-static agc_value builtin_float_to_bits(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  double x = agc_as_float(vm, args[0]);
-  return agc_int(int_from_bits(isnan(x) ? AGC_CANONICAL_NAN64 : float64_to_bits(x)));
-}
-
-static agc_value builtin_float_from_bits(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  double x = float64_from_bits((uint64_t)agc_as_int(vm, args[0]));
-  return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
-}
-
-/* The catalog uses these two keys. The Int forms above, and `Float.to_bits32` and `Float.from_bits32` below (no catalog
-   row has them), are kept for the stage0 before #1977 and the front end that built the stage0 of #1977 (to reproduce its
-   refresh); remove them in the next PR. */
 static agc_value builtin_float_to_bits64(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   double x = agc_as_float(vm, args[0]);
@@ -485,18 +469,6 @@ static agc_value builtin_float_from_bits64(agc_vm *vm, agc_value *args, uint32_t
   return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
 }
 
-static agc_value builtin_float_to_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  double x = agc_as_float(vm, args[0]);
-  if (isnan(x)) return agc_int(AGC_CANONICAL_NAN32);
-  uint32_t sign = signbit(x) ? UINT32_C(0x80000000) : 0;
-  if (fabs(x) >= AGC_FLOAT32_OVERFLOW) return agc_int(sign | UINT32_C(0x7F800000));
-  float narrow = (float)x;
-  uint32_t bits;
-  memcpy(&bits, &narrow, sizeof bits);
-  return agc_int(bits);
-}
-
 /* The binary32 whose bits are the Int argument, which must be between 0 and 2^32 - 1. */
 static float float_of_bits32(agc_vm *vm, agc_value arg, uint32_t span) {
   int64_t value = agc_as_int(vm, arg);
@@ -506,11 +478,6 @@ static float float_of_bits32(agc_vm *vm, agc_value arg, uint32_t span) {
   float narrow;
   memcpy(&narrow, &bits, sizeof narrow);
   return narrow;
-}
-
-static agc_value builtin_float_from_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
-  float narrow = float_of_bits32(vm, args[0], span);
-  return agc_float(isnan(narrow) ? float64_from_bits(AGC_CANONICAL_NAN64) : (double)narrow);
 }
 
 static agc_value builtin_float_to_float32(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -609,12 +576,8 @@ const agc_builtin agc_number_builtins[] = {
   {"Int.shift_left", 2, builtin_int_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.shift_right", 2, builtin_int_shift_right, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.shift_right_unsigned", 2, builtin_int_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float.to_bits", 1, builtin_float_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float.from_bits", 1, builtin_float_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.to_bits64", 1, builtin_float_to_bits64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.from_bits64", 1, builtin_float_from_bits64, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
-  {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Int.from_narrow", 1, builtin_int_from_narrow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"UInt64.to_int", 1, builtin_uint64_to_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"UInt64.to_int!", 1, builtin_uint64_to_int_bang, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
