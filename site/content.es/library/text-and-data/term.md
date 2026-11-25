@@ -2,7 +2,7 @@
 title: Term (CBOR)
 weight: 15
 description: Escribe un valor de Agentica como CBOR y lo lee de vuelta en una estructura o un enum, una forma binaria compacta que conserva claves Int, los bits exactos de un Float, nil, Bytes y enums.
-source_hash: "5bdea860f599"
+source_hash: "0e1da10f3186"
 ---
 
 `Term.encode` escribe un valor como bytes [CBOR](https://www.rfc-editor.org/rfc/rfc8949), la forma binaria de un valor. JSON sirve para otros programas; CBOR conserva lo que JSON pierde o deforma: un `Map` con claves `Int`, los bits exactos de un `Float` (infinitos incluidos), `nil` como valor propio, `Bytes` y un enum como un arreglo simple. También es más pequeño. Usos típicos son un caché en disco y los mensajes entre programas de Agentica. `Term.decode` lee los bytes de vuelta en el tipo que nombras: el tipo es el esquema, así que nunca se construye nada fuera de él.
@@ -104,7 +104,7 @@ Nunca hay una lectura sin tipo: los bytes no pueden nombrar un tipo para constru
 
 - **El mismo valor de vuelta:** `Term.decode(Term.encode(v), T)` da `v` para todo tipo que `Term.decode` puede tomar como destino. `Term.encode(Term.decode(bytes, T))` devuelve `bytes` solo cuando `bytes` es lo que `Term.encode` escribe.
 - **Solo lo que `Term.encode` escribe:** una cabecera más larga de lo necesario, una longitud indefinida, un tag, un medio flotante, un flotante con el ancho de otro tipo (`Float` lee 8 bytes, `Float32` 4), un NaN con payload, texto que no es UTF-8, una clave de `Map` repetida y bytes después del valor son errores. Un `Int` fuera de 64 bits es un error, y también un valor fuera del rango de un `Int8` a `UInt32`.
-- **Estructuras:** las claves pueden venir en cualquier orden y una clave que no nombra ningún campo se lee y se ignora (con las mismas comprobaciones y los mismos límites). Una clave nombrada dos veces (sea un campo o no) y un campo que falta son errores: el valor por defecto de un campo solo rellena un constructor, así que **añadir un campo rompe los datos viejos**. Quitar o reordenar campos es seguro.
+- **Estructuras:** las claves pueden venir en cualquier orden y una clave que no nombra ningún campo se lee y se ignora (con las mismas comprobaciones y los mismos límites). Una clave nombrada dos veces (sea un campo o no) en la propia estructura y un campo que falta son errores (las claves de un mapa dentro de un valor ignorado no se comprueban por repeticiones): el valor por defecto de un campo solo rellena un constructor, así que **añadir un campo rompe los datos viejos**. Quitar o reordenar campos es seguro.
 - **Enums:** un tag desconocido, una lista de payloads de otra longitud y un arreglo exterior que no es de dos elementos son errores.
 
 Los límites son los de `Term.encode`: 10,000 niveles, 4,000,000 valores y 64 MiB, y un valor que pasa uno devuelve un error como allí. La entrada se lee con el mismo cuidado que un archivo de bytecode: cada longitud se comprueba contra los bytes que quedan antes de construir nada, así que unos pocos bytes no pueden pedir mucha memoria. La clase del error es `term.decode`, y la ruta tiene la misma forma: `users[2].name: expected String`, `shapes[1]: unknown tag "Triangle"`, `$: trailing bytes after the value`, `x: expected signed 64-bit Int`. Donde el tipo es un `Optional`, el tipo esperado va seguido de `or nil`.

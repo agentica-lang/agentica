@@ -342,8 +342,8 @@ end
         if line == "error":
             continue
         accepted += 1
-        marker, written, again = line.split(" ")
-        assert marker == "ok", line
+        assert line.startswith("ok "), line
+        _, written, again = line.split(" ")
         try:
             read = decode(data)
         except PeerError:
