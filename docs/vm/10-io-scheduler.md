@@ -425,8 +425,8 @@ section says how the scheduler and the loop keep them.
   loop with an async handle. It reads a console with `ReadConsoleW` and hands
   the text on as UTF-8, and anything else with `_read` in binary mode. The
   handle keeps the loop alive only while a read is out. A cancelled reader
-  leaves the read in flight, and its bytes or EOF go to the next reader. At the
-  end of the run the read is cancelled where Windows can
+  leaves the read in flight, and its bytes or EOF go to the next reader (not a
+  child process). At the end of the run the read is cancelled where Windows can
   (`CancelSynchronousIo`, a pipe); a read that cannot be cancelled ends with
   the process, or, in an in-process harness, when input comes, and then touches
   nothing of the closed loop. Other unsupported hosts keep a blocking read on
