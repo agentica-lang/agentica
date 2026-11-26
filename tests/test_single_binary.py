@@ -302,6 +302,7 @@ GATED = (
     ("File.append_text", 'File.append_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.stat", 'File.stat("x.txt", 1000)', "--deny-fs"),
     ("File.lstat", 'File.lstat("x.txt", 1000)', "--deny-fs"),
+    ("File.chmod", 'File.chmod("x.txt", 0o644, 1000)', "--deny-fs"),
     ("File.each_line", 'File.each_line("x.txt", 4096, 1000) do |_| ok() end', "--deny-fs"),
     ("File.foreach", 'File.foreach("x.txt", 4096, 1000).to_a', "--deny-fs"),
     ("Lazy.write_lines", '["a"].lazy.write_lines("x.txt", 1000)', "--deny-fs"),

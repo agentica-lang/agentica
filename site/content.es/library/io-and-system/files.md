@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "2b12a9d7639a"
+source_hash: "e7a1db83ec70"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -132,10 +132,12 @@ Igual que `File.stat`, pero no sigue el enlace simbólico: `kind` es `"link"`, `
 File.chmod(path: String, mode: Int, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Cambia los bits de permiso del archivo o directorio en `path`, en la forma que lee `File.stat`: `File.chmod(path, 0o755)` hace ejecutable un archivo. Un enlace simbólico se sigue, así que cambia su destino. `mode` va de 0 a 4095 (octal 7777, con setuid, setgid y sticky); otro valor da un error `argument`, y una ruta que no existe da `io.not_found`.
+Cambia los bits de permiso del archivo o directorio en `path`, en la forma que lee `File.stat`: `File.chmod(path, 0o755)` hace ejecutable un archivo. `mode` es octal, así que escribe `0o755` (`755` es `0o1363`). Va de 0 a 4095 (octal 7777, con setuid, setgid y sticky); otro valor da un error `argument`, y una ruta que no existe da `io.not_found`.
 
+- Un enlace simbólico se sigue, así que cambia su destino.
 - Unix: los bits van a `chmod(2)` tal como se dan, y la umask no se aplica. El sistema puede borrar setgid cuando no perteneces al grupo del archivo.
-- Windows no tiene bits de Unix: solo cuenta el bit de escritura del propietario. Con ese bit puesto el archivo es escribible (`File.stat` da 438), y sin él es de solo lectura (292). Los demás bits se ignoran.
+- Windows no tiene bits de Unix: en un archivo solo cuenta el bit de escritura del propietario. Con ese bit puesto el archivo es escribible (`File.stat` da 438), y sin él es de solo lectura (292). Los demás bits se ignoran. Un directorio recibe el mismo atributo, que Windows no hace cumplir, así que los archivos de su interior siguen siendo escribibles.
+- Un tiempo de espera da un error, pero el cambio ya iniciado llega hasta el final.
 
 ```agentica {mode="check"}
 def main() -> Void

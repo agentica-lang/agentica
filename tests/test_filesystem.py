@@ -24,6 +24,7 @@ import pytest
 from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, ROOT, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
                                  host_only, output_lines, run, scaled, vm_command, vm_environment)
 from tests.test_vm_stdout import ROWS_PROGRAM, STUCK_ROWS
+from tests.vm_os_support import symlink
 from tests.windows_support import long_paths_enabled
 
 EXAMPLES = ROOT / "examples"
@@ -1089,6 +1090,11 @@ def main() -> Void
   puts(mode(path))
   show(File.chmod(path, 0o755))
   puts(mode(path))
+  show(File.chmod(path, mode(path)))
+  puts(mode(path))
+  show(File.chmod(System.args()[1], 0o444))
+  puts(mode(path))
+  show(File.chmod(path, 0o755))
   show(File.chmod(path, 4096))
   show(File.chmod(path, -1))
   show(File.chmod(path + ".missing", 0o644, 1000))
@@ -1098,25 +1104,25 @@ end
 
 
 def test_file_chmod_sets_the_mode_that_file_stat_reads_back_and_refuses_a_bad_mode_or_path(new_dir, run_program):
-    path = new_dir() / "mode.txt"
+    root = new_dir()
+    path, link = root / "mode.txt", root / "link.txt"
     path.write_text("text")
-    output = run_program(CHMOD_PROGRAM, [str(path)])
-    # Windows keeps the owner write bit only, as the read-only attribute: 0o444 and 0o666.
+    symlink("mode.txt", link)
+    output = run_program(CHMOD_PROGRAM, [str(path), str(link)])
+    # Windows keeps the owner write bit only, as the read-only attribute: 0o444 and 0o666. A link is followed there too.
+    writable = "438" if WINDOWS else "493"
     assert output.splitlines() == [
-        "ok", "292", "ok", "438" if WINDOWS else "493",
+        "ok", "292", "ok", writable, "ok", writable, "ok", "292", "ok",
         "argument filesystem: mode must be between 0 and 4095",
         "argument filesystem: mode must be between 0 and 4095",
         "io.not_found filesystem: cannot change the mode",
         "argument filesystem: timeout must be positive milliseconds",
     ], output
-    assert path.read_text() == "text"
-    denied = path.with_name("denied.agc")
-    denied.write_text('def main() -> Void\n  puts(File.chmod(System.args()[0], 0o600).message)\nend\n')
-    result = run(cli() + ["--deny-fs", denied, path], env=vm_environment())
-    assert result.stdout.startswith("denied: --deny-fs turns off file access"), (result.stdout, result.stderr)
+    assert path.stat().st_mode & 0o777 == (0o666 if WINDOWS else 0o755)
+    assert link.is_symlink() and path.read_text() == "text"
 
 
-@host_only(WINDOWS, "POSIX permission bits, setuid and symbolic links; Windows keeps only the read-only bit")
+@host_only(WINDOWS, "POSIX permission bits, setuid, folders and permission errors; Windows keeps only the read-only bit")
 def test_file_chmod_follows_a_link_changes_a_directory_and_sets_every_bit_of_a_mode(new_dir, run_program):
     root = new_dir()
     target, link, folder = root / "target.txt", root / "link.txt", root / "folder"
@@ -1127,12 +1133,33 @@ def test_file_chmod_follows_a_link_changes_a_directory_and_sets_every_bit_of_a_m
     output = run_program("""def main() -> Void
   root = System.args()[0]
   puts(File.chmod(root + "/link.txt", 0o751).ok?)
-  puts(File.chmod(root + "/folder", 0o700).ok?)
+  puts(File.stat(root + "/target.txt").unwrap!.mode)
+  puts(File.chmod(root + "/folder", 0o750).ok?)
   puts(File.chmod(root + "/target.txt", 0o4755).ok?)
   puts(File.stat(root + "/target.txt").unwrap!.mode)
 end
 """, [str(root)])
-    assert output == "true\ntrue\ntrue\n%d\n" % 0o4755
+    assert output == "true\n%d\ntrue\ntrue\n%d\n" % (0o751, 0o4755)
     assert link.is_symlink() and os.readlink(link) == "target.txt"
     assert target.stat().st_mode & 0o7777 == 0o4755
-    assert folder.stat().st_mode & 0o777 == 0o700
+    assert folder.stat().st_mode & 0o777 == 0o750
+    if os.geteuid() == 0:
+        return
+    # A folder nobody may search: the call fails with a permission error and the file keeps its mode.
+    sealed = new_dir()
+    kept = sealed / "kept.txt"
+    kept.write_text("kept")
+    kept.chmod(0o640)
+    sealed.chmod(0)
+    try:
+        output = run_program(r"""def main() -> Void
+  case File.chmod(System.args()[0], 0o777)
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{e.message.split("\n")[0]}")
+  end
+end
+""", [str(kept)])
+    finally:
+        sealed.chmod(0o755)
+    assert output == "io.permission filesystem: cannot change the mode\n"
+    assert kept.stat().st_mode & 0o777 == 0o640
