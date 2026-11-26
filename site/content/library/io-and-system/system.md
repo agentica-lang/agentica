@@ -94,11 +94,11 @@ The VM hides the variables it keeps for itself:
 System.hostname() -> Result[String]
 ```
 
-The host name of the machine, as Ruby's `Socket.gethostname`: in a container, the id that the container runtime gave it. It needs no flag, and `--deny-env` leaves it on, as it does `System.os`.
+The host name of the machine, as Ruby's `Socket.gethostname`: the name the runtime set (Docker: the container id unless `--hostname`). It needs no flag, and `--deny-env` leaves it on, as it does `System.os`.
 
 - The name is not looked up in the network: it is the one the operating system holds, with no domain added.
 - A name that is not valid UTF-8 is not an error. Each invalid sequence becomes one U+FFFD.
-- The error, which a system does not give in practice, has the kind `io.failed`.
+- The error, which a system does not give in practice, is an `io` error with the errno as its `code` (`io.failed` for any errno the table does not name).
 
 ```agentica
 def main() -> Void

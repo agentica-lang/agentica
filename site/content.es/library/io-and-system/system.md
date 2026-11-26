@@ -2,7 +2,7 @@
 title: System, Time y Random
 weight: 5
 description: Argumentos del programa, variables de entorno, códigos de salida, relojes y números aleatorios.
-source_hash: "288b82628faa"
+source_hash: "2726610279bc"
 ---
 
 ## System.args {#systemargs}
@@ -95,11 +95,11 @@ La VM oculta las variables que guarda para sí:
 System.hostname() -> Result[String]
 ```
 
-El nombre de host de la máquina, como `Socket.gethostname` de Ruby: en un contenedor, el id que le dio el runtime. No necesita ningún flag, y `--deny-env` lo deja activo, como a `System.os`.
+El nombre de host de la máquina, como `Socket.gethostname` de Ruby: el nombre que fijó el runtime (Docker: el id del contenedor, salvo `--hostname`). No necesita ningún flag, y `--deny-env` lo deja activo, como a `System.os`.
 
 - El nombre no se busca en la red: es el que guarda el sistema operativo, sin dominio añadido.
 - Un nombre que no es UTF-8 válido no es un error. Cada secuencia inválida se convierte en un U+FFFD.
-- El error, que un sistema no da en la práctica, tiene el tipo `io.failed`.
+- El error, que un sistema no da en la práctica, es un error `io` con el errno como su `code` (`io.failed` para cualquier errno que la tabla no nombre).
 
 ```agentica
 def main() -> Void

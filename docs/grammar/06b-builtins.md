@@ -336,8 +336,8 @@ on. `--deny-net` stops every connect and listen of `TCP` and `TLS`, `std/http`
 too, before any DNS lookup. `--deny-fs` covers every `File`, `Dir` and `Path`
 call but `Path.join`, `Lazy.write_lines`, `Lazy.write_bytes`, and a TLS call
 that names a file. `--deny-env` covers `System.env` (`System.hostname`,
-`System.os` and `System.pid` stay on: they hold no secret). Each turns on
-`--deny-native`, since native code could do the same. `--sandbox` is all of
+`System.os` and `System.pid` stay on: none of them is a credential). Each turns
+on `--deny-native`, since native code could do the same. `--sandbox` is all of
 them. The flags apply to the program, not to the front end; `agentica test`
 gives them to the test files, the step programs and the programs under test, not
 to its runner. The table of flags is in

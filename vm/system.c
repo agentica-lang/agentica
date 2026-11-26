@@ -1,12 +1,12 @@
 /*
- * System environment and process identity, independent of child processes.
+ * System environment, host name and process identity, independent of child processes.
  * Native UTF-8 environment access comes from libuv on every platform.
  * Service layer; the VM's private channel marker stays hidden.
  */
+#include "net_os.h"
 #include "services.h"
 #include "system_os.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -111,9 +111,7 @@ static agc_value builtin_hostname(agc_vm *vm, agc_value *args, uint32_t span) {
   } while (rc == UV_ENOBUFS);
   if (rc != 0) {
     free(name);
-    char message[160];
-    snprintf(message, sizeof message, "system: cannot read the host name: %s", uv_strerror(rc));
-    return agc_error(vm, AGC_KIND_IO_FAILED, message);
+    return agc_system_error(vm, AGC_FAMILY_IO, "system: cannot read the host name", agc_net_errno(rc));
   }
   agc_string *text = agc_utf8_decode((const uint8_t *)name, strlen(name), "\xEF\xBF\xBD");
   free(name);

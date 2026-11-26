@@ -113,7 +113,8 @@ in a PR that rewrites the goldens.
   flag is needed.
 - `System.hostname()` is libuv's `uv_os_gethostname` (the system's own name, no
   domain added), decoded as `System.env` values are; it needs no flag, and
-  `--deny-env` leaves it on. A failure of the call is `io.failed`.
+  `--deny-env` leaves it on. A failure of the call is an `io` error with the
+  errno as its code (`io.failed` for any errno the table does not name).
 - `System.pid()` is the VM's `getpid()`, with no flag. `--driver-pid` checks its
   argument against the VM's parent, so a program that starts a VM passes
   `System.pid()`.
