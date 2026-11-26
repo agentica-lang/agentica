@@ -30,6 +30,10 @@ struct Options
   timeout_ms: Int = 30000
   ## The largest total of extracted file bytes, 1 to 1073741824.
   max_output_bytes: Int = 268435456
+  ## `extract_tar` only: each extracted file gets the permission bits of its TAR header masked by `0o755`, so a setuid,
+  ## setgid or sticky bit and the write bits of the group and others are dropped. Without it every file is private
+  ## (`0o600` on Unix). `extract_zip` refuses `true`.
+  keep_mode: Bool = false
 end
 
 ## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
@@ -59,6 +63,7 @@ def extract_zip(
   if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
     return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
   end
+  return error("archive: options.keep_mode applies to extract_tar only", kind: "argument") if options.keep_mode
   Zip.extract_zip(src, members, dest_dir, options.timeout_ms, options.max_output_bytes)
 end
 
@@ -73,7 +78,10 @@ end
 ## long names; other PAX records are ignored, sparse entries are refused, and only `0`, NUL and `7` type flags count
 ## as regular files. A selected link, directory or device is an error, as are a missing member, a repeated member, a
 ## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member. `options`
-## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files.
+## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files, each written with
+## mode `0o600`. With `keep_mode: true` a selected file takes the mode of its header, masked by `0o755` and set with
+## `File.chmod` after its data is written (on Windows only the owner write bit counts); an unreadable mode field of a
+## selected entry is an `archive.format` error before the file is created.
 def extract_tar(
   src: String,
   members: List[String],
@@ -111,6 +119,7 @@ def extract_tar(
     dest: dest,
     deadline: deadline,
     max_output: options.max_output_bytes,
+    keep_mode: options.keep_mode,
     wanted: wanted,
     matched: List.repeat(false, wanted.size),
     counts: List.repeat(0, wanted.size),
@@ -141,6 +150,7 @@ def extract_tar(
     out: "",
     index: -1,
     fold: "",
+    mode: 0,
     total: 0,
   )
 
@@ -165,6 +175,9 @@ INT_MAX = 9223372036854775807
 GZIP_FIRST = 31
 GZIP_SECOND = 139
 
+# The permission bits `keep_mode` keeps: the owner's, and read and execute for the group and others.
+KEPT_MODE = 0o755
+
 # The bytes of "sparse", which no PAX key may hold.
 SPARSE_KEY = "sparse".bytes
 
@@ -181,11 +194,13 @@ struct Wanted
   segments: List[String]
 end
 
-# One parsed header: the raw name bytes, the size and the type flag.
+# One parsed header: the raw name bytes, the size, the type flag and the raw mode field (read only for a selected file
+# with `keep_mode`).
 struct TarHeader
   name: Bytes
   size: Int
   typeflag: Int
+  mode: Bytes
 end
 
 # The pending one-entry overrides from a local PAX header. The global PAX state lives in Ctx.
@@ -201,6 +216,7 @@ struct Ctx
   dest: String
   deadline: Int
   max_output: Int
+  keep_mode: Bool
   wanted: List[Wanted]
   matched: List[Bool]
   counts: List[Int]
@@ -231,7 +247,8 @@ end
 # The state of the scan between two chunks of the TAR stream. `carry` holds the bytes the phase still needs more of
 # (part of a header or of a record). `rest` is what the phase still takes; `size` is the whole record, entry or
 # padding, for the truncation message, and `what` names it. A selected entry writes to `out`, its wanted `index`,
-# under its case-folded name `fold`; an entry that is skipped has `out` "". `total` counts the bytes of the stream.
+# under its case-folded name `fold` and, with `keep_mode`, takes the permission bits `mode`; an entry that is skipped
+# has `out` "". `total` counts the bytes of the stream.
 struct Scan
   ctx: Ctx
   carry: Bytes
@@ -245,6 +262,7 @@ struct Scan
   out: String
   index: Int
   fold: String
+  mode: Int
   total: Int
 end
 
@@ -378,7 +396,7 @@ def read_header(block: Bytes, entry: Int) -> Result[TarHeader]
   if prefix.size > 0
     full = Bytes.concat([prefix, "/".bytes, name_field])
   end
-  ok(TarHeader(name: full, size: size, typeflag: block[156]))
+  ok(TarHeader(name: full, size: size, typeflag: block[156], mode: slice_range(block, 100, 108)))
 end
 
 # True when `hay` holds `needle` anywhere.
@@ -625,6 +643,21 @@ def create_out(out: String, deadline: Int) -> Result[Void]
   end
 end
 
+# The permission bits of a header's mode field, which USTAR writes as octal text; the base-256 form is refused.
+def read_mode(field: Bytes, entry: Int) -> Result[Int]
+  return error("archive: unsupported base-256 mode at entry #{entry}", kind: "archive.format") if field[0] >= 128
+  parse_octal(field, 0, 8, "mode", entry)
+end
+
+# Sets the mode of a file this call has just written under the destination, once its data is complete.
+def chmod_out(out: String, mode: Int, deadline: Int) -> Result[Void]
+  left = try time_left(deadline)
+  case File.chmod(out, mode.bit_and(KEPT_MODE), left)
+    ok(_) -> ok()
+    error(e) -> error(e.with(message: "archive: cannot set the mode of #{out}: #{e.message}"))
+  end
+end
+
 # Appends one piece of a selected file's data.
 def append_out(out: String, piece: Bytes, deadline: Int) -> Result[Void]
   left = try time_left(deadline)
@@ -809,16 +842,20 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
     try check_relative(canon, "entry name", " at entry #{entry}")
     return error("archive: the same archive holds #{canon} twice", kind: "archive.format") if ctx.matched[index]
     return error("archive: member is not a regular file: #{canon}", kind: "archive.unsafe") if !regular
-    sc = try open_selected(sc, index, size)
+    sc = try open_selected(sc, index, size, header.mode)
   end
   return end_data(sc) if size == 0
   ok(sc)
 end
 
 # Checks the place of one selected file and creates it under the new base, within both output caps.
-def open_selected(sc: Scan, index: Int, size: Int) -> Result[Scan]
+def open_selected(sc: Scan, index: Int, size: Int, mode_field: Bytes) -> Result[Scan]
   ctx = sc.ctx
   item = ctx.wanted[index]
+  mode = 0
+  if ctx.keep_mode
+    mode = try read_mode(mode_field, sc.entry)
+  end
   out = try join_under(ctx.dest, item.segments)
   fold = String.downcase(out)
   if Map.has_key?(ctx.seen_fold, fold)
@@ -829,7 +866,7 @@ def open_selected(sc: Scan, index: Int, size: Int) -> Result[Scan]
     return error("archive: output exceeds #{ctx.max_output} bytes", kind: "archive.too_large")
   end
   try create_out(out, ctx.deadline)
-  ok(sc.with(ctx: ctx, out: out, index: index, fold: fold, what: "file data of #{item.path}"))
+  ok(sc.with(ctx: ctx, out: out, index: index, fold: fold, mode: mode, what: "file data of #{item.path}"))
 end
 
 # The data of a PAX or GNU record, then its padding.
@@ -863,6 +900,9 @@ end
 def end_data(sc: Scan) -> Result[Scan]
   if sc.out != ""
     ctx = sc.ctx
+    if ctx.keep_mode
+      try chmod_out(sc.out, sc.mode, ctx.deadline)
+    end
     ctx = ctx.with(
       matched: List.set(ctx.matched, sc.index, true),
       counts: List.set(ctx.counts, sc.index, sc.size),

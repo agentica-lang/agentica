@@ -13,9 +13,9 @@ def compile_driver(tmp_path_factory):
                        tmp_path_factory.mktemp("agentica-archive-") / "driver.agcb")
 
 
-def limits(timeout=30000, max_out=268435456):
+def limits(timeout=30000, max_out=268435456, keep_mode=False):
     """The `Archive.Options` of a case; a case with None leaves the argument to its default."""
-    return {"timeout_ms": timeout, "max_output_bytes": max_out}
+    return {"timeout_ms": timeout, "max_output_bytes": max_out, "keep_mode": keep_mode}
 
 
 def extract(driver, work, kind, calls):

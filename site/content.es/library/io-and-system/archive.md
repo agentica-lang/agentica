@@ -2,7 +2,7 @@
 title: Archivo comprimido
 weight: 8
 description: El módulo Archive, que extrae los archivos con nombre de un TAR o un ZIP.
-source_hash: "e7e82c9cf78b"
+source_hash: "1e698d28ecb4"
 ---
 
 `Archive` copia a un directorio privado nuevo una lista de permitidos explícita de archivos regulares de un TAR o de un ZIP. Las únicas operaciones son los dos extractores: no hay una función para extraer todo, ni patrones con comodines, ni listado, ni escritor de ZIP.
@@ -26,6 +26,7 @@ end
 ```
 
 - `Archive.Options()`, el predeterminado, es un plazo de 30 s con como máximo 268435456 bytes extraídos; `timeout_ms` va de 1 a 86400000 y `max_output_bytes` de 1 a 1073741824.
+- `keep_mode: true` (`false` por omisión, solo para `extract_tar`) da a cada archivo los bits de permiso de su cabecera TAR, enmascarados con `0o755` y puestos con `File.chmod` cuando sus datos ya están escritos: se descartan un bit setuid, setgid o sticky y los bits de escritura del grupo y de otros. Sin él, cada archivo es privado (`0o600` en Unix). El campo de modo de una entrada seleccionada debe ser texto octal; si no, la llamada devuelve un error `archive.format` antes de crear el archivo; en Windows solo cuenta el bit de escritura del propietario. `extract_zip` rechaza `keep_mode: true` con un error `argument`.
 - El destino se crea privado y no debe existir; cada archivo se crea sin sobrescribir nunca, y sus carpetas padre se crean bajo la nueva base. Solo se escriben archivos regulares: los enlaces, los directorios, los dispositivos y los elementos dispersos se rechazan si están seleccionados y se omiten si no.
 - Los nombres conservan la grafía que tienen en el archivo: se rechazan las rutas absolutas, las letras de unidad, los recursos compartidos UNC, las barras invertidas, los dos puntos, los bytes NUL y los segmentos `.` o `..`, como también dos miembros que solo difieren en mayúsculas. La llamada recorre todo el contenedor hasta los dos bloques finales de ceros, así que un duplicado, un miembro que falta o una suma de comprobación incorrecta después de un archivo seleccionado sigue siendo un error.
 - Límites fijos: el recorrido del TAR en bruto es de como máximo 1073741824 bytes, un origen comprimido con gzip de como máximo 268435456 bytes comprimidos, 8192 elementos, 1024 bytes de nombre y 65536 bytes de datos de extensión PAX y GNU. Las cabeceras siguen USTAR con los registros PAX `path` y `size` y los nombres largos de GNU; los demás registros PAX se ignoran y los elementos dispersos se rechazan.

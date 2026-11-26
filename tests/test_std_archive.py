@@ -35,11 +35,12 @@ def run_source(work, name, text):
     return result.stdout.split("\n")
 
 
-def ustar_header(name, size, typeflag=b"0", prefix=b"", magic=b"ustar\x00", bad_checksum=False):
+def ustar_header(name, size, typeflag=b"0", prefix=b"", magic=b"ustar\x00", bad_checksum=False,
+                 mode=b"0000777\x00"):
     assert len(name) <= 100 and len(prefix) <= 155
     head = bytearray(512)
     head[0:len(name)] = name
-    head[100:108] = b"0000777\x00"
+    head[100:108] = mode
     head[108:116] = b"0000000\x00"
     head[116:124] = b"0000000\x00"
     head[124:136] = ("%011o\x00" % size).encode("ascii")
@@ -209,6 +210,72 @@ def test_option_and_member_validation(tmp_path, driver):
     assert lines[12].startswith("noparent error archive: cannot create no/such/d: ")
     assert (work / "taken").read_bytes() == b"keep"
     assert not (work / "d").exists()
+
+
+def modes_of(root, *names):
+    """The permission bits of each file below ROOT, as Python reads them: Windows has only 0o666 and 0o444."""
+    return [os.stat(root / name).st_mode & 0o777 for name in names]
+
+
+def windows_mode(mode):
+    return 0o666 if mode & 0o200 else 0o444
+
+
+def test_keep_mode_gives_files_the_header_mode_masked_and_never_setuid(tmp_path, driver):
+    work = tmp_path
+    with tarfile.open(work / "m.tar", "w", format=tarfile.PAX_FORMAT) as tar:
+        for arcname, mode in [("bin/tool", 0o755), ("suid", 0o4755), ("loose", 0o666), ("ro", 0o444), ("plain", 0o600),
+                              ("empty", 0o755)]:
+            data = b"" if arcname == "empty" else arcname.encode()
+            info = tarfile.TarInfo(arcname)
+            info.size, info.mode = len(data), mode
+            tar.addfile(info, io.BytesIO(data))
+    with open(work / "m.tar", "rb") as raw:
+        (work / "m.tar.gz").write_bytes(gzip.compress(raw.read()))
+    names = ["bin/tool", "suid", "loose", "ro", "plain", "empty"]
+    calls = [
+        ("kept", "m.tar", names, "kept", limits(keep_mode=True)),
+        ("gz", "m.tar.gz", names, "kept-gz", limits(keep_mode=True)),
+        ("off", "m.tar", names, "off", limits()),
+        ("default", "m.tar", names, "default", None),
+    ]
+    lines = extract(driver, work, "tar", calls)
+    counts = "[%s]" % ", ".join(str(len(name.encode())) if name != "empty" else "0" for name in names)
+    assert lines[:4] == ["kept ok " + counts, "gz ok " + counts, "off ok " + counts, "default ok " + counts]
+    posix = [0o755, 0o755, 0o644, 0o444, 0o600, 0o755]
+    expected = [windows_mode(mode) for mode in posix] if WINDOWS else posix
+    assert modes_of(work / "kept", *names) == expected
+    assert modes_of(work / "kept-gz", *names) == expected
+    # Without keep_mode every file is private, whatever its header says: 0o600 on POSIX, writable on Windows.
+    private = [0o666 if WINDOWS else 0o600] * len(names)
+    assert modes_of(work / "off", *names) == private
+    assert modes_of(work / "default", *names) == private
+
+
+def test_keep_mode_reads_the_mode_field_of_a_selected_file_only(tmp_path, driver):
+    work = tmp_path
+    blocks = [
+        entry(b"skipped.txt", b"skipped", mode=b"zzzzzzz\x00"),
+        entry(b"wide.txt", b"wide", mode=b"\x80" + b"\x00" * 7),
+        entry(b"bad.txt", b"bad", mode=b"zzzzzzz\x00"),
+        entry(b"good.txt", b"good", mode=b"0000775\x00"),
+    ]
+    (work / "f.tar").write_bytes(finish(blocks))
+    calls = [
+        ("ok", "f.tar", ["good.txt"], "o1", limits(keep_mode=True)),
+        ("bad", "f.tar", ["bad.txt"], "o2", limits(keep_mode=True)),
+        ("wide", "f.tar", ["wide.txt"], "o3", limits(keep_mode=True)),
+        ("off", "f.tar", ["bad.txt", "wide.txt"], "o4", limits()),
+    ]
+    lines = extract(driver, work, "tar", calls)
+    assert lines[0] == "ok ok [4]"
+    assert lines[1] == "bad error archive: bad octal mode at entry 3"
+    assert lines[2] == "wide error archive: unsupported base-256 mode at entry 2"
+    assert lines[3] == "off ok [3, 4]"
+    assert modes_of(work / "o1", "good.txt") == [0o666 if WINDOWS else 0o755]
+    # The mode field is read before the file is made.
+    assert sorted(path.name for path in (work / "o2").iterdir()) == []
+    assert sorted(path.name for path in (work / "o3").iterdir()) == []
 
 
 UNSAFE_MEMBERS = [
