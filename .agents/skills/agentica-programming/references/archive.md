@@ -18,8 +18,9 @@ Archive.extract_zip(src, members, dest_dir, options = Archive.Options()) -> Resu
 - `keep_mode: true` (`extract_tar` only; `extract_zip` refuses it with an
   `argument` error) gives each file its TAR header's permission bits masked
   by `0o755` (no setuid, setgid or sticky, no group or other write bit);
-  without it every file is private (`0o600`). A selected entry's mode field
-  must be octal text.
+  without it every file is private (`0o600`). The mask is literal: a header
+  mode without owner read gives a file its owner cannot read. A selected
+  entry's mode field must be octal text.
 - `members` holds 1 to 256 safe relative paths; one leading `./` is optional.
   Absolute paths, drive letters, UNC shares, backslashes, colons, NUL bytes,
   `.`/`..` segments, exact and case-only repeats are rejected before anything

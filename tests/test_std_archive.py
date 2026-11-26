@@ -417,6 +417,7 @@ def test_non_regular_selections_and_output_safety(tmp_path, driver):
         ("fold", "n.tar", ["afile/sub.txt", "afile"], "o4", None),
         ("pre", "n.tar", ["pre.txt"], "o5", None),
         ("trav", "n.tar", ["../outside.txt"], "o6", None),
+        ("link-keep", "n.tar", ["link.txt"], "o7", limits(keep_mode=True)),
     ]
     (work / "o5").mkdir()
     (work / "o5" / "pre.txt").write_bytes(b"original")
@@ -427,6 +428,8 @@ def test_non_regular_selections_and_output_safety(tmp_path, driver):
     assert lines[3].startswith("fold error archive: selected files collide on a case-insensitive system: ")
     assert lines[4].startswith("pre error archive: cannot create ")
     assert lines[5].startswith("trav error archive: member ")
+    assert lines[6] == "link-keep error archive: member is not a regular file: link.txt"
+    assert list((work / "o7").iterdir()) == []
     # Nothing escaped: the pre-existing file is intact and no outside file exists.
     assert (work / "o5" / "pre.txt").read_bytes() == b"original"
     assert not (work / "outside.txt").exists()

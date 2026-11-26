@@ -31,8 +31,9 @@ struct Options
   ## The largest total of extracted file bytes, 1 to 1073741824.
   max_output_bytes: Int = 268435456
   ## `extract_tar` only: each extracted file gets the permission bits of its TAR header masked by `0o755`, so a setuid,
-  ## setgid or sticky bit and the write bits of the group and others are dropped. Without it every file is private
-  ## (`0o600` on Unix). `extract_zip` refuses `true`.
+  ## setgid or sticky bit and the write bits of the group and others are dropped. The mask is literal: a header mode
+  ## without the owner read bit gives a file its owner cannot read. Without it every file is private (`0o600` on Unix).
+  ## `extract_zip` refuses `true`.
   keep_mode: Bool = false
 end
 
@@ -81,7 +82,8 @@ end
 ## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files, each written with
 ## mode `0o600`. With `keep_mode: true` a selected file takes the mode of its header, masked by `0o755` and set with
 ## `File.chmod` after its data is written (on Windows only the owner write bit counts); an unreadable mode field of a
-## selected entry is an `archive.format` error before the file is created.
+## selected entry is an `archive.format` error before the file is created. The mode is set by path in the private
+## destination, which no other process of the same user may write in.
 def extract_tar(
   src: String,
   members: List[String],
