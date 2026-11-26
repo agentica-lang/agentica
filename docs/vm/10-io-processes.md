@@ -112,6 +112,12 @@ systems get none.
   `init` gets it after `_exit`. A failed kill in `Process.close` ends the run
   with `RUNTIME-PROCESS-CLOSE`. Later operations on a closed process return
   `process: process is closed`.
+- **PID 1.** libuv reaps by pid (its exit callback) and the pty watcher by pid,
+  never with `waitpid(-1)`, so a VM that is PID 1 does not reap the processes
+  that its children leave behind: they stay zombies. The documented answer is
+  `docker run --init` (a small init as PID 1). A `waitpid(-1)` reaper in the VM
+  would take the exit status that libuv and the pty watcher wait for, so it is
+  not built.
 - **Signals.** A stop signal takes the one exit path (§10.2.2). A VM killed by
   `SIGKILL`, or ended by the out-of-memory exit (70, §6.3), leaves its children
   running; one that has a channel reads the end of input (on Windows the job

@@ -2,7 +2,7 @@
 title: Process
 weight: 3
 description: Inicia otros programas, habla con ellos por su entrada y su salida, y espera a que terminen.
-source_hash: "b625822ed0e4"
+source_hash: "1fd65086efd7"
 ---
 
 Un `Process` es un handle opaco, sin constructor, campos, igualdad ni codificación JSON; `IO.inspect` imprime `<Process>`. Un programa puede iniciar otros programas, salvo que se ejecute con `--deny-run` (o `--sandbox`, o `agentica run --deny-run`). Entonces cada inicio devuelve un error que empieza con `denied: --deny-run`, en todas las tareas, y los bloques extern se rechazan como con `--deny-native`. El flag va antes del archivo fuente; los argumentos posteriores llegan a `System.args`. Con `agentica test`, un programa de pasos no puede iniciar un programa bajo prueba:
@@ -277,6 +277,8 @@ def main() -> Void
   end
 end
 ```
+
+Como PID 1 de un contenedor, la VM solo recoge a los programas que inició. Un proceso que uno de ellos dejó atrás (un nieto cuyo padre terminó, o un miembro de un grupo que `Process.close` mató) lo adopta el PID 1 y queda como zombi al terminar, porque nadie lo espera. Inicia el contenedor con `docker run --init` (en Compose, `init: true`) para que un init pequeño sea el PID 1 y los recoja. La VM no los recoge por sí misma: exigiría `waitpid` sobre pids que no inició.
 
 ## Process.spawn_captured {#processspawn_captured}
 

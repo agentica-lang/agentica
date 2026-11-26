@@ -277,6 +277,8 @@ def main() -> Void
 end
 ```
 
+As PID 1 of a container, the VM reaps only the programs it started. A process that one of them left behind (a grandchild whose parent exited, or a member of a group that `Process.close` killed) is adopted by PID 1, and stays a zombie when it ends, since nothing waits for it. Start the container with `docker run --init` (in Compose, `init: true`), so that a small init is PID 1 and reaps them. The VM does not reap them itself: that would need `waitpid` on pids it did not start.
+
 ## Process.spawn_captured
 
 ```signature
