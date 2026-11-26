@@ -268,6 +268,56 @@ static void test_byte_keys(const char *directory) {
   assert(agc_fs_unlink(path) == 0);
 }
 
+static bool exists(const char *path) {
+  agc_fs_info info;
+  return agc_fs_stat(path, &info, false) == 0;
+}
+
+/* A "temp" handle makes its path like create_private and removes it when the handle closes, unless the path no longer
+   names that file: it was moved over another one first (Path.replace), or another file took the name. */
+static void test_temp_files(const char *directory) {
+  char temp[4300], final[4300], taken[4300];
+  assert(snprintf(temp, sizeof temp, "%s/temp.part", directory) > 0);
+  assert(snprintf(final, sizeof final, "%s/temp-final.bin", directory) > 0);
+  assert(snprintf(taken, sizeof taken, "%s/temp-taken.bin", directory) > 0);
+  agc_value open_args[] = {string(temp), string("temp"), agc_int(5000)};
+  agc_value put[] = {agc_void(), string("abc"), agc_int(5000)};
+  agc_value done[] = {agc_void(), agc_int(5000)};
+
+  agc_value handle = ok(call("File.open", open_args));
+  assert(exists(temp));
+  put[0] = done[0] = handle;
+  ok(call("File.write", put));
+  ok(call("File.close", done));
+  assert(!exists(temp));
+
+  handle = ok(call("File.open", open_args));
+  put[0] = done[0] = handle;
+  ok(call("File.write", put));
+  ok(call("File.flush", done));
+  agc_value move[] = {string(temp), string(final), agc_int(5000)};
+  ok(call("Path.replace", move));
+  ok(call("File.close", done));
+  assert(!exists(temp));
+  check_text(string(final), "abc");
+  assert(agc_fs_unlink(final) == 0);
+
+  /* An existing path is refused, and what is there stays. */
+  write_test_file(taken, (const uint8_t *)"keep", 4);
+  open_args[0] = string(taken);
+  assert(!agc_as_result(&vm, call("File.open", open_args))->ok);
+  check_text(string(taken), "keep");
+  assert(agc_fs_unlink(taken) == 0);
+  /* Another file at the path is not removed: only the file the handle made is. */
+  open_args[0] = string(temp);
+  done[0] = ok(call("File.open", open_args));
+  assert(agc_fs_unlink(temp) == 0);
+  write_test_file(temp, (const uint8_t *)"other", 5);
+  ok(call("File.close", done));
+  check_text(string(temp), "other");
+  assert(agc_fs_unlink(temp) == 0);
+}
+
 /* File.sha256 streams a whole regular file in fixed chunks with O(chunk) memory: the digests around the padding
    (55, 56), block (64) and chunk (64 KiB) boundaries, a multi-chunk input and one over the 1 MiB whole-text limit,
    then the rejections (a missing path, a directory, a FIFO or device that can wait, a bad timeout or path). A FIFO
@@ -379,7 +429,8 @@ int main(void) {
   check_text(file, text);
   unsigned invalid_flags[] = {
     AGC_FS_TRUNCATE, AGC_FS_WRITE | AGC_FS_APPEND | AGC_FS_TRUNCATE,
-    AGC_FS_WRITE | AGC_FS_EXCLUSIVE, 1u << 30, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_PRIVATE
+    AGC_FS_WRITE | AGC_FS_EXCLUSIVE, 1u << 30, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_PRIVATE,
+    AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_SHARED
   };
   for (size_t k = 0; k < sizeof invalid_flags / sizeof invalid_flags[0]; k++) {
     assert(agc_fs_open(path, invalid_flags[k]) == -1 && errno == EINVAL);
@@ -512,6 +563,7 @@ int main(void) {
 #endif
   test_sha256(directory);
   test_byte_keys(directory);
+  test_temp_files(directory);
   test_callback_refusals(directory);
   int fd = agc_fs_open(path, AGC_FS_READ);
   uint8_t data[257];

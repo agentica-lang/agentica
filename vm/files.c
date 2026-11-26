@@ -61,7 +61,7 @@ typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
   OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD,
-  OP_SYMLINK, OP_READLINK, OP_COPY
+  OP_SYMLINK, OP_READLINK, OP_COPY, OP_OPEN_TEMP
 } op_kind;
 
 typedef struct {
@@ -70,6 +70,9 @@ typedef struct {
   agc_poller *poller;
   uint8_t *buf;
   size_t start, end, cap, scan;
+  /* A "temp" handle: its path and the identity of the file it made, until the path is removed or no longer names it. */
+  CC_OWNS char *temp;
+  uint64_t temp_dev, temp_ino;
 } file_state;
 
 typedef struct {
@@ -396,12 +399,38 @@ static file_state *new_state(bool readable, bool writable) {
   return st;
 }
 
+/* Whether the path of a "temp" handle still names the file the handle made: it was not moved away (Path.replace,
+   Path.rename) and no other file took the name. Asked before the descriptor closes, while the open file keeps its
+   inode from being reused. Best effort: a process that swaps the path between this check and the unlink loses the file
+   it put there. */
+static bool temp_named(const file_state *st) {
+  agc_fs_info info;
+  return st->temp && agc_fs_stat(st->temp, &info, false) == 0 && info.dev == st->temp_dev && info.ino == st->temp_ino;
+}
+
+/* Removes the path of a "temp" handle once its descriptor is closed, when NAMED (temp_named, asked before the close),
+   and forgets it. The errno of an unlink that fails for another reason than a path already gone, else 0. With PATH
+   the path passes to *PATH, for the error of a close. */
+static int remove_temp(file_state *st, bool named, char **path) {
+  int err = 0;
+  if (!st->temp) return 0;
+  if (named && agc_fs_unlink(st->temp) != 0 && errno != ENOENT) err = errno;
+  if (path)
+    *path = st->temp;
+  else
+    free(st->temp);
+  st->temp = NULL;
+  return err;
+}
+
 static void free_state(file_state *st) {
   if (!st) return;
+  bool named = temp_named(st);
   if (st->poller)
     agc_poller_close(st->poller);
   else if (st->fd >= 0)
     agc_fs_close(st->fd);
+  (void)remove_temp(st, named, NULL);
   free(st->buf);
   free(st);
 }
@@ -643,9 +672,11 @@ static bool names_output_fd(const agc_runtime *rt, const char *path) {
 #endif
 
 static int open_for(op *o, bool reading, bool append) {
-  if (o->kind == OP_OPEN_CREATE) {
+  if (o->kind == OP_OPEN_CREATE || o->kind == OP_OPEN_TEMP) {
     /* O_EXCL fails on any existing entry, a dangling link included, and never follows one. */
-    int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE);
+    /* A temp file is moved to its final name while its handle is open. */
+    unsigned shared = o->kind == OP_OPEN_TEMP ? AGC_FS_SHARED : 0;
+    int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE | shared);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return fd;
   }
@@ -1342,11 +1373,35 @@ static void work_copy(op *o) {
   if (status != FS_OK) fail_op(o, status, err);
 }
 
+/* A temp open keeps its path and the identity of the new file in the state, so a close removes only that file. On
+   failure the new file is removed here, and the call fails. */
+static bool remember_temp(op *o, int fd) {
+  agc_fs_info info;
+  int err = 0;
+  if (agc_fs_fstat(fd, &info) != 0) {
+    err = errno;
+  } else if (info.ino == 0) {
+    err = ENOTSUP;
+  } else if (!(o->st->temp = strdup(o->path))) {
+    err = ENOMEM;
+  }
+  if (err) {
+    agc_fs_close(fd);
+    agc_fs_unlink(o->path);
+    fail_op(o, FS_OPEN, err);
+    return false;
+  }
+  o->st->temp_dev = info.dev;
+  o->st->temp_ino = info.ino;
+  return true;
+}
+
 /* A `regular` open (File.chunks) is refused unless the descriptor itself is a regular file, decided by its fstat as in
    work_sha256, so a pipe or a device swapped in after the path stat is never read. The open is non-blocking. */
 static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
+  if (o->kind == OP_OPEN_TEMP && !remember_temp(o, fd)) return;
   agc_fs_info info;
   bool stated = o->regular && agc_fs_fstat(fd, &info) == 0;
   if (o->regular && (!stated || !AGC_FS_ISREG(info.mode))) {
@@ -1492,8 +1547,11 @@ static void work_close(op *o) {
   file_state *st = o->st;
   if (st->writable && st->end && !write_all(st->fd, st->buf, st->end, &o->err)) o->status = FS_WRITE;
   st->end = 0;
+  bool named = temp_named(st);
   agc_fs_close(st->fd);
   st->fd = -1;
+  int err = remove_temp(st, named, &o->path);
+  if (err && o->status == FS_OK) fail_op(o, FS_REMOVE, err);
 }
 
 static void work(void *data) {
@@ -1520,6 +1578,7 @@ static void work(void *data) {
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
+    case OP_OPEN_TEMP:
     case OP_OPEN_APPEND: work_open(o); break;
     case OP_READ_BYTES: work_read_bytes(o); break;
     case OP_READ_LINE: work_read_line(o); break;
@@ -1533,8 +1592,9 @@ static void work(void *data) {
 static void drop(void *data) {
   op *o = data;
   /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes, or
-     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush); only a polled
-     descriptor is non-blocking (work_open), so its flush never waits. */
+     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush), and the release of a
+     temp handle is a stat and an unlink of its path; only a polled descriptor is non-blocking (work_open), so its
+     flush never waits. */
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
     agc_poller_close(o->poller);
@@ -1610,7 +1670,8 @@ static void ready(void *data, int status) {
 }
 
 static bool opens(const op *o) {
-  return o->kind == OP_OPEN_READ || o->kind == OP_OPEN_WRITE || o->kind == OP_OPEN_CREATE || o->kind == OP_OPEN_APPEND;
+  return o->kind == OP_OPEN_READ || o->kind == OP_OPEN_WRITE || o->kind == OP_OPEN_CREATE ||
+         o->kind == OP_OPEN_TEMP || o->kind == OP_OPEN_APPEND;
 }
 
 /* The rest of a whole-file call whose path is a pipe, a FIFO or a device:
@@ -1868,6 +1929,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_READ:
       case OP_OPEN_WRITE:
       case OP_OPEN_CREATE:
+      case OP_OPEN_TEMP:
       case OP_OPEN_APPEND: {
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
@@ -2145,8 +2207,10 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
     kind = OP_OPEN_APPEND;
   } else if (same_text(mode->data, mode->bytes, "create_private")) {
     kind = OP_OPEN_CREATE;
+  } else if (same_text(mode->data, mode->bytes, "temp")) {
+    kind = OP_OPEN_TEMP;
   } else {
-    return error_of(vm, AGC_KIND_ARGUMENT, "filesystem: mode must be read, write, append, or create_private");
+    return error_of(vm, AGC_KIND_ARGUMENT, "filesystem: mode must be read, write, append, create_private, or temp");
   }
   if (!path_string(path)) return bad_path(vm, path);
   return start(vm, open_op(vm, kind, path), args[0], timeout);

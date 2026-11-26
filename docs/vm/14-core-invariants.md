@@ -89,7 +89,8 @@ Known exceptions (the mechanisms are in §10.2.2):
   writes what the handle buffers with one blocking write on the loop thread.
   Only a regular file or a device that never waits is written so, which bounds
   the write: at most 4 KiB (`WRITE_BUFFER`) for a `File.open` handle and 64 KiB
-  (`CHUNK`) for the `Lazy.write_lines` handle.
+  (`CHUNK`) for the `Lazy.write_lines` handle. The release of a `"temp"` handle
+  adds a stat and an unlink of its path (`free_state`).
 
 ### 14.2 Timeouts
 

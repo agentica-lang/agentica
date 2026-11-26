@@ -302,6 +302,78 @@ end
     assert path.read_text() == "hello world\n"
 
 
+def test_a_temp_file_is_removed_unless_its_path_was_moved_away_first(new_dir, run_program):
+    root = new_dir()
+    output = run_program(r"""def holder(path: String) -> Result[Int]
+  f = File.open(path, "temp", 1000).unwrap!
+  _ = File.write(f, "partial", 1000)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def crash(path: String) -> Result[Int]
+  f = File.open(path, "temp", 1000).unwrap!
+  _ = File.write(f, "partial", 1000)
+  return ok(2) if not File.stat(path, 1000).ok?
+  n = 0
+  return ok(1 / n)
+end
+
+def appears(path: String, left: Int) -> Bool
+  return true if File.stat(path, 1000).ok?
+  return false if left == 0
+  Task.sleep(10)
+  return appears(path, left - 1)
+end
+
+def main() -> Void
+  root = System.args()[0]
+  closed = File.open(root + "/closed.part", "temp", 1000).unwrap!
+  _ = File.write(closed, "gone", 1000)
+  puts(File.close(closed, 1000).ok?)
+  moved = File.open(root + "/moved.part", "temp", 1000).unwrap!
+  _ = File.write(moved, "kept", 1000)
+  _ = File.flush(moved, 1000)
+  puts(Path.replace(root + "/moved.part", root + "/moved.txt", 1000).ok?)
+  puts(File.close(moved, 1000).ok?)
+  held = Task.spawn(&holder, root + "/cancelled.part")
+  puts(appears(root + "/cancelled.part", 500))
+  Task.cancel(held)
+  puts(Task.await(held).ok?)
+  puts(Task.await(Task.spawn(&crash, root + "/crashed.part")).ok?)
+  puts(File.open(root + "/taken.part", "create_private", 1000).ok?)
+  puts(File.open(root + "/taken.part", "temp", 1000).ok?)
+  _ = File.open(root + "/left.part", "temp", 1000).unwrap!
+end
+""", [root])
+    assert output == "true\ntrue\ntrue\ntrue\nfalse\nfalse\ntrue\nfalse\n"
+    assert sorted(item.name for item in root.iterdir()) == ["moved.txt", "taken.part"]
+    assert (root / "moved.txt").read_text() == "kept"
+
+
+def test_a_temp_file_is_removed_by_a_close_that_timed_out(new_dir, run_program):
+    # One pool thread, held by the digest of a large sparse file: the close queues behind it, its 1 ms deadline passes,
+    # and main ends at once; the run waits for the close, which still removes the file.
+    root = new_dir()
+    big = root / "big.bin"
+    with open(big, "wb") as handle:
+        handle.truncate(256 << 20)
+    run_program(r"""def digest(path: String) -> Bool
+  return File.sha256(path, 60000).ok?
+end
+
+def main() -> Void
+  root = System.args()[0]
+  out = File.open(root + "/timed.part", "temp", 1000).unwrap!
+  _ = File.write_bytes(out, "0123456789".bytes, 1000)
+  Task.spawn(&digest, root + "/big.bin")
+  Task.sleep(100)
+  _ = File.close(out, 1)
+end
+""", [root], env=vm_environment({"UV_THREADPOOL_SIZE": "1"}))
+    assert sorted(item.name for item in root.iterdir()) == ["big.bin"]
+
+
 def test_the_run_waits_for_a_timed_out_close_so_its_buffered_write_reaches_the_disk(new_dir, run_program):
     # One pool thread, held by the digest of a large sparse file: the close queues behind it, so its 1 ms deadline
     # passes before its work runs, and main ends at once. Nothing is printed, so no output flush holds the exit.
