@@ -25,9 +25,12 @@ A blocked `read()` on a pool thread would hang the VM at exit: the exit path
 joins the pool, and the pool would wait for a FIFO that never writes.
 
 - **Regular files** (and directories) use the libuv thread pool, since a read or
-  write on them ends in bounded time. The other bounded pool work is DNS
-  (`getaddrinfo`) and the TLS setup jobs that load CA, certificate and key files
-  (§10.2.2, pool size).
+  write on them ends in bounded time. A whole-file call of any size
+  (`File.sha256`, `File.copy`) is a loop of such reads and writes on one pool
+  thread; `File.copy` also stops between two blocks when its deadline passed or
+  the run is over (`work_copy`), and `File.sha256` runs to its end. The other
+  bounded pool work is DNS (`getaddrinfo`) and the TLS setup jobs that load CA,
+  certificate and key files (§10.2.2, pool size).
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits
@@ -182,7 +185,8 @@ flush. **When `main` ends, the program ends.** The steps are:
 2. flush stdout, stderr and open files (the file flush within the flush limit);
    the file flush includes a handle's write or close whose deadline passed
    while its pool work had not ended, since that work holds bytes the program
-   wrote;
+   wrote, and a `File.copy` in progress, which the end of the run stops at its
+   next block (or before its rename) and which removes its new file;
 3. free what native code still owns (`agc_ffi_end` in `vm/ffi.c`). First wait
    for the running compute calls that hold a resource or owned buffer still
    open; calls that hold nothing are not waited for. Then free every resource

@@ -122,7 +122,7 @@ VM_BUILTINS = Set.new([
   "Time.DateTime.strftime", "Path.replace", "Process.pid", "System.program_name", "Ref.new", "Task.spawn_link",
   "Float.to_float32", "Int.to_float32", "Float32.to_f", "Float32.to_bits", "Float32.from_bits", "Term.encode",
   "Term.decode", "Terminal.raw", "Terminal.size", "Terminal.tty?", "Enum.name", "Enum.parse", "File.chmod",
-  "File.symlink", "File.readlink", "System.hostname",
+  "File.symlink", "File.readlink", "File.copy", "System.hostname",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
