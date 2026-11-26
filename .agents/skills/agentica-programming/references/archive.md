@@ -11,9 +11,16 @@ Archive.extract_zip(src, members, dest_dir, options = Archive.Options()) -> Resu
 ```
 
 - `options` is `Archive.Options(timeout_ms: Int = 30000,
-  max_output_bytes: Int = 268435456)`, `Archive.Options()` by default.
-  `timeout_ms` is 1 to 86400000, `max_output_bytes` 1 to 1073741824. The
-  result holds each file's bytes in member order.
+  max_output_bytes: Int = 268435456, keep_mode: Bool = false)`,
+  `Archive.Options()` by default. `timeout_ms` is 1 to 86400000,
+  `max_output_bytes` 1 to 1073741824. The result holds each file's bytes in
+  member order.
+- `keep_mode: true` (`extract_tar` only; `extract_zip` refuses it with an
+  `argument` error) gives each file its TAR header's permission bits masked
+  by `0o755` (no setuid, setgid or sticky, no group or other write bit);
+  without it every file is private (`0o600`). The mask is literal: a header
+  mode without owner read gives a file its owner cannot read. A selected
+  entry's mode field must be octal text.
 - `members` holds 1 to 256 safe relative paths; one leading `./` is optional.
   Absolute paths, drive letters, UNC shares, backslashes, colons, NUL bytes,
   `.`/`..` segments, exact and case-only repeats are rejected before anything
