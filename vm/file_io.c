@@ -245,7 +245,9 @@ int agc_fs_symlink(const char *target, const char *link) {
   uv_fs_t req;
   int result = uv_fs_symlink(NULL, &req, target, link, flags, NULL);
 #ifdef _WIN32
-  if (result == UV_EPERM && req.sys_errno_ == ERROR_PRIVILEGE_NOT_HELD) result = UV_ENOTSUP;
+  /* An existing folder at LINK is ERROR_ACCESS_DENIED there, not "exists". */
+  if (result == UV_EPERM && agc_fs_stat(link, &info, false) == 0) result = UV_EEXIST;
+  else if (result == UV_EPERM && req.sys_errno_ == ERROR_PRIVILEGE_NOT_HELD) result = UV_ENOTSUP;
 #endif
   uv_fs_req_cleanup(&req);
 #ifdef _WIN32
