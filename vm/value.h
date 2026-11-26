@@ -1113,14 +1113,16 @@ agc_list *agc_list_reverse(const agc_list *l);
 agc_list *agc_list_repeat(agc_value v, size_t n);
 uint32_t agc_list_kind(const agc_list *l);
 
+/* The Float32 case of the inline push and cursor below, out of line: the 8-byte and boxed paths stay small (17.12). */
+void agc_list_builder_push_narrow(agc_list_builder *b, agc_value v);
+agc_value agc_list_item_narrow(const char *items, size_t k);
+
 static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
   if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
     agc_list_builder_more(b, v);
   } else if (b->kind) {
     if (b->kind == AGC_T_FLOAT32) {
-      uint32_t word = agc_float32_word(v);
-      memcpy(b->next, &word, sizeof word);
-      b->next += sizeof word;
+      agc_list_builder_push_narrow(b, v);
     } else {
       *(uint64_t *)b->next = agc_value_word(v);
       b->next += sizeof(uint64_t);
@@ -1136,9 +1138,7 @@ static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   size_t k = c->index++ - c->start;
   if (c->kind) {
     if (c->kind == AGC_T_FLOAT32) {
-      uint32_t word;
-      memcpy(&word, c->chunk + k * sizeof word, sizeof word);
-      *out = agc_word_float32(word);
+      *out = agc_list_item_narrow(c->chunk, k);
     } else {
       uint64_t word;
       memcpy(&word, c->chunk + k * sizeof word, sizeof word);

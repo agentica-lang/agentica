@@ -310,6 +310,18 @@ agc_value agc_list_trie_get(const agc_list *l, size_t i) {
   return list_item(l->kind, node->child[(i >> LIST_BITS) & LIST_MASK], i & LIST_MASK);
 }
 
+agc_value agc_list_item_narrow(const char *items, size_t k) {
+  uint32_t word;
+  memcpy(&word, items + k * sizeof word, sizeof word);
+  return agc_word_float32(word);
+}
+
+void agc_list_builder_push_narrow(agc_list_builder *b, agc_value v) {
+  uint32_t word = agc_float32_word(v);
+  memcpy(b->next, &word, sizeof word);
+  b->next += sizeof word;
+}
+
 agc_value agc_list_narrow_get(const agc_list *l, size_t i) {
   size_t off = list_tail_off(l->len);
   const char *items = (const char *)l->tail;
@@ -319,9 +331,7 @@ agc_value agc_list_narrow_get(const agc_list *l, size_t i) {
     items = node->child[(i >> LIST_BITS) & LIST_MASK];
     off = i & ~(size_t)LIST_MASK;
   }
-  uint32_t word;
-  memcpy(&word, items + (i - off) * sizeof word, sizeof word);
-  return agc_word_float32(word);
+  return agc_list_item_narrow(items, i - off);
 }
 
 size_t agc_list_len(const agc_list *l) { return list_len(l); }
