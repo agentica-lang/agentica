@@ -32,11 +32,14 @@
 #define INPUT_READ_MAX ((size_t)1024 * 1024)
 #define INPUT_ROOM ((size_t)4096)
 #define FILL_WAIT 3
+/* The read that ended with no bytes because its task was cancelled: not an EOF, not a failure. */
+#define READ_CANCELLED ((int64_t)-2)
 
 #if defined(__linux__) || defined(__APPLE__)
 typedef struct {
   int fd;
   bool socket;
+  bool waiting;
   agc_io_job *job;
   agc_poller *poller;
   size_t room;
@@ -136,17 +139,18 @@ static void read_work(void *data) {
 #endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-/* The end of a read: GOT bytes at DATA, 0 at EOF or -1. Every reader that waited re-runs its builtin. */
+/* The end of a read: GOT bytes at DATA, 0 at EOF, -1 or READ_CANCELLED. Every reader that waited re-runs its
+   builtin. */
 static void read_end(agc_vm *vm, int64_t got, const uint8_t *data) {
   agc_input *in = &vm->rt->in;
   in->reading = false;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "stdin bytes=%" PRId64 " status=%s", got > 0 ? got : 0,
-            got > 0 ? "data" : got == 0 ? "eof" : "error");
+            got > 0 ? "data" : got == 0 ? "eof" : got == READ_CANCELLED ? "cancelled" : "error");
   if (got > 0) {
     reserve(in, (size_t)got);
     memcpy(in->buf + in->end, data, (size_t)got);
     in->end += (size_t)got;
-  } else {
+  } else if (got != READ_CANCELLED) {
     in->got = got == 0 ? 0 : -1;
     in->eof_seq++;
   }
@@ -181,7 +185,6 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
 static void read_drop(void *data) { free(data); }
 
 static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL, true, NULL};
-static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL, true, NULL};
 #elif defined(_WIN32)
 /* The job's data is the reader, which the input owns: nothing to free. */
 static agc_value reader_done(agc_vm *vm, void *data, agc_value context) {
@@ -229,9 +232,29 @@ static void stdin_ready(void *data, int status) {
     q->got = -1;
   else if (!read_once(q))
     return;
+  q->waiting = false;
   agc_poller_pause(q->poller);
   agc_io_ready(q->job);
 }
+
+/* The task that started the read was cancelled: the poll stops here, on the loop's thread, and the job ends with no
+   bytes, so a byte that comes later stays for the next reader, in this process or another. A read that ended already
+   keeps what it read. Returns false: the job is not dropped but ends through `done`, which hands the read to the
+   waiters. */
+static bool stdin_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  read_request *q = data;
+  if (!q->waiting) return false;
+  q->waiting = false;
+  agc_poller_pause(q->poller);
+  q->got = READ_CANCELLED;
+  agc_io_ready(q->job);
+  return false;
+}
+
+static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", stdin_cancel, true, NULL};
 
 /* A pipe or terminal is reopened, so only the VM's file description is
    non-blocking; a socket is read with MSG_DONTWAIT (10.2.2, Stdin). */
@@ -292,10 +315,12 @@ static int start_read(agc_vm *vm, agc_input *in) {
     agc_io_start(vm, &read_io, q, agc_void(), -1);
   } else {
     q->job = agc_io_start(vm, &poll_read_io, q, agc_void(), -1);
-    if (read_once(q))
+    if (read_once(q)) {
       agc_io_ready(q->job);
-    else
+    } else {
+      q->waiting = true;
       agc_poller_wait(q->poller, false, stdin_ready, q);
+    }
   }
   vm->task->retry = true;
   return FILL_WAIT;
