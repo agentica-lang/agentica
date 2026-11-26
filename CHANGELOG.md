@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.40.0-beta.2] - 2026-11-26
+
 ### Added
 
 - `File.copy(from, to)` copies a file with its permission bits, in one step (#1422).
@@ -1853,7 +1855,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.40.0-beta.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.40.0-beta.2...HEAD
+[0.40.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.40.0-beta.1...0.40.0-beta.2
 [0.40.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.39.1...0.40.0-beta.1
 [0.39.1]: https://github.com/agentica-lang/agentica/compare/0.39.0...0.39.1
 [0.39.0]: https://github.com/agentica-lang/agentica/compare/0.38.0...0.39.0
