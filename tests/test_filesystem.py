@@ -1502,11 +1502,10 @@ end
     assert sorted(path.name for path in root.iterdir() if ".agc-" in path.name) == []
 
 
-@host_only(WINDOWS, "a sparse file of 1 GiB, which NTFS makes only on request")
 def test_file_copy_stops_at_a_timeout_and_at_the_end_of_the_run_and_removes_the_new_file(new_dir, run_program):
     root = new_dir()
-    with open(root / "big.bin", "wb") as sparse:
-        sparse.truncate(1 << 30)
+    with open(root / "big.bin", "wb") as large:
+        large.truncate(1 << 30)
     (root / "to.txt").write_text("old")
     output = run_program("""def main() -> Void
   case File.copy("big.bin", "to.txt", 20)
@@ -1519,6 +1518,7 @@ end
     assert (root / "to.txt").read_text() == "old"
     assert sorted(path.name for path in root.iterdir() if ".agc-" in path.name) == []
     # The program ends while the copy is on its way: the exit waits for the short abort, not for the whole file.
+    started = time.monotonic()
     run_program("""def copier(_: Int) -> Result[Void]
   return File.copy("big.bin", "to.txt", 60000)
 end
@@ -1528,5 +1528,6 @@ def main() -> Void
   Task.sleep(50)
 end
 """, cwd=root)
+    assert time.monotonic() - started < scaled(10)
     assert (root / "to.txt").read_text() == "old"
     assert sorted(path.name for path in root.iterdir() if ".agc-" in path.name) == []

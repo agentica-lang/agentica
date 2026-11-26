@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "8e7292a0cda9"
+source_hash: "b444b67f6d2c"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -69,11 +69,11 @@ def main() -> Void
 end
 ```
 
-- Los bytes van a un archivo nuevo junto a `to`, que en POSIX solo el propietario puede leer mientras se escribe; después toma los bits de permiso de `from`, se vuelca al disco y se renombra sobre `to`, como hace `Path.replace`. La umask no se aplica, y setuid, setgid y sticky no se copian. En un sistema de archivos que no guarda bits de permiso (vfat, exFAT) el archivo nuevo conserva los bits que le dio el sistema. Un fallo borra el archivo nuevo y deja `to` como estaba. Un proceso terminado a mitad de la copia puede dejar un archivo oculto `.agc-PID-N.tmp` en la carpeta de `to`. Copiar necesita permiso de escritura en esa carpeta.
-- `to` se reemplaza cuando existe y se crea cuando no existe. Un enlace simbólico en `to` se sigue y sigue siendo un enlace, como con `File.replace` y `File.write_text`: el archivo al que apunta es el que se reemplaza, y un enlace roto da `io.not_found`. Una carpeta en `to`, también detrás de un enlace, da `io.is_directory`, y un `to` que no es un archivo regular (una FIFO, un dispositivo o un socket) da `io.exists`; entonces no se lee nada. Un `from` que es un enlace simbólico se sigue. Un `from` que no es un archivo regular (una carpeta, una FIFO o un dispositivo) da `error("filesystem: path does not refer to a regular file")`, sin esperar.
+- Los bytes van a un archivo nuevo en la carpeta de `to`, o en la carpeta del archivo que nombra un enlace en `to`. En POSIX solo el propietario puede leerlo mientras se escribe; después toma los bits de permiso de `from`, se vuelca al disco y se renombra sobre el destino, como hace `Path.replace`. La umask no se aplica, y setuid, setgid y sticky no se copian. En un sistema de archivos que no guarda bits de permiso (vfat, exFAT) el archivo nuevo conserva los bits que le dio el sistema. Un fallo borra el archivo nuevo y deja el destino como estaba. Un proceso terminado a mitad de la copia puede dejar un archivo oculto `.agc-PID-N.tmp` en esa carpeta. Copiar necesita permiso de escritura en esa carpeta.
+- `to` se reemplaza cuando existe y se crea cuando no existe. Un enlace simbólico en `to` se sigue y sigue siendo un enlace, como con `File.replace` y `File.write_text`: el archivo al que apunta es el que se reemplaza, y un enlace roto da `io.not_found`. Una carpeta en `to`, también detrás de un enlace, da `io.is_directory`, y uno que no es un archivo regular (una FIFO, un dispositivo o un socket) da `io.exists`; entonces no se lee nada. Un enlace simbólico `from` se sigue. Un `from` que no es un archivo regular (una carpeta, una FIFO o un dispositivo) da `error("filesystem: path does not refer to a regular file")`, sin esperar.
 - El archivo nuevo pertenece al usuario que ejecuta el programa. El propietario, las fechas y los demás atributos de `from` no se copian, y un enlace duro de `to` conserva los bytes antiguos. Copiar un archivo sobre sí mismo deja una copia de él.
 - Los `details` de un error guardan `from` bajo `"path"` y `to` bajo `"to"`.
-- Un tiempo de espera termina la copia: se detiene en su siguiente bloque de 64 KiB, borra el archivo nuevo y deja `to` como estaba. Lo mismo hace el fin del programa, que espera esa parada corta. Una tarea cancelada solo deja de esperar: su copia llega hasta el final.
+- Un tiempo de espera termina la copia: se detiene en su siguiente bloque de 64 KiB o antes del renombrado, borra el archivo nuevo y deja `to` como estaba; el volcado final al disco no se puede interrumpir. Lo mismo hace el fin del programa, que espera esa parada corta. Una tarea cancelada solo deja de esperar: su copia llega hasta el final.
 - Windows conserva solo el bit de solo lectura de `from`, y rechaza con `io.permission` un `to` de solo lectura, dejándolo como estaba.
 
 ## File.append_text {#fileappend_text}

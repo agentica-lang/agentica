@@ -185,7 +185,8 @@ flush. **When `main` ends, the program ends.** The steps are:
 2. flush stdout, stderr and open files (the file flush within the flush limit);
    the file flush includes a handle's write or close whose deadline passed
    while its pool work had not ended, since that work holds bytes the program
-   wrote;
+   wrote, and a `File.copy` in progress, which the end of the run stops at its
+   next block (or before its rename) and which removes its new file;
 3. free what native code still owns (`agc_ffi_end` in `vm/ffi.c`). First wait
    for the running compute calls that hold a resource or owned buffer still
    open; calls that hold nothing are not waited for. Then free every resource

@@ -84,7 +84,7 @@ typedef struct {
   fs_status status;
   int err, fd;
   bool owns_st, polled, locked, regular;
-  atomic_bool stop;
+  atomic_bool deadline_passed;
   const char *file_type;
   agc_vm *vm;
   agc_poller *poller;
@@ -373,6 +373,7 @@ static op *new_op(agc_vm *vm, op_kind kind) {
   o->kind = kind;
   o->fd = -1;
   o->rt = vm->rt;
+  atomic_init(&o->deadline_passed, false);
   return o;
 }
 
@@ -789,11 +790,6 @@ static void work_write_text(op *o) {
   agc_fs_close(fd);
 }
 
-/* The hash of a whole regular file, streamed in fixed chunks with O(chunk) memory: one private descriptor, read from
-   the start and closed on every return path. The fstat of the descriptor itself decides what is regular, so a rename
-   or a replacement between the path stat and the open cannot turn this into a read of a pipe or a device; the open
-   is non-blocking, a non-regular descriptor is refused before any blocking read, and the job never waits on the loop.
-   Only malloc'd memory is touched here, no GC pointer, and nothing raises. */
 /* The descriptor of the path of O, opened to read, which its own fstat says is a regular file (so a pipe or a device
    swapped in after the path stat is never read) and which is made blocking; INFO is that fstat. -1, with the op
    failed, otherwise. */
@@ -815,6 +811,11 @@ static int open_regular_source(op *o, agc_fs_info *info) {
   return fd;
 }
 
+/* The hash of a whole regular file, streamed in fixed chunks with O(chunk) memory: one private descriptor, read from
+   the start and closed on every return path. The fstat of the descriptor itself decides what is regular, so a rename
+   or a replacement between the path stat and the open cannot turn this into a read of a pipe or a device; the open
+   is non-blocking, a non-regular descriptor is refused before any blocking read, and the job never waits on the loop.
+   Only malloc'd memory is touched here, no GC pointer, and nothing raises. */
 static void work_sha256(op *o) {
   agc_fs_info info;
   int fd = open_regular_source(o, &info);
@@ -1246,14 +1247,26 @@ static char *copy_target(op *o) {
   return target;
 }
 
+/* True when the copy must end: its deadline passed (deadline_passed, set on the I/O thread by pause_wait and again by
+   expired) or the run is over (rt->over, as run_compute reads it). */
+static bool copy_stopped(const op *o) {
+  return atomic_load_explicit(&o->deadline_passed, memory_order_acquire) ||
+         atomic_load_explicit(&o->rt->over, memory_order_acquire);
+}
+
 /* File.copy: the bytes of the regular file from (a link is followed) go to a new file beside the target (copy_target),
    which only the owner can read while it is written (POSIX); it then takes the permission bits of from (setuid, setgid
    and sticky are not copied), is flushed to the disk and is renamed over the target in one step, so a reader sees the
    old file or the whole copy, never a part. A failure of the source is that of a read of it; every other failure is
-   FS_COPY, removes the new file and leaves the target as it was. A file of any size is copied in blocks, and between
-   two of them the copy stops (ECANCELED, nothing renamed) when its deadline passed (op.stop, set by expired) or the
-   run is over; a cancelled task only detaches the job, which has no hook, so the copy then runs to its end. */
+   FS_COPY, removes the new file and leaves the target as it was. A file of any size is copied in blocks. The copy
+   ends as cancelled (ECANCELED, nothing renamed) when copy_stopped is true at its start, before each block, before
+   the flush and before the rename; the flush itself (fsync) cannot be interrupted. A cancelled task only detaches
+   the job, which has no hook, so the copy then runs to its end. */
 static void work_copy(op *o) {
+  if (copy_stopped(o)) {
+    fail_op(o, FS_COPY, ECANCELED);
+    return;
+  }
   agc_fs_info info;
   int source = open_regular_source(o, &info);
   if (source < 0) return;
@@ -1282,8 +1295,7 @@ static void work_copy(op *o) {
   int err = 0;
   fs_status status = FS_OK;
   for (;;) {
-    if (atomic_load_explicit(&o->stop, memory_order_acquire) ||
-        atomic_load_explicit(&o->rt->over, memory_order_acquire)) {
+    if (copy_stopped(o)) {
       err = ECANCELED;
       status = FS_COPY;
       break;
@@ -1303,12 +1315,20 @@ static void work_copy(op *o) {
   }
   free(buf);
   agc_fs_close(source);
+  if (status == FS_OK && copy_stopped(o)) {
+    err = ECANCELED;
+    status = FS_COPY;
+  }
   if (status == FS_OK && (agc_fs_fchmod_if_able(copy, (int)(info.mode & 0777)) != 0 || agc_fs_fsync(copy) != 0)) {
     err = errno;
     status = FS_COPY;
   }
   if (agc_fs_close(copy) != 0 && status == FS_OK) {
     err = errno;
+    status = FS_COPY;
+  }
+  if (status == FS_OK && copy_stopped(o)) {
+    err = ECANCELED;
     status = FS_COPY;
   }
   if (status == FS_OK && agc_fs_replace(fresh, target) != 0) {
@@ -1626,9 +1646,11 @@ static bool begin_wait(void *data, agc_io_job *job) {
   return true;
 }
 
-/* The kind's `pause`: the deadline of a polled wait passed, and the wait stops on the I/O thread before `expired`
-   moves the buffer that its callback writes. */
+/* The kind's `pause`, on the I/O thread when the job's timer fires, before `expired`: a copy on a pool thread learns
+   that its deadline passed (work_copy), and a polled wait stops before `expired` moves the buffer that its callback
+   writes. */
 static void pause_wait(void *data) {
+  atomic_store_explicit(&((op *)data)->deadline_passed, true, memory_order_release);
   agc_poller *p = poller_of(data);
   if (p) agc_poller_pause(p);
 }
@@ -1873,7 +1895,7 @@ static void keep_unsent(op *o) {
 
 static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   op *o = data;
-  atomic_store_explicit(&o->stop, true, memory_order_release);
+  atomic_store_explicit(&o->deadline_passed, true, memory_order_release);
   agc_poller *p = poller_of(o);
   if (p) agc_poller_pause(p);
   keep_unsent(o);
