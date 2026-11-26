@@ -2,7 +2,7 @@
 title: Primeros pasos
 weight: 1
 description: Instala Agentica, ejecuta tu primer programa y compruébalo.
-source_hash: "316291d5aca8"
+source_hash: "66357440c709"
 ---
 
 ## Instalar {#install}
@@ -38,23 +38,23 @@ Necesita tener activados los flakes (`experimental-features = nix-command flakes
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   outputs = { self, nixpkgs }:
     let
-      version = "0.39.0";
+      version = "0.39.1";
       releases = {
         x86_64-linux = {
           platform = "linux-x86_64";
-          hash = "sha256-LOkqkNL/6blATFfXIqf2pubXsjdtCc/DVIp3O4T5vA8=";
+          hash = "sha256-ws4jVAaLgoWJF/BJo404MfZKcdSVtSN3har2ItbVJyU=";
         };
         aarch64-linux = {
           platform = "linux-arm64";
-          hash = "sha256-8mRkIgiHZlbVtyLSAzBRELFbypSs4hD/t9xWaoPQfdI=";
+          hash = "sha256-IjmkcV4Ay4CzLCouUzB66OaruFxiu4pp9yck8RzSeew=";
         };
         aarch64-darwin = {
           platform = "macos-arm64";
-          hash = "sha256-vqIYeJUoMqFRqKSjOJTF76kOW6VRQNyOV5aKvC0O1pE=";
+          hash = "sha256-phy+gyNzKEws6RtWRTiMf4p3VN9NKFFe/IdiWB+imZQ=";
         };
         x86_64-darwin = {
           platform = "macos-x86_64";
-          hash = "sha256-yqETS480LU6ZbHhF8zWNFix125pKNfAQ8eErLlSnpZM=";
+          hash = "sha256-FNg6cmn7hJhSYGXvugdWHzDs5PeXaP3s6DYM3WLcGVE=";
         };
       };
       forAllSystems = nixpkgs.lib.genAttrs (builtins.attrNames releases);
