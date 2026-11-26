@@ -162,7 +162,6 @@ static bool visit_items(agc_vm *vm, work_stack *s, const agc_value *x, const agc
   for (size_t k = 0; k < n; k++)
     if (scalar_tag(x[k].tag) && !visit(vm, s, x[k], y[k])) return false;
   for (size_t k = n; k > 0; k--)
-    // cchecker: ignore CC-GCC-ANALYZER-USE-OF-UNINITIALIZED-VALUE: visit_list fills x[0..n) and y[0..n) before the call
     if (!scalar_tag(x[k - 1].tag) && !visit(vm, s, x[k - 1], y[k - 1])) return false;
   return true;
 }
