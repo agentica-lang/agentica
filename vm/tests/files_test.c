@@ -275,18 +275,6 @@ static bool exists(const char *path) {
 
 /* A "temp" handle makes its path like create_private and removes it when the handle closes, unless the path no longer
    names that file: it was moved over another one first (Path.replace), or another file took the name. */
-static agc_value tok(int step, agc_value result) {
-  if (!agc_as_result(&vm, result)->ok) {
-    const agc_value v = agc_as_result(&vm, result)->value;
-    fprintf(stderr, "temp step %d failed\n", step);
-    if (agc_is(v, AGC_T_STRUCT)) {
-      const agc_struct *e = agc_as_struct(&vm, v);
-      if (e->n > 0 && agc_is(e->fields[0], AGC_T_STRING)) fprintf(stderr, "  %s\n", agc_as_string(&vm, e->fields[0])->data);
-    }
-  }
-  return ok(result);
-}
-
 static void test_temp_files(const char *directory) {
   char temp[4300], final[4300], taken[4300];
   assert(snprintf(temp, sizeof temp, "%s/temp.part", directory) > 0);
@@ -296,20 +284,20 @@ static void test_temp_files(const char *directory) {
   agc_value put[] = {agc_void(), string("abc"), agc_int(5000)};
   agc_value done[] = {agc_void(), agc_int(5000)};
 
-  agc_value handle = tok(1, call("File.open", open_args));
+  agc_value handle = ok(call("File.open", open_args));
   assert(exists(temp));
   put[0] = done[0] = handle;
-  tok(2, call("File.write", put));
-  tok(3, call("File.close", done));
+  ok(call("File.write", put));
+  ok(call("File.close", done));
   assert(!exists(temp));
 
-  handle = tok(4, call("File.open", open_args));
+  handle = ok(call("File.open", open_args));
   put[0] = done[0] = handle;
-  tok(5, call("File.write", put));
-  tok(6, call("File.flush", done));
+  ok(call("File.write", put));
+  ok(call("File.flush", done));
   agc_value move[] = {string(temp), string(final), agc_int(5000)};
-  tok(7, call("Path.replace", move));
-  tok(8, call("File.close", done));
+  ok(call("Path.replace", move));
+  ok(call("File.close", done));
   assert(!exists(temp));
   check_text(string(final), "abc");
   assert(agc_fs_unlink(final) == 0);
@@ -323,10 +311,10 @@ static void test_temp_files(const char *directory) {
 #ifndef _WIN32
   /* Another file at the path is not removed: only the file the handle made is. */
   open_args[0] = string(temp);
-  done[0] = tok(9, call("File.open", open_args));
+  done[0] = ok(call("File.open", open_args));
   assert(agc_fs_unlink(temp) == 0);
   write_test_file(temp, (const uint8_t *)"other", 5);
-  tok(10, call("File.close", done));
+  ok(call("File.close", done));
   check_text(string(temp), "other");
   assert(agc_fs_unlink(temp) == 0);
 #endif
