@@ -88,6 +88,28 @@ The VM hides the variables it keeps for itself:
 - `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either.
 - `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are reserved for the VM metrics. A program started with `Process.spawn` does not get them, but `System.env` still shows them to your program.
 
+## System.hostname
+
+```signature
+System.hostname() -> Result[String]
+```
+
+The host name of the machine, as Ruby's `Socket.gethostname`: in a container, the id that the container runtime gave it. It needs no flag, and `--deny-env` leaves it on, as it does `System.os`.
+
+- The name is not looked up in the network: it is the one the operating system holds, with no domain added.
+- A name that is not valid UTF-8 is not an error. Each invalid sequence becomes one U+FFFD.
+- The error, which a system does not give in practice, has the kind `io.failed`.
+
+```agentica
+def main() -> Void
+  puts(System.hostname().unwrap!.length > 0)
+end
+```
+
+```output
+true
+```
+
 ## System.os
 
 ```signature

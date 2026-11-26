@@ -417,6 +417,7 @@ String.upcase
 System.args
 System.env
 System.exit
+System.hostname
 System.os
 System.pid
 System.program_name

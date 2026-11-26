@@ -6,6 +6,7 @@
 #include "services.h"
 #include "system_os.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -96,8 +97,32 @@ static agc_value builtin_os(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_make_string(name, strlen(name), strlen(name)));
 }
 
+static agc_value builtin_hostname(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  size_t size = 256;
+  char *name = NULL;
+  int rc;
+  do {
+    free(name);
+    name = malloc(size);
+    if (!name) agc_out_of_memory();
+    rc = uv_os_gethostname(name, &size);
+  } while (rc == UV_ENOBUFS);
+  if (rc != 0) {
+    free(name);
+    char message[160];
+    snprintf(message, sizeof message, "system: cannot read the host name: %s", uv_strerror(rc));
+    return agc_error(vm, AGC_KIND_IO_FAILED, message);
+  }
+  agc_string *text = agc_utf8_decode((const uint8_t *)name, strlen(name), "\xEF\xBF\xBD");
+  free(name);
+  return agc_result_value(true, agc_string_value(text));
+}
+
 const agc_builtin agc_system_builtins[] = {
   {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"System.hostname", 0, builtin_hostname, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"System.os", 0, builtin_os, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
 };

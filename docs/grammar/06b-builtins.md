@@ -335,12 +335,13 @@ begins with `denied: ` and the flag (`denied: --deny-fs`), and the program goes
 on. `--deny-net` stops every connect and listen of `TCP` and `TLS`, `std/http`
 too, before any DNS lookup. `--deny-fs` covers every `File`, `Dir` and `Path`
 call but `Path.join`, `Lazy.write_lines`, `Lazy.write_bytes`, and a TLS call
-that names a file. `--deny-env` covers `System.env` (`System.os` and
-`System.pid` stay on: they hold no secret). Each turns on `--deny-native`, since
-native code could do the same. `--sandbox` is all of them. The flags apply to
-the program, not to the front end; `agentica test` gives them to the test files,
-the step programs and the programs under test, not to its runner. The table of
-flags is in [Command line](../../site/content/cli.md#options).
+that names a file. `--deny-env` covers `System.env` (`System.hostname`,
+`System.os` and `System.pid` stay on: they hold no secret). Each turns on
+`--deny-native`, since native code could do the same. `--sandbox` is all of
+them. The flags apply to the program, not to the front end; `agentica test`
+gives them to the test files, the step programs and the programs under test, not
+to its runner. The table of flags is in
+[Command line](../../site/content/cli.md#options).
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

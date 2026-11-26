@@ -2,7 +2,7 @@
 title: System, Time y Random
 weight: 5
 description: Argumentos del programa, variables de entorno, códigos de salida, relojes y números aleatorios.
-source_hash: "86af0195f9eb"
+source_hash: "288b82628faa"
 ---
 
 ## System.args {#systemargs}
@@ -88,6 +88,28 @@ La VM oculta las variables que guarda para sí:
 
 - `AGENTICA_CHANNEL`, y `UV_USE_IO_URING` cuando lo fijó la VM. Un programa iniciado con `Process.spawn` tampoco las recibe.
 - `AGENTICA_VM_METRICS` y `AGENTICA_VM_METRICS_FILE` están reservadas para las métricas de la VM. Un programa iniciado con `Process.spawn` no las recibe, pero `System.env` sigue mostrándoselas a tu programa.
+
+## System.hostname {#systemhostname}
+
+```signature
+System.hostname() -> Result[String]
+```
+
+El nombre de host de la máquina, como `Socket.gethostname` de Ruby: en un contenedor, el id que le dio el runtime. No necesita ningún flag, y `--deny-env` lo deja activo, como a `System.os`.
+
+- El nombre no se busca en la red: es el que guarda el sistema operativo, sin dominio añadido.
+- Un nombre que no es UTF-8 válido no es un error. Cada secuencia inválida se convierte en un U+FFFD.
+- El error, que un sistema no da en la práctica, tiene el tipo `io.failed`.
+
+```agentica
+def main() -> Void
+  puts(System.hostname().unwrap!.length > 0)
+end
+```
+
+```output
+true
+```
 
 ## System.os {#systemos}
 

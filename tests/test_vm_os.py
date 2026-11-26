@@ -297,3 +297,7 @@ def test_children_never_get_the_metrics_variables_but_the_program_reads_them(roo
     assert lines[0] == "own 9465 /nowhere/metrics.prom"
     # Only the exact names go; a longer name that starts with them is an ordinary variable.
     assert sorted(lines[1:]) == ["AGENTICA_VM_METRICS_KEPT=kept", "OTHER_VARIABLE=stays"]
+
+def test_hostname_is_the_name_the_system_holds_and_stays_on_under_deny_env(root, work):
+    program = "def main() -> Void\n  puts(System.hostname().unwrap!)\nend\n"
+    assert run_program(root, work, program, "hostname", flags=("--deny-env",)) == [socket.gethostname()]
