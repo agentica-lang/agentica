@@ -245,6 +245,9 @@ System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
   controlling terminal (`/dev/tty` fails: no `ssh` password prompt, `less`,
   `sudo`, editor) and shares stdin with the program (a pending `IO.gets` splits
   the input); flush your output before spawning. `--deny-run` refuses it.
+- As PID 1 of a container the VM reaps only the programs it started, so a
+  grandchild that outlives its parent stays a zombie. Run the container with
+  `docker run --init` (Compose: `init: true`); the VM has no `waitpid` reaper.
 - `System.signal` reaches a process that is not a child, only while
   `/proc/<pid>/comm` (at most 15 bytes) equals `comm`, through a pidfd, so a
   reused pid is never hit. Linux 5.3+; elsewhere `signal: pidfd is
