@@ -254,7 +254,7 @@ section says how the scheduler and the loop keep them.
   buffer made once, and between reads runs the block for every complete line
   already buffered. A timed-out read closes the handle. On Windows no `File`
   call waits on the loop: `probe` refuses a named pipe or a device with
-  `ENOTSUP`, and the call closes it (§14.1).
+  `ENOTSUP` (the kind `io.unsupported`), and the call closes it (§14.1).
 - **End of run: one exit path.** However the run ends, `agc_launch_settle` in
   `vm/launch.c` takes the steps of §14.4 and nothing else. What the loop adds:
   - Before the files, each TLS session that finished its handshake (TCP sockets,

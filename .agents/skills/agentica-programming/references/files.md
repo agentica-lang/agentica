@@ -91,8 +91,7 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   target first; a Windows target starting `\\.\` or `\\?\` is an `argument`
   error. `File.readlink(path, ms)` gives the text (`io.failed` for a path that
   is not a link; `text.encoding` when the text is not UTF-8; Windows shows `/`
-  for `\`). A link is told by
-  `File.lstat(path).unwrap!.kind == "link"`.
+  for `\`). A link is told by `File.lstat(path).unwrap!.kind == "link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one
   directory only you can use and fails if the path exists or the parent is

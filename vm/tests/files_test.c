@@ -120,6 +120,17 @@ static void test_error_mapping(void) {
     check_error(cases[i].uv_error, false, cases[i].expected_errno);
 }
 
+/* What a failed CreateSymbolicLinkW becomes: the privilege is ENOTSUP, a folder at the link (access denied) is
+   EEXIST, and any other code takes the libuv translation. */
+static void test_symlink_errno(void) {
+  assert(agc_fs_symlink_errno(ERROR_PRIVILEGE_NOT_HELD, false) == ENOTSUP);
+  assert(agc_fs_symlink_errno(ERROR_PRIVILEGE_NOT_HELD, true) == ENOTSUP);
+  assert(agc_fs_symlink_errno(ERROR_ACCESS_DENIED, true) == EEXIST);
+  assert(agc_fs_symlink_errno(ERROR_ACCESS_DENIED, false) == EPERM);
+  assert(agc_fs_symlink_errno(ERROR_ALREADY_EXISTS, false) == EEXIST);
+  assert(agc_fs_symlink_errno(ERROR_PATH_NOT_FOUND, false) == ENOENT);
+}
+
 /* The whole chain a native call walks: GetLastError(), libuv, then errno. */
 static void test_win32_error_chain(void) {
   const struct { int win_error, expected_errno; } cases[] = {
@@ -340,6 +351,7 @@ int main(void) {
 #ifdef _WIN32
   test_error_mapping();
   test_win32_error_chain();
+  test_symlink_errno();
 #endif
   agc_init();
   agc_io_init();

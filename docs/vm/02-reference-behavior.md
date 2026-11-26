@@ -354,12 +354,14 @@ Every failure is an error value. The checks run in this order:
   `target` under `to`, and its message shows the target in its printed form, cut
   at 256 characters. A `target` that is empty, holds a NUL or (Windows) starts
   `\\.\` or `\\?\` is an `argument` error before the job starts, as for a
-  path. Windows is `CreateSymbolicLinkW` itself (`agc_fs_symlink_windows`), not
+  path. Windows is `CreateSymbolicLinkW` itself (`agc_fs_symlink`), not
   libuv's call, which clears the unprivileged-create flag for the whole process
   when one call answers `ERROR_INVALID_PARAMETER`; ours retries without the flag
   for that call alone. A `/` of the text becomes `\`, a target that is a folder
   when the call is made gives a folder link (stat from the folder of the link
-  when the text is relative), and `ERROR_PRIVILEGE_NOT_HELD` is `ENOTSUP`.
+  when the text is relative), `ERROR_PRIVILEGE_NOT_HELD` is `ENOTSUP`, and
+  `ERROR_ACCESS_DENIED` at a path that exists (a folder) is `EEXIST`
+  (`agc_fs_symlink_errno`).
   `ENOTSUP` (and `EOPNOTSUPP`) of a file call is the kind `io.unsupported`
   (`agc_errno_kind`). `File.readlink(path, timeout_ms)` is `readlink` (one pool
   job); a text that is not UTF-8 is `text.encoding`, as for a read of a file;

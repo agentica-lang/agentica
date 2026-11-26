@@ -15,6 +15,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `File.symlink(target, link)` makes a symbolic link and `File.readlink(path)` reads its text; Windows without the right to make links, or a system that answers `ENOTSUP`, gives the new error kind `io.unsupported` (#1866).
 - `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
+### Changed
+
+- **Breaking:** an error of a file call with the errno `ENOTSUP` or `EOPNOTSUPP` has the kind `io.unsupported`, not `io.failed`; on Windows this includes a named pipe or a device refused as a file (#1866).
+
 ## [0.39.1] - 2026-11-26
 
 ### Fixed

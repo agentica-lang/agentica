@@ -599,11 +599,12 @@ int agc_fs_rename_noreplace(const char *from, const char *to) {
    decides between a folder link and a file link (a target that is not there yet gets a file link). A system older
    than the flag answers ERROR_INVALID_PARAMETER and gets the call without it, for this call only: libuv would clear
    the flag for the whole process. */
-int agc_fs_symlink_windows(const char *target, const char *link) {
-  size_t length = strlen(target), folder = 0;
-  for (size_t k = 0; link[k]; k++) {
-    if (link[k] == '/' || link[k] == '\\') folder = k + 1;
+int agc_fs_symlink(const char *target, const char *link) {
+  if (!target || !*target || !link || !*link) {
+    errno = EINVAL;
+    return -1;
   }
+  size_t length = strlen(target), folder = agc_fs_folder_length(link);
   char *native = malloc(folder + length + 1);
   if (!native) {
     errno = ENOMEM;
@@ -632,15 +633,15 @@ int agc_fs_symlink_windows(const char *target, const char *link) {
   free(wide_link);
   free(wide_target);
   if (made) return 0;
-  if (error == ERROR_PRIVILEGE_NOT_HELD) {
-    errno = ENOTSUP;
-  } else if (error == ERROR_ACCESS_DENIED && agc_fs_stat(link, &info, false) == 0) {
-    /* An existing folder at LINK is access denied here, not "exists"; every other existing path is EEXIST. */
-    errno = EEXIST;
-  } else {
-    agc_fs_set_error(uv_translate_sys_error((int)error));
-  }
+  errno = agc_fs_symlink_errno(error, error == ERROR_ACCESS_DENIED && agc_fs_stat(link, &info, false) == 0);
   return -1;
+}
+
+int agc_fs_symlink_errno(uint32_t error, bool link_exists) {
+  if (error == ERROR_PRIVILEGE_NOT_HELD) return ENOTSUP;
+  if (error == ERROR_ACCESS_DENIED && link_exists) return EEXIST;
+  agc_fs_set_error(uv_translate_sys_error((int)error));
+  return errno;
 }
 
 int agc_fs_try_lock(int fd) {

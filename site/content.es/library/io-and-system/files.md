@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "3c5563e68a75"
+source_hash: "cabfa0d2c363"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -212,7 +212,7 @@ Abre un archivo para trabajar en flujo.
 - Al final del programa, la ejecución espera a que se escriban los archivos abiertos y a que la salida de `puts` e `IO.warn` llegue a su tubería o a su archivo, como máximo 30 segundos (`--flush-timeout MS` o `AGENTICA_FLUSH_TIMEOUT_MS`; el flag tiene prioridad). Cuando se acaba el tiempo, el código de salida se mantiene y el error estándar recibe una línea que dice que los datos del archivo podrían no escribirse.
 - Ante `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1` o `SIGUSR2` a los que el programa no se ha suscrito ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)): primero se detienen los procesos hijos, después se escriben los archivos y luego el programa termina por esa señal. `SIGQUIT` hace lo mismo y termina con código 131, sin volcado de núcleo. Una segunda señal lo termina de inmediato, cuando los hijos ya se hayan detenido. Con `agentica`, Ctrl-C llega directamente al programa; `agentica` espera 2 segundos, envía `SIGTERM`, espera 2 más y después lo mata.
 - Una ruta que vuelve a abrir una de las tuberías internas del programa, o el descriptor que hay detrás de stdout o stderr (`/proc/self/fd/5`), da `error("filesystem: path does not refer to a regular file")`. Las tuberías que el programa recibió al empezar (stdin, stdout, stderr, un `<(...)` de la shell) se abren por ruta.
-- Windows: las llamadas de archivo solo aceptan archivos regulares (y carpetas donde se pretende una carpeta); una tubería con nombre o un dispositivo se rechazan de inmediato.
+- Windows: las llamadas de archivo solo aceptan archivos regulares (y carpetas donde se pretende una carpeta); una tubería con nombre o un dispositivo se rechazan de inmediato con `io.unsupported`.
 
 ```agentica {mode="check"}
 def main() -> Void

@@ -1205,6 +1205,10 @@ def main() -> Void
   show(File.symlink(long, "long.txt"))
   show(File.symlink(text(File.readlink("long.txt")), "long-again.txt"))
   puts(text(File.readlink("long.txt")) == long && text(File.readlink("long-again.txt")) == long)
+  case File.symlink(long, "long.txt")
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{String.length(e.message.split("\n")[2])}")
+  end
   nul = String.from_code(0)
   show(File.symlink("a" + nul, "nul-target"))
   show(File.symlink("target.txt", "nul" + nul))
@@ -1245,6 +1249,7 @@ def test_file_symlink_makes_a_link_readlink_reads_it_even_dangling_and_an_existi
         "ok", "../target.txt",
         "ok", absolute,
         "ok", "ok", "true",
+        f"io.exists {len('  target: ') + 256}",
         'argument filesystem: invalid path "a\\u0000" - -',
         'argument filesystem: invalid path "nul\\u0000" - -',
         'argument filesystem: invalid path "nul\\u0000"',
