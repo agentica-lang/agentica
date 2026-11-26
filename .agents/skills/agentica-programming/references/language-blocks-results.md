@@ -85,10 +85,10 @@ Signatures: `builtins.md`.
   `error(...)` builds one.
 - Builtin errors have kinds: `argument` (a bad argument value), `io.*`
   (`not_found`, `permission`, `exists`, `is_directory`, `not_directory`,
-  `too_large`, `eof`, `closed`, `timeout`, `failed`), `net.*` (`timeout`,
-  `refused`, `host_not_found`, `closed`, `eof`, `tls`, `failed`), `http.*`
-  (`protocol`, `too_large`, `closed`), `process.*` (`not_found`, `timeout`,
-  `closed`, `eof`, `failed`), `task.crashed`, `task.cancelled`,
+  `too_large`, `eof`, `closed`, `timeout`, `unsupported`, `failed`), `net.*`
+  (`timeout`, `refused`, `host_not_found`, `closed`, `eof`, `tls`, `failed`),
+  `http.*` (`protocol`, `too_large`, `closed`), `process.*` (`not_found`,
+  `timeout`, `closed`, `eof`, `failed`), `task.crashed`, `task.cancelled`,
   `task.timeout`, `channel.*` (`closed`, `timeout`, `gone`), `json.parse`,
   `json.decode`, `number.parse`, `number.range`, `text.encoding`, `zlib.data`,
   `zlib.too_large`, `crypto.*` (`auth`, `key`, `failed`), `system.env`,

@@ -204,6 +204,22 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "File.readlink",
+    parameters: [
+      Model.Named(name: "path", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.String),
+    rule: Model.Rule.Plain,
+    implementation: "File.readlink",
+    effects: ["filesystem"],
+    description: (
+      "Return the text of the symbolic link at path as it was made, whether or not it names something; a path that " +
+      "is not a link is an error; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "File.replace",
     parameters: [
       Model.Named(name: "path", type: Types.Type.String),
@@ -266,6 +282,24 @@ ROWS: List[Model.Builtin] = [
     description: (
       "Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic " +
       "links."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "File.symlink",
+    parameters: [
+      Model.Named(name: "target", type: Types.Type.String),
+      Model.Named(name: "link", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "File.symlink",
+    effects: ["filesystem"],
+    description: (
+      "Make the symbolic link link whose text is target, which need not exist and is read from the folder of link " +
+      "when relative; an existing path at link is an error, never replaced; io.unsupported on Windows without the " +
+      "right to make links or where the system answers ENOTSUP; VM only."
     ),
     alternatives: [],
   ),

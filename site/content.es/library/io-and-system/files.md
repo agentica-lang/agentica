@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "e7a1db83ec70"
+source_hash: "cabfa0d2c363"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -147,6 +147,47 @@ def main() -> Void
 end
 ```
 
+## File.symlink {#filesymlink}
+
+```signature
+File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Crea el enlace simbólico `link` cuyo texto es `target`, como el `File.symlink` de Ruby (primero el destino, después el enlace).
+
+- El texto se guarda tal como se da, y `target` no tiene que existir: se crea un enlace a una ruta que no existe (un enlace roto), y funciona cuando el destino aparece. Un `target` relativo se lee desde la carpeta de `link`, no desde el directorio de trabajo, así que `File.symlink("a.txt", "dir/b.txt")` enlaza `dir/b.txt` con `dir/a.txt`.
+- Nunca reemplaza nada: cuando `link` existe (un archivo, una carpeta u otro enlace, roto o no), la llamada falla con `io.exists` y nada cambia. Una carpeta que falta en `link` da `io.not_found`. Un `target` o un `link` vacío, con un NUL, y en Windows uno que empieza por `\\.\` o `\\?\` dan un error `argument`. Los `details` de un error guardan el `link` tal como se dio bajo `"path"` y el `target` bajo `"to"`.
+- Windows crea el enlace con `CreateSymbolicLinkW` y la opción que deja crearlo a un usuario sin el privilegio (necesita el Modo de desarrollador activado; un administrador no necesita nada). Cuando el sistema lo rechaza por falta de ese derecho, o responde `ENOTSUP`, el error tiene la clase `io.unsupported`. Una `/` de `target` pasa a `\`. Un `target` que es una carpeta al hacer la llamada da un enlace de carpeta, y uno que aún no existe da un enlace de archivo, así que crea primero la carpeta.
+- Un tiempo de espera da un error, pero la llamada ya iniciada llega hasta el final.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("model-v2.gguf", "weights", 1000).unwrap!
+  File.symlink("model-v2.gguf", "model.gguf", 1000).unwrap!
+  puts(File.readlink("model.gguf", 1000).unwrap!)
+end
+```
+
+## File.readlink {#filereadlink}
+
+```signature
+File.readlink(path: String, timeout_ms: Int = 30000) -> Result[String]
+```
+
+Da el texto del enlace simbólico en `path` tal como se creó, sin comprobar que nombre algo, así que un enlace roto se lee bien. Una `path` que no es un enlace es un error `io.failed`, y una que no existe es `io.not_found`. El texto debe ser UTF-8: un enlace creado por otro programa con otros bytes es un error `text.encoding`, nunca un texto cambiado. El último nombre de `path` no se sigue, pero un enlace en una carpeta superior sí.
+
+- Para distinguir un enlace de otros archivos, `File.lstat(path).unwrap!.kind == "link"` (una `path` que no existe es un error ahí).
+- Windows da `/` por cada `\` del texto, que `File.symlink` vuelve a escribir como `\`: `File.symlink(File.readlink(a).unwrap!, b)` crea un enlace con el mismo texto en todos los sistemas.
+
+```agentica {mode="check"}
+def main() -> Void
+  case File.readlink("model.gguf", 1000)
+    ok(text) -> puts("model.gguf -> #{text}")
+    error(e) -> puts(e.kind)
+  end
+end
+```
+
 ## File.open y File.close {#fileopen-and-fileclose}
 
 ```signature
@@ -171,7 +212,7 @@ Abre un archivo para trabajar en flujo.
 - Al final del programa, la ejecución espera a que se escriban los archivos abiertos y a que la salida de `puts` e `IO.warn` llegue a su tubería o a su archivo, como máximo 30 segundos (`--flush-timeout MS` o `AGENTICA_FLUSH_TIMEOUT_MS`; el flag tiene prioridad). Cuando se acaba el tiempo, el código de salida se mantiene y el error estándar recibe una línea que dice que los datos del archivo podrían no escribirse.
 - Ante `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1` o `SIGUSR2` a los que el programa no se ha suscrito ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)): primero se detienen los procesos hijos, después se escriben los archivos y luego el programa termina por esa señal. `SIGQUIT` hace lo mismo y termina con código 131, sin volcado de núcleo. Una segunda señal lo termina de inmediato, cuando los hijos ya se hayan detenido. Con `agentica`, Ctrl-C llega directamente al programa; `agentica` espera 2 segundos, envía `SIGTERM`, espera 2 más y después lo mata.
 - Una ruta que vuelve a abrir una de las tuberías internas del programa, o el descriptor que hay detrás de stdout o stderr (`/proc/self/fd/5`), da `error("filesystem: path does not refer to a regular file")`. Las tuberías que el programa recibió al empezar (stdin, stdout, stderr, un `<(...)` de la shell) se abren por ruta.
-- Windows: las llamadas de archivo solo aceptan archivos regulares (y carpetas donde se pretende una carpeta); una tubería con nombre o un dispositivo se rechazan de inmediato.
+- Windows: las llamadas de archivo solo aceptan archivos regulares (y carpetas donde se pretende una carpeta); una tubería con nombre o un dispositivo se rechazan de inmediato con `io.unsupported`.
 
 ```agentica {mode="check"}
 def main() -> Void

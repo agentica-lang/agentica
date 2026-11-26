@@ -326,6 +326,10 @@ static void test_codes(void) {
   kind_is(AGC_FAMILY_IO, EISDIR, "io.is_directory");
   kind_is(AGC_FAMILY_IO, ENOTDIR, "io.not_directory");
   kind_is(AGC_FAMILY_IO, ENOSPC, "io.failed");
+  kind_is(AGC_FAMILY_IO, ENOTSUP, "io.unsupported");
+#ifdef EOPNOTSUPP
+  kind_is(AGC_FAMILY_IO, EOPNOTSUPP, "io.unsupported");
+#endif
   kind_is(AGC_FAMILY_NET, ECONNREFUSED, "net.refused");
   kind_is(AGC_FAMILY_NET, ECONNRESET, "net.closed");
   kind_is(AGC_FAMILY_NET, EPIPE, "net.closed");
