@@ -52,13 +52,16 @@ static inline agc_value list_item(uint32_t kind, const char *items, size_t k) {
   return v;
 }
 
+/* The item of the trie, not for a list of Float32s: list_at sends those to agc_list_narrow_get. */
 agc_value agc_list_trie_get(const agc_list *l, size_t i);
 
 /* The item of a list of Float32s (4-byte items), out of line: the hot loops read 8-byte and 16-byte items inline. */
 agc_value agc_list_narrow_get(const agc_list *l, size_t i);
 
 static inline agc_value list_at(const agc_list *l, size_t i) {
-  if (l->kind == AGC_T_FLOAT32) return agc_list_narrow_get(l, i);
+  if (l->kind) {
+    if (l->kind == AGC_T_FLOAT32) return agc_list_narrow_get(l, i);
+  }
   size_t off = list_tail_off(l->len);
   if (i >= off) return list_item(l->kind, (const char *)l->tail, i - off);
   return agc_list_trie_get(l, i);

@@ -1116,13 +1116,15 @@ uint32_t agc_list_kind(const agc_list *l);
 static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
   if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
     agc_list_builder_more(b, v);
-  } else if (b->kind == AGC_T_FLOAT32) {
-    uint32_t word = agc_float32_word(v);
-    memcpy(b->next, &word, sizeof word);
-    b->next += sizeof word;
   } else if (b->kind) {
-    *(uint64_t *)b->next = agc_value_word(v);
-    b->next += sizeof(uint64_t);
+    if (b->kind == AGC_T_FLOAT32) {
+      uint32_t word = agc_float32_word(v);
+      memcpy(b->next, &word, sizeof word);
+      b->next += sizeof word;
+    } else {
+      *(uint64_t *)b->next = agc_value_word(v);
+      b->next += sizeof(uint64_t);
+    }
   } else {
     *(agc_value *)b->next = v;
     b->next += sizeof(agc_value);
@@ -1132,14 +1134,16 @@ static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
 static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
   size_t k = c->index++ - c->start;
-  if (c->kind == AGC_T_FLOAT32) {
-    uint32_t word;
-    memcpy(&word, c->chunk + k * sizeof word, sizeof word);
-    *out = agc_word_float32(word);
-  } else if (c->kind) {
-    uint64_t word;
-    memcpy(&word, c->chunk + k * sizeof word, sizeof word);
-    *out = agc_word_value(c->kind, word);
+  if (c->kind) {
+    if (c->kind == AGC_T_FLOAT32) {
+      uint32_t word;
+      memcpy(&word, c->chunk + k * sizeof word, sizeof word);
+      *out = agc_word_float32(word);
+    } else {
+      uint64_t word;
+      memcpy(&word, c->chunk + k * sizeof word, sizeof word);
+      *out = agc_word_value(c->kind, word);
+    }
   } else {
     *out = ((const agc_value *)c->chunk)[k];
   }

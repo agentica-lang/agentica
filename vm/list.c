@@ -29,7 +29,7 @@ static uint32_t shift_for(size_t trie_len) {
 }
 
 static size_t stride_of(uint32_t kind) {
-  return kind == AGC_T_FLOAT32 ? sizeof(uint32_t) : kind ? sizeof(uint64_t) : sizeof(agc_value);
+  return (kind ? sizeof(uint64_t) : sizeof(agc_value)) >> (kind == AGC_T_FLOAT32);
 }
 
 static uint32_t kind_of(agc_value v) {
@@ -41,8 +41,10 @@ static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_
 /* Boehm adds a byte to each object for interior pointers: SLAB_BYTES - 1 keeps a slab in 16 heap blocks, not 17. */
 static size_t slab_leaves(uint32_t kind) { return (SLAB_BYTES - 1) / (LIST_WIDTH * stride_of(kind)); }
 
+/* The Float32 case tests the item size: a test of the kind itself made GCC split append and set by kind, and list-build
+   ran 15% slower with --jit off. */
 static void item_put(uint32_t kind, char *dst, agc_value v) {
-  if (kind == AGC_T_FLOAT32) {
+  if (stride_of(kind) == sizeof(uint32_t)) {
     uint32_t word = agc_float32_word(v);
     memcpy(dst, &word, sizeof word);
   } else if (kind) {
@@ -237,7 +239,8 @@ static void builder_replay(agc_list_builder *wide, const agc_list *src, size_t c
 }
 
 /* The items written so far are the first `done` of the half-built list: the slabs, then the tail. A numeric builder
-   shares no leaves, so its slab starts at a multiple of 32 leaves. */
+   shares no leaves, so its slab starts at a multiple of slab_leaves(kind) leaves (511 for Float32, 255 for Int and
+   Float). */
 static void builder_demote(agc_list_builder *b) {
   const agc_list *half = b->out;
   size_t slab = (b->leaf - 1) / slab_leaves(b->kind) * slab_leaves(b->kind);

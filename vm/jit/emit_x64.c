@@ -581,6 +581,7 @@ void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, 
 
 _Static_assert(AGC_JIT_LIST_TAIL + 8 < 128, "the tail reads below use an 8-bit displacement");
 _Static_assert(AGC_JIT_LIST_MASK == 31, "the tail index below is masked with an 8-bit ~31");
+_Static_assert(AGC_T_FLOAT32 < 128, "the kind of a list is compared below as an 8-bit immediate");
 
 /* rcx = the list, rax = the index, then rax = the index in the tail: an index outside the list (a negative one is
    above every length as unsigned) or below the tail takes the helper, and so does a list of Float32s, whose items

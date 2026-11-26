@@ -262,16 +262,20 @@ other list as it is.
 
 **Reads and writes.** `list_at` and `agc_list_trie_get` rebuild the value from
 the kind: the tag is the kind and the payload is the 8 bytes. A Float32 list is
-read out of line (`agc_list_narrow_get`, which `list_at` calls first), so the
-turn loop's inline read keeps the code it had for 8 and 16 byte items; the
-compiled `LIST_GET` takes the helper for it, since its inline tail read has an
-8-byte stride. The cursor and the inline builder push carry the kind in their
-structs. Two details keep the boxed path as fast as it was. The stores of `push`
-are typed (`uint64_t` and `agc_value`): a `char *` store may alias the builder's
-own fields, and then the compiler reloads them for every item. And a value is
-built from its two 8-byte words (`agc_word_value` and `agc_value_word`, both in
-`value.h`), because the field-by-field form made the compiler merge the boxed
-and numeric paths with masks.
+read out of line (`agc_list_narrow_get`, which `list_at` calls inside its test
+of a non-zero kind, so a boxed list pays one compare; `agc_list_trie_get` is not
+for Float32 lists), so the turn loop's inline read keeps the code it had for
+8 and 16 byte items; the compiled `LIST_GET` takes the helper for it, since its
+inline tail read has an 8-byte stride. The cursor and the inline builder push
+carry the kind in their structs, and test for Float32 inside their non-zero kind
+arm too. Three details keep the boxed and the 8-byte paths as fast as they
+were. The stores of `push` are typed (`uint64_t` and `agc_value`): a `char *`
+store may alias the builder's own fields, and then the compiler reloads them
+for every item. A value is built from its two 8-byte words (`agc_word_value`
+and `agc_value_word`, both in `value.h`), because the field-by-field form made
+the compiler merge the boxed and numeric paths with masks. And `item_put` tests
+the item size, not the kind: a test of the kind made GCC split `append` and
+`set` by kind, and `list-build` ran 15% slower with `--jit off`.
 
 **Memory and the GC.**
 
