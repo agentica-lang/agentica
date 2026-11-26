@@ -439,7 +439,7 @@ typedef struct {
      counts a step or asks to yield; it only returns a value or fails with agc_fail. Its work is O(1) or bounded, so a
      builtin whose work grows with a String or a list (a compare, a copy, a UTF-8 walk) is not a leaf even when it
      charges nothing today. List.append and List.set copy the whole list only when a value's tag does not match a packed
-     Int or Float list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
+     Int, Float or Float32 list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
      goes on without the generic tail; compiled code calls it below a native call (agc_jit_call_leaf). A leaf may take
      rt->sync and drop it before it returns to read shared state (Native.closed?). A leaf row is never shared, has
      AGC_NATIVE_NONE and AGC_COST_NONE (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds
@@ -816,6 +816,21 @@ static inline agc_value agc_float32(double f) {
   return v;
 }
 
+/* The 4 bytes of a Float32 in a packed list (17.12): its binary32 bits. The double is exactly a binary32, so both
+   conversions lose nothing, the sign and payload of a NaN included. */
+static inline uint32_t agc_float32_word(agc_value v) {
+  float narrow = (float)v.as.f;
+  uint32_t word;
+  memcpy(&word, &narrow, sizeof word);
+  return word;
+}
+
+static inline agc_value agc_word_float32(uint32_t word) {
+  float narrow;
+  memcpy(&narrow, &word, sizeof narrow);
+  return agc_float32((double)narrow);
+}
+
 static inline agc_value agc_string_value(agc_string *s) {
   agc_value v;
   v.tag = AGC_T_STRING;
@@ -1098,12 +1113,21 @@ agc_list *agc_list_reverse(const agc_list *l);
 agc_list *agc_list_repeat(agc_value v, size_t n);
 uint32_t agc_list_kind(const agc_list *l);
 
+/* The Float32 case of the inline push and cursor below, out of line: the 8-byte and boxed paths stay small (17.12). */
+void agc_list_builder_push_narrow(agc_list_builder *b, agc_value v);
+agc_value agc_list_item_narrow(const char *items, size_t k);
+
 static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
   if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
     agc_list_builder_more(b, v);
   } else if (b->kind) {
-    *(uint64_t *)b->next = agc_value_word(v);
-    b->next += sizeof(uint64_t);
+    /* kept nested: see 17.12 */
+    if (b->kind == AGC_T_FLOAT32) {
+      agc_list_builder_push_narrow(b, v);
+    } else {
+      *(uint64_t *)b->next = agc_value_word(v);
+      b->next += sizeof(uint64_t);
+    }
   } else {
     *(agc_value *)b->next = v;
     b->next += sizeof(agc_value);
@@ -1114,9 +1138,14 @@ static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
   size_t k = c->index++ - c->start;
   if (c->kind) {
-    uint64_t word;
-    memcpy(&word, c->chunk + k * sizeof word, sizeof word);
-    *out = agc_word_value(c->kind, word);
+    /* kept nested: see 17.12 */
+    if (c->kind == AGC_T_FLOAT32) {
+      *out = agc_list_item_narrow(c->chunk, k);
+    } else {
+      uint64_t word;
+      memcpy(&word, c->chunk + k * sizeof word, sizeof word);
+      *out = agc_word_value(c->kind, word);
+    }
   } else {
     *out = ((const agc_value *)c->chunk)[k];
   }

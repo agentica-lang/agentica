@@ -2,7 +2,7 @@
 title: BDD
 weight: 2
 description: Programas de prueba con archivos de características Gherkin y el comando agentica test.
-source_hash: "3d4ae00333f7"
+source_hash: "2ffebef475e7"
 ---
 
 `agentica test` ejecuta archivos Gherkin `.feature`. Cada escenario inicia tu programa como un proceso aparte, le envía una entrada y comprueba su salida.
@@ -135,7 +135,7 @@ Feature: Memory
 
 - Un paso recibe el contexto `ctx` del escenario y lo devuelve; el siguiente paso recibe lo que devolvió el anterior. La mayoría de las llamadas a `BDD` reciben y devuelven el contexto: conserva el que se devuelve. `BDD.doc_string`, `BDD.table`, `BDD.get`, `BDD.call` y `BDD.read_line` devuelven su valor en su lugar. Cada paso `Then` debe hacer al menos una comprobación de `BDD`.
 - Cada hueco de `--jobs` ejecuta sus escenarios uno tras otro en un proceso trabajador, cada escenario en una tarea propia: sus valores (`BDD.set`, `BDD.keep`), su programa bajo prueba, los handles y las tareas que abrió, su semilla y su `Task.pending_count` son suyos. Un fallo, `System.exit` o un bucle sin fin hace fallar solo su escenario, y el siguiente escenario recibe un trabajador nuevo; lo mismo ocurre con cualquier escenario que falla o se omite. Un paso debe terminar las tareas que inicia (`RUNTIME-BDD-PENDING-TASKS`); un fallo sin esperar lo hace fallar con `RUNTIME-TASK-CRASHED`.
-- Un trabajador ejecuta `main` una sola vez, así que el estado que `main` crea antes de `BDD.run` y que capturan los pasos (una tabla `ATS`, un `Channel`) lo comparten los escenarios que ejecuta ese trabajador, y lo mismo pasa con el estado de proceso que un paso define, como `Logger.set_level`. Crea ese estado en un paso (un `Background`) para que sea nuevo en cada escenario, o ejecuta con `--isolate`, que da a cada escenario un proceso propio y vuelve a ejecutar `main` para cada uno, como antes de la 0.32. `main` solo debe crear la lista y llamar a `BDD.run`. Ejecutado solo, un programa de pasos imprime cómo ejecutarlo y termina con código 2.
+- Un trabajador ejecuta `main` una sola vez, así que el estado que `main` crea antes de `BDD.run` y que capturan los pasos (una tabla `ATS`, un `Channel`) lo comparten los escenarios que ejecuta ese trabajador, y lo mismo pasa con el estado de proceso que un paso define, como `Logger.set_level`. Crea ese estado en un paso (un `Background`) para que sea nuevo en cada escenario, o ejecuta con `--isolate`, que da a cada escenario un proceso propio y vuelve a ejecutar `main` para cada uno. `main` solo debe crear la lista y llamar a `BDD.run`. Ejecutado solo, un programa de pasos imprime cómo ejecutarlo y termina con código 2.
 - Un paso puede importar archivos y usar `Process.spawn`. Su entrada estándar está vacía (`IO.gets` da el error de fin de entrada). No debe llamar a `Process.parent_read_line` ni a `Process.parent_send`: pertenecen al ejecutor de pruebas.
 
 ## BDD.step y BDD.run {#bddstep-and-bddrun}

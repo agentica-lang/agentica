@@ -70,7 +70,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # Native.wait_* cases in tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a
 # child at the end of the run that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a
 # way to limit the CPUs of a process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v
-# that limits the address space (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's
+# that limits the address space (tests/test_vm_multicore.py); the peak memory of tests/test_vm_list_float32.py is
+# read from /proc, which only Linux has; neither loads an LD_PRELOAD library in front of glibc's
 # getaddrinfo (tests/test_vm_dns.py); the other systems lack the Windows-only modules above and the search of NAME.com
 # and NAME.exe in PATH (tests/test_bytecode_cache.py); Windows and macOS do not drop the SYN of a connect to a full
 # accept queue, so that one case of tests/test_vm_http_timeouts.py skips there (its https case, a server that never
@@ -92,10 +93,12 @@ _NEEDS_POSIX = frozenset({
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
     "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py", "tests/test_examples.py",
     "tests/test_cli_compile.py", "tests/test_vm_http_timeouts.py", "tests/test_terminal.py",
+    "tests/test_vm_list_float32.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
     "tests/test_vm_multicore.py", "tests/test_vm_dns.py", "tests/test_vm_http_timeouts.py",
+    "tests/test_vm_list_float32.py",
 })
 _NEEDS_WINDOWS = WINDOWS_ONLY_MODULES | {"tests/test_bytecode_cache.py", "tests/test_terminal.py"}
 _NEEDS_IPV6 = frozenset({"tests/test_vm_http_connect_to.py"})
@@ -172,7 +175,7 @@ AREAS = {
             "tests/test_term_peer.py",
             "tests/test_vm_stack.py", "tests/test_vm_heap_limit.py",
             "tests/test_vm_jit.py",
-            "tests/test_vm_equality.py", "tests/test_error_kinds.py", "tests/test_time.py",
+            "tests/test_vm_equality.py", "tests/test_error_kinds.py", "tests/test_time.py", "tests/test_vm_list_float32.py",
         ],
     ),
     "library": (

@@ -167,8 +167,8 @@ static bool visit_items(agc_vm *vm, work_stack *s, const agc_value *x, const agc
 }
 
 /* Two packed lists of one kind compare here, with no stack entry per item. Int lists compare each stretch the two
-   cursors share with memcmp (a leaf both lists share is skipped); Floats go one by one, by IEEE 754, so a NaN item
-   is not equal. One unit per item compared, as a pair taken from the stack would cost. */
+   cursors share with memcmp (a leaf both lists share is skipped); Floats and Float32s go one by one, by IEEE 754, so
+   a NaN item is not equal. One unit per item compared, as a pair taken from the stack would cost. */
 static bool same_scalars(agc_vm *vm, const agc_list *x, const agc_list *y) {
   agc_list_cursor left, right;
   size_t compared = 0;
@@ -189,9 +189,11 @@ static bool same_scalars(agc_vm *vm, const agc_list *x, const agc_list *y) {
     }
   } else {
     agc_value a, b;
+    bool narrow = agc_list_kind(x) == AGC_T_FLOAT32;
     while (same && agc_list_cursor_next(&left, &a) && agc_list_cursor_next(&right, &b)) {
       compared++;
-      same = a.tag == b.tag && agc_as_float(vm, a) == agc_as_float(vm, b);
+      same = a.tag == b.tag &&
+             (narrow ? agc_as_float32(vm, a) == agc_as_float32(vm, b) : agc_as_float(vm, a) == agc_as_float(vm, b));
     }
   }
   agc_charge(vm, compared);

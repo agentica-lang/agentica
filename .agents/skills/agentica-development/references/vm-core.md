@@ -43,7 +43,7 @@ rules those comments do not carry.
 
 ## Lists (`vm/list.c`)
 
-The design (trie, unboxed Int and Float leaves, builders, costs) is
+The design (trie, unboxed Int, Float and Float32 leaves, builders, costs) is
 `docs/vm/17-lists.md`. Rules for code that touches it:
 
 - `struct agc_list` is opaque outside `list_impl.h`. Only
