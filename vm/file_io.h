@@ -60,6 +60,13 @@ int agc_fs_fchmod(int fd, int mode);
 /* The permission bits of PATH, a link followed (on Windows through its real path); on Windows only the owner write bit
    counts (read-only or not). */
 int agc_fs_chmod(const char *path, int mode);
+/* Makes the symbolic link LINK whose text is TARGET (any text, no check that it names something): 0, or -1 with errno
+   (EEXIST when LINK exists). On Windows a '/' of TARGET becomes '\\', a target that names a folder makes a folder link,
+   and a refusal for want of the privilege is ENOTSUP. */
+int agc_fs_symlink(const char *target, const char *link);
+/* The text of the symbolic link at PATH, malloc'd (the caller frees it), or NULL with errno (EINVAL when PATH is not
+   a link); on Windows its '\\' are '/'. */
+CC_OWNS char *agc_fs_readlink(const char *path);
 /* Renames FROM to TO, replacing a file at TO in one step (rename on POSIX, MoveFileExW REPLACE_EXISTING on Windows). */
 int agc_fs_replace(const char *from, const char *to);
 #ifdef _WIN32

@@ -348,6 +348,16 @@ Every failure is an error value. The checks run in this order:
   sets or clears the read-only attribute from the owner write bit alone. A
   failure is `filesystem: cannot change the mode` with the path and the system
   error.
+- `File.symlink(target, link, timeout_ms)` is one pool job: `symlink` with the
+  text `target` (not checked, not resolved) at the absolute `link`, which must
+  not exist (`EEXIST` is `io.exists`). The error holds `link` under `path` and
+  `target` under `to`. Windows is `CreateSymbolicLinkW` through libuv with the
+  unprivileged-create flag: a `/` of the text becomes `\`, a target that is a
+  folder when the call is made gives a folder link (stat from the folder of the
+  link when the text is relative), and `ERROR_PRIVILEGE_NOT_HELD` is `ENOTSUP`,
+  the kind `io.unsupported`. `File.readlink(path, timeout_ms)` is `readlink`
+  (one pool job; the text must be UTF-8, else `text.encoding`); Windows shows
+  `/` for each `\`. A path that is not a link is `EINVAL`, `io.failed`.
 - `File.open` mode `create_private` is `open` with `O_WRONLY | O_CREAT | O_EXCL
   | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any existing
   entry, a dangling link included, is an error.

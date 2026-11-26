@@ -27,6 +27,8 @@ File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 File.chmod(path: String, mode: Int, timeout_ms: Int = 30000) -> Result[Void]
+File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void]
+File.readlink(path: String, timeout_ms: Int = 30000) -> Result[String]
 File.try_lock(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Bool]
 Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -82,6 +84,13 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   `0o1363`), 0 to 4095, else an `argument` error. Windows keeps only the owner
   write bit of a file, as the read-only attribute (`File.stat` then gives 438
   or 292); a folder's attribute is not enforced there.
+- `File.symlink(target, link, ms)` makes the symlink `link` with the text
+  `target` (a relative text is read from the folder of `link`; it may name
+  nothing). It never replaces: an existing `link` is `io.exists`. Windows needs
+  Developer Mode or an administrator, else `io.unsupported`; make a folder
+  target first. `File.readlink(path, ms)` gives the text (`io.failed` for a
+  path that is not a link; Windows shows `/` for `\`). A link is told by
+  `File.lstat(path).unwrap!.kind == "link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one
   directory only you can use and fails if the path exists or the parent is

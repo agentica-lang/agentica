@@ -146,6 +146,47 @@ def main() -> Void
 end
 ```
 
+## File.symlink
+
+```signature
+File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Makes the symbolic link `link` whose text is `target`, as Ruby's `File.symlink` does (the target first, the link second).
+
+- The text is kept as given, and `target` need not exist: a link to a missing path (a dangling link) is made, and it works once the target appears. A relative `target` is read from the folder of `link`, not from the working directory, so `File.symlink("a.txt", "dir/b.txt")` links `dir/b.txt` to `dir/a.txt`.
+- It never replaces anything: when `link` exists (a file, a folder or another link, dangling or not), the call fails with `io.exists` and nothing changes. A missing folder in `link` is `io.not_found`. An empty `target` or `link`, or one with a NUL, gives an `argument` error. The `details` of an error hold the `link` as given under `"path"` and the `target` under `"to"`.
+- Windows makes the link with `CreateSymbolicLinkW` and the flag that lets a user without the privilege make it (it needs Developer Mode on; an administrator needs nothing). When the system refuses for want of that right, the error has the kind `io.unsupported`. A `/` in `target` becomes `\`. A `target` that is a folder when the call is made gives a folder link, and one that does not exist yet gives a file link, so make the folder first.
+- A timeout gives an error, but the started call runs to its end.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("model-v2.gguf", "weights", 1000).unwrap!
+  File.symlink("model-v2.gguf", "model.gguf", 1000).unwrap!
+  puts(File.readlink("model.gguf", 1000).unwrap!)
+end
+```
+
+## File.readlink
+
+```signature
+File.readlink(path: String, timeout_ms: Int = 30000) -> Result[String]
+```
+
+Gives the text of the symbolic link at `path` as it was made, with no check that it names anything, so a dangling link reads fine. A `path` that is not a link is an `io.failed` error, and a missing one is `io.not_found`. The last name of `path` is not followed, but a link in a folder above it is.
+
+- To tell a link from other files, `File.lstat(path).unwrap!.kind == "link"` (a missing `path` is an error there).
+- Windows gives `/` for each `\` of the text, which `File.symlink` writes back as `\`: `File.symlink(File.readlink(a).unwrap!, b)` makes a link with the same text on every system.
+
+```agentica {mode="check"}
+def main() -> Void
+  case File.readlink("model.gguf", 1000)
+    ok(text) -> puts("model.gguf -> #{text}")
+    error(e) -> puts(e.kind)
+  end
+end
+```
+
 ## File.open and File.close
 
 ```signature

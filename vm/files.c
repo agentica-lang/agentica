@@ -53,13 +53,15 @@
 #define NO_DEADLINE ((int64_t)-1)
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_CHMOD, FS_NO_MEMORY
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_CHMOD,
+  FS_SYMLINK, FS_READLINK, FS_NO_MEMORY
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD,
+  OP_SYMLINK, OP_READLINK
 } op_kind;
 
 typedef struct {
@@ -889,6 +891,21 @@ static void work_chmod(op *o) {
   if (agc_fs_chmod(o->path, (int)o->mode) != 0) fail_op(o, FS_CHMOD, errno);
 }
 
+/* The link is o->path, the text it holds o->to. */
+static void work_symlink(op *o) {
+  if (agc_fs_symlink(o->to, o->path) != 0) fail_op(o, FS_SYMLINK, errno);
+}
+
+static void work_readlink(op *o) {
+  char *link_text = agc_fs_readlink(o->path);
+  if (!link_text) {
+    fail_op(o, FS_READLINK, errno);
+    return;
+  }
+  o->out = (uint8_t *)link_text;
+  o->out_len = strlen(link_text);
+}
+
 static void work_list(op *o) {
   char *names;
   int rc = agc_fs_list(o->path, &names, &o->out_len, &o->count);
@@ -1362,6 +1379,8 @@ static void work(void *data) {
     case OP_REPLACE: work_replace(o); break;
     case OP_RENAME_OVER: work_rename_over(o); break;
     case OP_CHMOD: work_chmod(o); break;
+    case OP_SYMLINK: work_symlink(o); break;
+    case OP_READLINK: work_readlink(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1553,6 +1572,18 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_LOCK: return agc_system_error(vm, AGC_FAMILY_IO, "filesystem: cannot lock file", o->err);
     case FS_NOT_LOCKABLE: return error_of(vm, AGC_KIND_IO_FAILED, not_lockable);
     case FS_CHMOD: return os_error(vm, "filesystem: cannot change the mode", o->path, path_len, o->err);
+    case FS_READLINK: return os_error(vm, "filesystem: cannot read symbolic link", o->path, path_len, o->err);
+    case FS_SYMLINK: {
+      text t = {0};
+      puts_text(&t, "filesystem: cannot make symbolic link\n  link: ");
+      put(&t, o->path, path_len);
+      puts_text(&t, "\n  target: ");
+      put(&t, o->to, strlen(o->to));
+      put_system_error(vm, &t, o->err);
+      /* ENOTSUP: the system cannot make links at all (Windows without the privilege). */
+      return error_text(vm, o->err == ENOTSUP ? AGC_KIND_IO_UNSUPPORTED : agc_errno_kind(AGC_FAMILY_IO, o->err), &t,
+                        o->err);
+    }
     case FS_RENAME: {
       text t = {0};
       puts_text(&t, "filesystem: cannot rename path\n  from: ");
@@ -1686,7 +1717,8 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   } else {
     switch (o->kind) {
       case OP_READ_TEXT:
-      case OP_READ_LINE: result = text_result(vm, o); break;
+      case OP_READ_LINE:
+      case OP_READLINK: result = text_result(vm, o); break;
       case OP_SHA256: result = bytes_result(o); break;
       case OP_LIST: result = list_result(vm, o); break;
       case OP_REAL: result = real_result(o); break;
@@ -1832,6 +1864,28 @@ static agc_value builtin_chmod(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t mode = agc_as_int(vm, args[1]);
   if (mode < 0 || mode > 07777) return error_of(vm, AGC_KIND_ARGUMENT, "filesystem: mode must be between 0 and 4095");
   return path_job(vm, OP_CHMOD, args[0], agc_as_int(vm, args[2]), mode);
+}
+
+/* File.readlink(path, timeout_ms): the text of the link, which may name nothing. */
+static agc_value builtin_readlink(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_READLINK, args[0], agc_as_int(vm, args[1]));
+}
+
+/* File.symlink(target, link, timeout_ms): the error names the link as its path and the text as its "to". */
+static agc_value builtin_symlink(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *target = agc_as_string(vm, args[0]);
+  if (fs_denied(vm, span)) return agc_error_detail(vm, fs_refused(vm, args[1]), "to", target->data, target->bytes);
+  const agc_string *link = agc_as_string(vm, args[1]);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
+  if (!target->bytes || memchr(target->data, 0, target->bytes)) return bad_path(vm, target);
+  if (!path_string(link)) return bad_path(vm, link);
+  agc_value named_by[] = {args[1], args[0]};
+  op *o = call_op(vm, OP_SYMLINK, NULL);
+  o->path = agc_host_path(vm, link);
+  o->to = agc_cstr(target);
+  return start(vm, o, agc_list_value(agc_list_from_array(named_by, 2)), timeout);
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -2645,6 +2699,8 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.seek", 3, builtin_seek, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.chmod", 3, builtin_chmod, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.symlink", 3, builtin_symlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.readlink", 2, builtin_readlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

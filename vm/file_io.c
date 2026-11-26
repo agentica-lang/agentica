@@ -206,6 +206,59 @@ static size_t folder_length(const char *path) {
   return cut;
 }
 
+/* The text that a realpath or readlink request gave, as a malloc'd copy (a '\\' is a '/' on Windows), or NULL with
+   errno. The request is cleaned up. */
+static char *path_text(int result, uv_fs_t *req) {
+  char *copy = result == 0 ? strdup(req->ptr) : NULL;
+  uv_fs_req_cleanup(req);
+  if (result < 0) os_result(result);
+  else if (!copy) errno = ENOMEM;
+#ifdef _WIN32
+  for (char *p = copy; p && *p; p++) if (*p == '\\') *p = '/';
+#endif
+  return copy;
+}
+
+int agc_fs_symlink(const char *target, const char *link) {
+  if (!target || !*target || !link || !*link) {
+    errno = EINVAL;
+    return -1;
+  }
+  int flags = 0;
+#ifdef _WIN32
+  /* CreateSymbolicLinkW stores the target as it gets it and resolves a relative one only with '\\', and a link to a
+     folder must be made as a folder link. A relative target is looked up from the folder of the link. */
+  size_t length = strlen(target), folder = folder_length(link);
+  char *native = malloc(folder + length + 1);
+  if (!native) {
+    errno = ENOMEM;
+    return -1;
+  }
+  char *text = native + folder;
+  for (size_t k = 0; k <= length; k++) text[k] = target[k] == '/' ? '\\' : target[k];
+  agc_fs_info info;
+  bool rooted = agc_fs_rooted(text, length);
+  if (!rooted) memcpy(native, link, folder);
+  if (agc_fs_stat(rooted ? text : native, &info, true) == 0 && AGC_FS_ISDIR(info.mode)) flags = UV_FS_SYMLINK_DIR;
+  target = text;
+#endif
+  uv_fs_t req;
+  int result = uv_fs_symlink(NULL, &req, target, link, flags, NULL);
+#ifdef _WIN32
+  if (result == UV_EPERM && req.sys_errno_ == ERROR_PRIVILEGE_NOT_HELD) result = UV_ENOTSUP;
+#endif
+  uv_fs_req_cleanup(&req);
+#ifdef _WIN32
+  free(native);
+#endif
+  return os_result(result);
+}
+
+char *agc_fs_readlink(const char *path) {
+  uv_fs_t req;
+  return path_text(uv_fs_readlink(NULL, &req, path, NULL), &req);
+}
+
 int agc_fs_open_beside(const char *path, CC_OWNS_OUT char **name) {
   static atomic_uint counter;
   *name = NULL;
@@ -328,15 +381,7 @@ int agc_fs_list(const char *path, char **names, size_t *size, size_t *count) {
 
 char *agc_fs_realpath(const char *path) {
   uv_fs_t req;
-  int result = uv_fs_realpath(NULL, &req, path, NULL);
-  char *copy = result == 0 ? strdup(req.ptr) : NULL;
-  uv_fs_req_cleanup(&req);
-  if (result < 0) os_result(result);
-  else if (!copy) errno = ENOMEM;
-#ifdef _WIN32
-  for (char *p = copy; p && *p; p++) if (*p == '\\') *p = '/';
-#endif
-  return copy;
+  return path_text(uv_fs_realpath(NULL, &req, path, NULL), &req);
 }
 
 char *agc_fs_cwd(void) {
