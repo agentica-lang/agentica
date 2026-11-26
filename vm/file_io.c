@@ -267,6 +267,13 @@ int agc_fs_fchmod(int fd, int mode) {
   return os_result(result);
 }
 
+int agc_fs_chmod(const char *path, int mode) {
+  uv_fs_t req;
+  int result = uv_fs_chmod(NULL, &req, path, mode, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
 int agc_fs_replace(const char *from, const char *to) {
   uv_fs_t req;
   int result = uv_fs_rename(NULL, &req, from, to, NULL);

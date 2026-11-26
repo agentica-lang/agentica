@@ -341,6 +341,11 @@ Every failure is an error value. The checks run in this order:
 - `File.lstat` is `lstat`: a link has `kind` `"link"`, `size_bytes` as its text
   length, and its own mode, owner and mtime. Other paths give what `File.stat`
   gives.
+- `File.chmod(path, mode, timeout_ms)` is one pool job: `chmod` of the path (a
+  link is followed) with a mode from 0 to 07777, else an `argument` error before
+  the job starts. libuv's `uv_fs_chmod` on Windows sets or clears the read-only
+  attribute from the owner write bit alone. A failure is `filesystem: cannot
+  change the mode` with the path and the system error.
 - `File.open` mode `create_private` is `open` with `O_WRONLY | O_CREAT | O_EXCL
   | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any existing
   entry, a dangling link included, is an error.

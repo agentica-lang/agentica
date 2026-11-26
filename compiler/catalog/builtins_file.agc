@@ -17,6 +17,23 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "File.chmod",
+    parameters: [
+      Model.Named(name: "path", type: Types.Type.String),
+      Model.Named(name: "mode", type: Types.Type.Int),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "File.chmod",
+    effects: ["filesystem"],
+    description: (
+      "Set the permission bits (0 to 4095, with setuid, setgid and sticky) of the file or directory at path, " +
+      "following a symbolic link; Windows keeps only the owner write bit, as the read-only attribute; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "File.chunks",
     parameters: [
       Model.Named(name: "path", type: Types.Type.String),

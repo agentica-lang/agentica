@@ -53,13 +53,13 @@
 #define NO_DEADLINE ((int64_t)-1)
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_NO_MEMORY
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_CHMOD, FS_NO_MEMORY
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD
 } op_kind;
 
 typedef struct {
@@ -885,6 +885,10 @@ static void work_stat(op *o) {
   o->group_id = (int64_t)info.gid;
 }
 
+static void work_chmod(op *o) {
+  if (agc_fs_chmod(o->path, (int)o->mode) != 0) fail_op(o, FS_CHMOD, errno);
+}
+
 static void work_list(op *o) {
   char *names;
   int rc = agc_fs_list(o->path, &names, &o->out_len, &o->count);
@@ -1357,6 +1361,7 @@ static void work(void *data) {
     case OP_RENAME: work_rename(o); break;
     case OP_REPLACE: work_replace(o); break;
     case OP_RENAME_OVER: work_rename_over(o); break;
+    case OP_CHMOD: work_chmod(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1547,6 +1552,7 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_REFUSED: return error_of(vm, AGC_KIND_ARGUMENT, refused_path);
     case FS_LOCK: return agc_system_error(vm, AGC_FAMILY_IO, "filesystem: cannot lock file", o->err);
     case FS_NOT_LOCKABLE: return error_of(vm, AGC_KIND_IO_FAILED, not_lockable);
+    case FS_CHMOD: return os_error(vm, "filesystem: cannot change the mode", o->path, path_len, o->err);
     case FS_RENAME: {
       text t = {0};
       puts_text(&t, "filesystem: cannot rename path\n  from: ");
@@ -1763,14 +1769,20 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   return agc_void();
 }
 
-/* A job on the file at GIVEN, a String: the job's context, so that its error names it (done). */
-static agc_value path_op(agc_vm *vm, op_kind kind, agc_value given, int64_t timeout) {
+/* A job on the file at GIVEN, a String: the job's context, so that its error names it (done). MODE is the one the job
+   sets (OP_CHMOD); a stat job fills the field itself. */
+static agc_value path_job(agc_vm *vm, op_kind kind, agc_value given, int64_t timeout, int64_t mode) {
   const agc_string *path = agc_as_string(vm, given);
   if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
   if (!path_string(path)) return bad_path(vm, path);
   op *o = call_op(vm, kind, NULL);
   o->path = agc_host_path(vm, path);
+  o->mode = mode;
   return start(vm, o, given, timeout);
+}
+
+static agc_value path_op(agc_vm *vm, op_kind kind, agc_value given, int64_t timeout) {
+  return path_job(vm, kind, given, timeout, 0);
 }
 
 static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1812,6 +1824,14 @@ static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   return path_op(vm, OP_SHA256, args[0], agc_as_int(vm, args[1]));
+}
+
+/* File.chmod(path, mode, timeout_ms): the permission bits, a link followed (Windows: the owner write bit only). */
+static agc_value builtin_chmod(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  int64_t mode = agc_as_int(vm, args[1]);
+  if (mode < 0 || mode > 07777) return error_of(vm, AGC_KIND_ARGUMENT, "filesystem: mode must be between 0 and 4095");
+  return path_job(vm, OP_CHMOD, args[0], agc_as_int(vm, args[2]), mode);
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -2624,6 +2644,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.sha256.bytes", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.seek", 3, builtin_seek, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"File.chmod", 3, builtin_chmod, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

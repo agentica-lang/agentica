@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "b52482a3be62"
+source_hash: "2b12a9d7639a"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -125,6 +125,25 @@ File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 ```
 
 Igual que `File.stat`, pero no sigue el enlace simbólico: `kind` es `"link"`, `size_bytes` es la longitud del texto del enlace, y los demás campos son los del propio enlace.
+
+## File.chmod {#filechmod}
+
+```signature
+File.chmod(path: String, mode: Int, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Cambia los bits de permiso del archivo o directorio en `path`, en la forma que lee `File.stat`: `File.chmod(path, 0o755)` hace ejecutable un archivo. Un enlace simbólico se sigue, así que cambia su destino. `mode` va de 0 a 4095 (octal 7777, con setuid, setgid y sticky); otro valor da un error `argument`, y una ruta que no existe da `io.not_found`.
+
+- Unix: los bits van a `chmod(2)` tal como se dan, y la umask no se aplica. El sistema puede borrar setgid cuando no perteneces al grupo del archivo.
+- Windows no tiene bits de Unix: solo cuenta el bit de escritura del propietario. Con ese bit puesto el archivo es escribible (`File.stat` da 438), y sin él es de solo lectura (292). Los demás bits se ignoran.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("tool.sh", "echo hi\n", 1000).unwrap!
+  File.chmod("tool.sh", 0o755, 1000).unwrap!
+  puts(File.stat("tool.sh", 1000).unwrap!.mode)
+end
+```
 
 ## File.open y File.close {#fileopen-and-fileclose}
 

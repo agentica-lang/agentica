@@ -1072,3 +1072,67 @@ def test_path_replace_swaps_a_file_or_link_in_one_step_and_refuses_a_directory(n
     assert (root / "other.txt").read_text() == "other"
     assert sorted(path.name for path in root.iterdir()) == [
         "blocked.txt", "folder", "from-link.txt", "link.txt", "missing.txt", "old.txt", "other.txt", "target.txt"]
+
+
+CHMOD_PROGRAM = r"""def show(r: Result[Void]) -> Void
+  case r
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{e.message.split("\n")[0]}")
+  end
+end
+
+def mode(path: String) -> Int = File.stat(path).unwrap!.mode
+
+def main() -> Void
+  path = System.args()[0]
+  show(File.chmod(path, 0o444))
+  puts(mode(path))
+  show(File.chmod(path, 0o755))
+  puts(mode(path))
+  show(File.chmod(path, 4096))
+  show(File.chmod(path, -1))
+  show(File.chmod(path + ".missing", 0o644, 1000))
+  show(File.chmod(path, 0o644, 0))
+end
+"""
+
+
+def test_file_chmod_sets_the_mode_that_file_stat_reads_back_and_refuses_a_bad_mode_or_path(new_dir, run_program):
+    path = new_dir() / "mode.txt"
+    path.write_text("text")
+    output = run_program(CHMOD_PROGRAM, [str(path)])
+    # Windows keeps the owner write bit only, as the read-only attribute: 0o444 and 0o666.
+    assert output.splitlines() == [
+        "ok", "292", "ok", "438" if WINDOWS else "493",
+        "argument filesystem: mode must be between 0 and 4095",
+        "argument filesystem: mode must be between 0 and 4095",
+        "io.not_found filesystem: cannot change the mode",
+        "argument filesystem: timeout must be positive milliseconds",
+    ], output
+    assert path.read_text() == "text"
+    denied = path.with_name("denied.agc")
+    denied.write_text('def main() -> Void\n  puts(File.chmod(System.args()[0], 0o600).message)\nend\n')
+    result = run(cli() + ["--deny-fs", denied, path], env=vm_environment())
+    assert result.stdout.startswith("denied: --deny-fs turns off file access"), (result.stdout, result.stderr)
+
+
+@host_only(WINDOWS, "POSIX permission bits, setuid and symbolic links; Windows keeps only the read-only bit")
+def test_file_chmod_follows_a_link_changes_a_directory_and_sets_every_bit_of_a_mode(new_dir, run_program):
+    root = new_dir()
+    target, link, folder = root / "target.txt", root / "link.txt", root / "folder"
+    target.write_text("text")
+    target.chmod(0o600)
+    os.symlink("target.txt", link)
+    folder.mkdir()
+    output = run_program("""def main() -> Void
+  root = System.args()[0]
+  puts(File.chmod(root + "/link.txt", 0o751).ok?)
+  puts(File.chmod(root + "/folder", 0o700).ok?)
+  puts(File.chmod(root + "/target.txt", 0o4755).ok?)
+  puts(File.stat(root + "/target.txt").unwrap!.mode)
+end
+""", [str(root)])
+    assert output == "true\ntrue\ntrue\n%d\n" % 0o4755
+    assert link.is_symlink() and os.readlink(link) == "target.txt"
+    assert target.stat().st_mode & 0o7777 == 0o4755
+    assert folder.stat().st_mode & 0o777 == 0o700

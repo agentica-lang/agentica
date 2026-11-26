@@ -125,6 +125,25 @@ File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 
 Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own.
 
+## File.chmod
+
+```signature
+File.chmod(path: String, mode: Int, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Sets the permission bits of the file or directory at `path`, in the form `File.stat` reads them: `File.chmod(path, 0o755)` makes a file executable. A symbolic link is followed, so its target changes. `mode` is 0 to 4095 (octal 7777, setuid, setgid and sticky included); another value gives an `argument` error, and a missing path gives `io.not_found`.
+
+- Unix: the bits go to `chmod(2)` as given, and the umask does not apply. The system may clear setgid when you are not in the file's group.
+- Windows has no Unix bits: only the owner write bit counts. With it set the file is writable (`File.stat` gives 438), with it clear the file is read-only (292). The other bits are ignored.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("tool.sh", "echo hi\n", 1000).unwrap!
+  File.chmod("tool.sh", 0o755, 1000).unwrap!
+  puts(File.stat("tool.sh", 1000).unwrap!.mode)
+end
+```
+
 ## File.open and File.close
 
 ```signature
