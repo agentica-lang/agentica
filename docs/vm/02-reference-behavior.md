@@ -373,7 +373,11 @@ Every failure is an error value. The checks run in this order:
   `io.failed`.
 - `File.open` mode `create_private` is `open` with `O_WRONLY | O_CREAT | O_EXCL
   | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any existing
-  entry, a dangling link included, is an error.
+  entry, a dangling link included, is an error. Mode `temp` opens the same way
+  and keeps the path and the device and inode of the new file; every release of
+  the handle (a close, a timed-out close, the end of its task or of the run)
+  removes the path after the descriptor is closed, only if it still has that
+  device and inode (no other file, no moved file, no link is removed).
 - `File.try_lock(handle, timeout_ms)` is `flock(LOCK_EX | LOCK_NB)` in a pool
   job. `ok(true)` means the lock is taken (again on the same handle, too);
   `ok(false)` means another open file description holds it. The lock lasts

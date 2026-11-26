@@ -56,7 +56,10 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
 - Modes: `read` needs an existing non-directory; `write` creates or truncates;
   `append` creates or appends; `create_private` creates a new write-only file
   only you can use and fails if the path exists (a dangling link too; it never
-  follows a link). Unix: mode 0600.
+  follows a link). Unix: mode 0600. `temp` is `create_private` that removes
+  the file when the handle closes (also when its task is cancelled or ends, or
+  the run ends) unless its path no longer names that file: write, then
+  `Path.replace(path, final)` while open, then close.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns empty bytes
   at EOF; `write_bytes` takes at most 1048576 bytes (`bytes.md`).

@@ -227,8 +227,11 @@ Opens a file for streaming.
 | `"write"` | create the file, or empty it |
 | `"append"` | write at the end of the file |
 | `"create_private"` | a new file that only you can read and write |
+| `"temp"` | like `"create_private"`, and the file is removed when the handle closes unless its path was moved away |
 
 `"create_private"` fails when the path exists (a dangling link too) and never follows a link, so another user cannot redirect the write. Unix: mode 0600, less where the umask clears bits. Windows: a protected DACL that grants only the current user; creation fails unless the opened object has that owner and DACL.
+
+`"temp"` is for a file that must not be left behind half written: write it, then move it to its final name with [`Path.replace`](/library/io-and-system/files/#pathreplace) while the handle is open, and close the handle. The close removes the file only if its path still names the file the handle made, so a file moved away, or another file at that path, stays. A handle that is never closed by the program (its task is cancelled, fails or ends, or the program ends) is closed the same way, so a half-written file does not stay. A program that is killed leaves the file.
 
 `close` writes pending data. Closing twice is fine. Timeouts are positive milliseconds and include the wait for the handle's lock: a timeout during active I/O closes the handle, and a timeout while waiting for the lock keeps it open.
 

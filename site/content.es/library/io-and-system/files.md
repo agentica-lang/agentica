@@ -228,8 +228,11 @@ Abre un archivo para trabajar en flujo.
 | `"write"` | crear el archivo, o vaciarlo |
 | `"append"` | escribir al final del archivo |
 | `"create_private"` | un archivo nuevo que solo tú puedes leer y escribir |
+| `"temp"` | como `"create_private"`, y el archivo se borra al cerrar el handle salvo que su ruta se haya movido |
 
 `"create_private"` falla cuando la ruta ya existe (también un enlace colgado) y nunca sigue un enlace, así que otro usuario no puede desviar la escritura. En Unix: modo 0600, o menos cuando la umask quita bits. En Windows: una DACL protegida que solo concede acceso al usuario actual; la creación falla salvo que el objeto abierto tenga ese propietario y esa DACL.
+
+`"temp"` sirve para un archivo que no debe quedar a medias: escríbelo, muévelo a su nombre final con [`Path.replace`](/library/io-and-system/files/#pathreplace) mientras el handle sigue abierto, y cierra el handle. El cierre borra el archivo solo si su ruta aún nombra el archivo que creó el handle, así que un archivo movido, u otro archivo en esa ruta, se queda. Un handle que el programa nunca cierra (su tarea se cancela, falla o termina, o el programa termina) se cierra igual, así que un archivo a medias no se queda. Un programa al que matan deja el archivo.
 
 `close` escribe los datos pendientes. Cerrar dos veces está bien. Los tiempos de espera son milisegundos positivos e incluyen la espera del bloqueo del handle: un tiempo de espera durante una E/S activa cierra el handle, y uno mientras se espera el bloqueo lo deja abierto.
 

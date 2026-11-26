@@ -12,6 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `File.copy(from, to)` copies a file with its permission bits, in one step (#1422).
 - `System.hostname()` gives the host name of the machine (#1422).
+- `File.open(path, "temp")` makes a file that is removed when the handle closes (also when its task is cancelled or the run ends) unless its path was moved away first (#1875).
 - A native module reads a `List[Float32]` in place as C floats and makes one from a C array, with no term per item (`an_float32_run`, `an_float32s`, C API 1.6) (#2031).
 
 ## [0.40.0-beta.1] - 2026-11-26

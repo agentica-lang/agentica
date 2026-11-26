@@ -118,7 +118,7 @@ def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(ro
     try:
         lines = run_program(root, work, MODES_PROGRAM, "modes", root)
         assert lines[:8] == ["true", "false", "false", "true", "true", "true", "false", "false"]
-        assert lines[8] == 'error("filesystem: mode must be read, write, append, or create_private", kind: "argument")'
+        assert lines[8] == 'error("filesystem: mode must be read, write, append, create_private, or temp", kind: "argument")'
         secret = root / "private" / "secret.bin"
         if not WINDOWS:
             assert stat.S_IMODE((root / "private").stat().st_mode) == 0o700

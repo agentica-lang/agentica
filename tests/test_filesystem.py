@@ -302,6 +302,47 @@ end
     assert path.read_text() == "hello world\n"
 
 
+def test_a_temp_file_is_removed_unless_its_path_was_moved_away_first(new_dir, run_program):
+    root = new_dir()
+    output = run_program(r"""def holder(path: String) -> Result[Int]
+  f = File.open(path, "temp", 1000).unwrap!
+  _ = File.write(f, "partial", 1000)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def crash(path: String) -> Result[Int]
+  f = File.open(path, "temp", 1000).unwrap!
+  _ = File.write(f, "partial", 1000)
+  n = 0
+  return ok(1 / n)
+end
+
+def main() -> Void
+  root = System.args()[0]
+  closed = File.open(root + "/closed.part", "temp", 1000).unwrap!
+  _ = File.write(closed, "gone", 1000)
+  puts(File.close(closed, 1000).ok?)
+  moved = File.open(root + "/moved.part", "temp", 1000).unwrap!
+  _ = File.write(moved, "kept", 1000)
+  _ = File.flush(moved, 1000)
+  puts(Path.replace(root + "/moved.part", root + "/moved.txt", 1000).ok?)
+  puts(File.close(moved, 1000).ok?)
+  held = Task.spawn(&holder, root + "/cancelled.part")
+  Task.sleep(100)
+  Task.cancel(held)
+  puts(Task.await(held).ok?)
+  puts(Task.await(Task.spawn(&crash, root + "/crashed.part")).ok?)
+  puts(File.open(root + "/taken.part", "create_private", 1000).ok?)
+  puts(File.open(root + "/taken.part", "temp", 1000).ok?)
+  _ = File.open(root + "/left.part", "temp", 1000).unwrap!
+end
+""", [root])
+    assert output == "true\ntrue\ntrue\nfalse\nfalse\ntrue\nfalse\n"
+    assert sorted(item.name for item in root.iterdir()) == ["moved.txt", "taken.part"]
+    assert (root / "moved.txt").read_text() == "kept"
+
+
 def test_the_run_waits_for_a_timed_out_close_so_its_buffered_write_reaches_the_disk(new_dir, run_program):
     # One pool thread, held by the digest of a large sparse file: the close queues behind it, so its 1 ms deadline
     # passes before its work runs, and main ends at once. Nothing is printed, so no output flush holds the exit.
