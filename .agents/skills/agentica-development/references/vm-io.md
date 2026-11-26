@@ -128,8 +128,11 @@ Order and rules: `docs/vm/10-io-scheduler.md` §10.2.2, "End of run", and
   calls only. `owns_st` marks the request that frees the file state.
 - `File.open(path, "temp")` (`OP_OPEN_TEMP`) is `create_private` whose state
   keeps `temp` and the device and inode of the new file: `work_close` and
-  `free_state` call `remove_temp`, which unlinks the path only while it still
-  has that identity (a `Path.replace` of the path first keeps the file).
+  `free_state` ask `temp_named` before the descriptor closes and then call
+  `remove_temp`, which unlinks the path only if it had that identity (a
+  `Path.replace` of the path first keeps the file). Best effort: a swap of the
+  path between the check and the unlink loses the new file; only `File.close`
+  reports an unlink error.
 - BDD driver builtins (`File.open(path, "create_private")`, `File.try_lock`,
   `Path.remove`, `Path.rename`, `Path.real`, `File.lstat`, `Dir.mkdir_private`)
   are pool jobs with the rules of `docs/vm/02-reference-behavior.md` §2.8. Keep

@@ -308,7 +308,6 @@ static void test_temp_files(const char *directory) {
   assert(!agc_as_result(&vm, call("File.open", open_args))->ok);
   check_text(string(taken), "keep");
   assert(agc_fs_unlink(taken) == 0);
-#ifndef _WIN32
   /* Another file at the path is not removed: only the file the handle made is. */
   open_args[0] = string(temp);
   done[0] = ok(call("File.open", open_args));
@@ -317,7 +316,6 @@ static void test_temp_files(const char *directory) {
   ok(call("File.close", done));
   check_text(string(temp), "other");
   assert(agc_fs_unlink(temp) == 0);
-#endif
 }
 
 /* File.sha256 streams a whole regular file in fixed chunks with O(chunk) memory: the digests around the padding

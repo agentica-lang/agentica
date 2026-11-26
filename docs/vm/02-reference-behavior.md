@@ -376,8 +376,14 @@ Every failure is an error value. The checks run in this order:
   entry, a dangling link included, is an error. Mode `temp` opens the same way
   and keeps the path and the device and inode of the new file; every release of
   the handle (a close, a timed-out close, the end of its task or of the run)
-  removes the path after the descriptor is closed, only if it still has that
-  device and inode (no other file, no moved file, no link is removed).
+  removes the path after the descriptor is closed, only if it had that device
+  and inode when the close began (no other file, no moved file, no link is
+  removed). The check is best effort: a process that swaps the path between the
+  check and the unlink loses the file it put there. An explicit `File.close`
+  returns the error of an unlink that fails for any reason but a missing path
+  (unless a write error came first); an implicit release cannot report it. A
+  file system whose files have no inode number (`ino` 0) refuses the open with
+  `ENOTSUP`. A process that ends by SIGKILL or a crash leaves the file.
 - `File.try_lock(handle, timeout_ms)` is `flock(LOCK_EX | LOCK_NB)` in a pool
   job. `ok(true)` means the lock is taken (again on the same handle, too);
   `ok(false)` means another open file description holds it. The lock lasts

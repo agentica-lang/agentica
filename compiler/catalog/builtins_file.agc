@@ -156,7 +156,7 @@ ROWS: List[Model.Builtin] = [
     description: (
       "Open a regular file for read, write, append, create_private or temp with a deadline; create_private makes a " +
       "new file only the current user can use and fails when the path exists, and temp does the same and removes " +
-      "the file when the handle closes unless its path was moved away."
+      "the file when the handle closes unless its path was moved away; SIGKILL or a crash leaves it."
     ),
     alternatives: [
       Model.Builtin(

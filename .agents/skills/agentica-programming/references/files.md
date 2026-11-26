@@ -59,7 +59,8 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   follows a link). Unix: mode 0600. `temp` is `create_private` that removes
   the file when the handle closes (also when its task is cancelled or ends, or
   the run ends) unless its path no longer names that file: write, then
-  `Path.replace(path, final)` while open, then close.
+  `Path.replace(path, final)` while open, then close. SIGKILL or a crash leaves
+  the file.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns empty bytes
   at EOF; `write_bytes` takes at most 1048576 bytes (`bytes.md`).

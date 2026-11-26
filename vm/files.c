@@ -399,24 +399,38 @@ static file_state *new_state(bool readable, bool writable) {
   return st;
 }
 
-/* Removes the path of a "temp" handle, once its descriptor is closed, when it still names the file the handle made: the
-   file was not moved away (Path.replace, Path.rename) and no other file took the name. */
-static void remove_temp(file_state *st) {
+/* Whether the path of a "temp" handle still names the file the handle made: it was not moved away (Path.replace,
+   Path.rename) and no other file took the name. Asked before the descriptor closes, while the open file keeps its
+   inode from being reused. Best effort: a process that swaps the path between this check and the unlink loses the file
+   it put there. */
+static bool temp_named(const file_state *st) {
   agc_fs_info info;
-  if (!st->temp) return;
-  if (st->temp_ino && agc_fs_stat(st->temp, &info, false) == 0 && info.dev == st->temp_dev && info.ino == st->temp_ino)
-    agc_fs_unlink(st->temp);
-  free(st->temp);
+  return st->temp && agc_fs_stat(st->temp, &info, false) == 0 && info.dev == st->temp_dev && info.ino == st->temp_ino;
+}
+
+/* Removes the path of a "temp" handle once its descriptor is closed, when NAMED (temp_named, asked before the close),
+   and forgets it. The errno of an unlink that fails for another reason than a path already gone, else 0. With PATH
+   the path passes to *PATH, for the error of a close. */
+static int remove_temp(file_state *st, bool named, char **path) {
+  int err = 0;
+  if (!st->temp) return 0;
+  if (named && agc_fs_unlink(st->temp) != 0 && errno != ENOENT) err = errno;
+  if (path)
+    *path = st->temp;
+  else
+    free(st->temp);
   st->temp = NULL;
+  return err;
 }
 
 static void free_state(file_state *st) {
   if (!st) return;
+  bool named = temp_named(st);
   if (st->poller)
     agc_poller_close(st->poller);
   else if (st->fd >= 0)
     agc_fs_close(st->fd);
-  remove_temp(st);
+  (void)remove_temp(st, named, NULL);
   free(st->buf);
   free(st);
 }
@@ -1366,6 +1380,8 @@ static bool remember_temp(op *o, int fd) {
   int err = 0;
   if (agc_fs_fstat(fd, &info) != 0) {
     err = errno;
+  } else if (info.ino == 0) {
+    err = ENOTSUP;
   } else if (!(o->st->temp = strdup(o->path))) {
     err = ENOMEM;
   }
@@ -1385,6 +1401,7 @@ static bool remember_temp(op *o, int fd) {
 static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
+  if (o->kind == OP_OPEN_TEMP && !remember_temp(o, fd)) return;
   agc_fs_info info;
   bool stated = o->regular && agc_fs_fstat(fd, &info) == 0;
   if (o->regular && (!stated || !AGC_FS_ISREG(info.mode))) {
@@ -1400,7 +1417,6 @@ static void work_open(op *o) {
     return;
   }
   if (!o->st->polled) agc_fs_blocking(fd);
-  if (o->kind == OP_OPEN_TEMP && !remember_temp(o, fd)) return;
   o->st->fd = fd;
 }
 
@@ -1531,9 +1547,11 @@ static void work_close(op *o) {
   file_state *st = o->st;
   if (st->writable && st->end && !write_all(st->fd, st->buf, st->end, &o->err)) o->status = FS_WRITE;
   st->end = 0;
+  bool named = temp_named(st);
   agc_fs_close(st->fd);
   st->fd = -1;
-  remove_temp(st);
+  int err = remove_temp(st, named, &o->path);
+  if (err && o->status == FS_OK) fail_op(o, FS_REMOVE, err);
 }
 
 static void work(void *data) {
@@ -1574,8 +1592,9 @@ static void work(void *data) {
 static void drop(void *data) {
   op *o = data;
   /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes, or
-     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush); only a polled
-     descriptor is non-blocking (work_open), so its flush never waits. */
+     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush), and the release of a
+     temp handle is a stat and an unlink of its path; only a polled descriptor is non-blocking (work_open), so its
+     flush never waits. */
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
     agc_poller_close(o->poller);
