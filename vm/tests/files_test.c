@@ -444,7 +444,7 @@ int main(void) {
   unsigned invalid_flags[] = {
     AGC_FS_TRUNCATE, AGC_FS_WRITE | AGC_FS_APPEND | AGC_FS_TRUNCATE,
     AGC_FS_WRITE | AGC_FS_EXCLUSIVE, 1u << 30, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_PRIVATE,
-    AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_SHARE_DELETE
+    AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_SHARED
   };
   for (size_t k = 0; k < sizeof invalid_flags / sizeof invalid_flags[0]; k++) {
     assert(agc_fs_open(path, invalid_flags[k]) == -1 && errno == EINVAL);
