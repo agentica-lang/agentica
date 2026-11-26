@@ -115,12 +115,11 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   the permission bits and writes through a symlink, which stays a link. A
   missing file is an error; Windows refuses a read-only one.
 - `File.copy(from, to, ms)` copies a regular file of any size with its
-  permission bits (not setuid, setgid or sticky), in one rename like
-  `Path.replace`: `to` is replaced or made, a symlink at `to` is replaced itself,
-  a directory is `io.is_directory`; a failure leaves `to` as it was. The error
-  `details` hold `from` and `to`. Windows refuses a read-only `to`.
-- A path exists when `File.stat(path, ms).ok?` (`File.lstat` for a dangling
-  link); there is no separate exists call.
+  permission bits (not setuid, setgid or sticky), in one rename: `to` is
+  replaced or made, a symlink at `to` is followed and stays a link, a directory
+  is `io.is_directory`, a FIFO or device `io.exists`; a failure, a timeout or
+  the end of the program leaves `to` as it was. The error `details` hold `from`
+  and `to`. Windows refuses a read-only `to`.
 - `Path.rename(from, to, ms)` moves a file, a symlink (as a link) or a directory
   to a path that does not exist, atomically: an existing target, even an empty
   directory, is an error and never replaced, so racing programs get one winner.

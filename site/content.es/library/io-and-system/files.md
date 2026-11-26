@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "baa6fe820906"
+source_hash: "8e7292a0cda9"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -69,12 +69,12 @@ def main() -> Void
 end
 ```
 
-- Los bytes van a un archivo nuevo junto a `to`, que solo el propietario puede leer mientras se escribe; después toma los bits de permiso de `from`, se vuelca al disco y se renombra sobre `to`, como hace `Path.replace`. La umask no se aplica, y setuid, setgid y sticky no se copian. Un fallo borra el archivo nuevo y deja `to` como estaba. Un proceso terminado a mitad de la copia puede dejar un archivo oculto `.agc-PID-N.tmp` en la carpeta de `to`. Copiar necesita permiso de escritura en esa carpeta.
-- `to` se reemplaza cuando existe y se crea cuando no existe. Un enlace simbólico en `to` se reemplaza él mismo, y el archivo al que apunta queda intacto. Una carpeta en `to` da `io.is_directory` y no se lee nada. Un `from` que es un enlace simbólico se sigue. Un `from` que no es un archivo regular (una carpeta, una FIFO o un dispositivo) da `error("filesystem: path does not refer to a regular file")`.
+- Los bytes van a un archivo nuevo junto a `to`, que en POSIX solo el propietario puede leer mientras se escribe; después toma los bits de permiso de `from`, se vuelca al disco y se renombra sobre `to`, como hace `Path.replace`. La umask no se aplica, y setuid, setgid y sticky no se copian. En un sistema de archivos que no guarda bits de permiso (vfat, exFAT) el archivo nuevo conserva los bits que le dio el sistema. Un fallo borra el archivo nuevo y deja `to` como estaba. Un proceso terminado a mitad de la copia puede dejar un archivo oculto `.agc-PID-N.tmp` en la carpeta de `to`. Copiar necesita permiso de escritura en esa carpeta.
+- `to` se reemplaza cuando existe y se crea cuando no existe. Un enlace simbólico en `to` se sigue y sigue siendo un enlace, como con `File.replace` y `File.write_text`: el archivo al que apunta es el que se reemplaza, y un enlace roto da `io.not_found`. Una carpeta en `to`, también detrás de un enlace, da `io.is_directory`, y un `to` que no es un archivo regular (una FIFO, un dispositivo o un socket) da `io.exists`; entonces no se lee nada. Un `from` que es un enlace simbólico se sigue. Un `from` que no es un archivo regular (una carpeta, una FIFO o un dispositivo) da `error("filesystem: path does not refer to a regular file")`, sin esperar.
 - El archivo nuevo pertenece al usuario que ejecuta el programa. El propietario, las fechas y los demás atributos de `from` no se copian, y un enlace duro de `to` conserva los bytes antiguos. Copiar un archivo sobre sí mismo deja una copia de él.
 - Los `details` de un error guardan `from` bajo `"path"` y `to` bajo `"to"`.
-- Windows conserva solo el bit de solo lectura de `from`, y rechaza con `io.permission` un `to` de solo lectura, que queda como estaba.
-- Un tiempo de espera da un error, pero la copia ya iniciada llega hasta el final.
+- Un tiempo de espera termina la copia: se detiene en su siguiente bloque de 64 KiB, borra el archivo nuevo y deja `to` como estaba. Lo mismo hace el fin del programa, que espera esa parada corta. Una tarea cancelada solo deja de esperar: su copia llega hasta el final.
+- Windows conserva solo el bit de solo lectura de `from`, y rechaza con `io.permission` un `to` de solo lectura, dejándolo como estaba.
 
 ## File.append_text {#fileappend_text}
 
@@ -132,9 +132,9 @@ Devuelve un `File.Info`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user
 
 - `kind` usa el nombre de `File::Stat#ftype` de Ruby: `"file"` (solo un archivo regular), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (como `/dev/null`), `"blockSpecial"` o `"unknown"`. Windows da `"file"`, `"directory"`, `"link"` (`File.lstat` de un punto de reanálisis) y `"characterSpecial"` para `NUL`. Comprueba `kind == "file"` antes de leer una ruta que tú no creaste: una lectura de una FIFO puede esperar a un escritor.
 
-- Para comprobar que una ruta existe, usa `File.stat(path, 1000).ok?` (`File.lstat` cuando cuenta un enlace roto): no hay `File.exists?`, porque el resultado ya lo dice y una comprobación en disco necesita un tiempo de espera y un error.
 - `mode` son los bits de permiso como un `Int`, con setuid, setgid y sticky: `rw-------` es 384 (octal 600).
 - Windows no tiene bits de Unix ni ids de propietario: `mode` es solo el atributo de solo lectura (438 escribible, 292 de solo lectura; no dice nada sobre la ACL), y `user_id` y `group_id` son siempre 0, que no es el propietario.
+- Para comprobar que una ruta existe (el `File.exist?` de Ruby), usa `File.stat(path, 1000).ok?`, o `File.lstat` cuando cuenta un enlace roto: no hay una llamada aparte, porque el resultado ya lo dice y una comprobación en disco necesita un tiempo de espera y un error.
 
 ```agentica {mode="check"}
 def main() -> Void

@@ -297,6 +297,23 @@ int agc_fs_fchmod(int fd, int mode) {
   return os_result(result);
 }
 
+int agc_fs_fchmod_if_able(int fd, int mode) {
+  if (agc_fs_fchmod(fd, mode) == 0 || errno == EPERM || errno == ENOTSUP) return 0;
+#if defined(EOPNOTSUPP) && EOPNOTSUPP != ENOTSUP
+  if (errno == EOPNOTSUPP) return 0;
+#endif
+  return -1;
+}
+
+bool agc_fs_replaceable(const agc_fs_info *info) {
+#ifdef _WIN32
+  return (info->mode & 0200) != 0;
+#else
+  (void)info;
+  return true;
+#endif
+}
+
 int agc_fs_chmod(const char *path, int mode) {
 #ifdef _WIN32
   /* libuv calls _wchmod there, which changes the attribute of a link itself; chmod(2) follows the link. */

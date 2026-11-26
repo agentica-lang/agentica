@@ -25,9 +25,12 @@ A blocked `read()` on a pool thread would hang the VM at exit: the exit path
 joins the pool, and the pool would wait for a FIFO that never writes.
 
 - **Regular files** (and directories) use the libuv thread pool, since a read or
-  write on them ends in bounded time. The other bounded pool work is DNS
-  (`getaddrinfo`) and the TLS setup jobs that load CA, certificate and key files
-  (§10.2.2, pool size).
+  write on them ends in bounded time. A whole-file call of any size
+  (`File.sha256`, `File.copy`) is a loop of such reads and writes on one pool
+  thread; `File.copy` also stops between two blocks when its deadline passed or
+  the run is over (`work_copy`), and `File.sha256` runs to its end. The other
+  bounded pool work is DNS (`getaddrinfo`) and the TLS setup jobs that load CA,
+  certificate and key files (§10.2.2, pool size).
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits

@@ -417,15 +417,25 @@ Every failure is an error value. The checks run in this order:
   timeout the job runs to its end (14.3).
 - `File.copy(from, to, timeout_ms)` is one pool job with the paths checked as
   for `Path.rename`. `from` is opened as a read is (non-blocking, so a FIFO
-  never blocks the thread) and must be a regular file by its `fstat`, else the
-  error of a read of it; a directory at `to` (lstat) is `EISDIR` before any
-  byte is read. The bytes go in `CHUNK` blocks to `.agc-PID-N.tmp` beside `to`
-  (as `File.replace`: exclusive, no link followed, mode 0600 while written), then
-  `fchmod` to `from`'s mode & 0777, `fsync` and `agc_fs_replace` over `to`, so a
-  link at `to` is replaced itself; the folder is then flushed on POSIX. Every
-  failure after the source is open is `filesystem: cannot copy file` with `from`
-  and `to`, removes the new file, and leaves `to` as it was. After a timeout the
-  job runs to its end (14.3).
+  never blocks the thread) and must be a regular file by its `fstat`
+  (`open_regular_source`, shared with `File.sha256`), else the error of a read
+  of it. The target is `to` with a link at it resolved (`uv_fs_realpath`, as
+  `File.replace`), so a link stays a link; nothing there is made, a dangling
+  link is `ENOENT`, a folder (also behind a link) is `EISDIR`, a path that is
+  neither a regular file nor absent (a FIFO, a device, a socket) is `EEXIST`,
+  and on Windows a read-only file is `EACCES` (`agc_fs_replaceable`). The bytes
+  go in `CHUNK` blocks to `.agc-PID-N.tmp` beside the target (as `File.replace`:
+  exclusive, no link followed, mode 0600 while written on POSIX), then
+  `fchmod` to `from`'s mode & 0777 (`EPERM`, `ENOTSUP` and `EOPNOTSUPP` are
+  ignored: vfat and exFAT hold no bits), `fsync` and `agc_fs_replace` over the
+  target; the folder is then flushed on POSIX. Every failure of the new file is
+  `filesystem: cannot copy file` with `from` and `to`, removes the new file, and
+  leaves the target as it was. Before each block the copy stops with
+  `ECANCELED`, with nothing renamed, when the job's deadline passed (`op.stop`,
+  set by `expired`) or the run is over (`rt->over`, as `run_compute` reads it);
+  the job has `AGC_JOB_FLUSH`, so the end of the run waits for that short abort.
+  A cancel only detaches the job and has no hook, so a cancelled copy runs to
+  its end.
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

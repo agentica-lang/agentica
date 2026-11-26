@@ -68,12 +68,12 @@ def main() -> Void
 end
 ```
 
-- The bytes go to a new file beside `to`, which only the owner can read while it is written; it then takes the permission bits of `from`, is flushed to the disk and is renamed over `to`, as `Path.replace` does. The umask does not apply, and setuid, setgid and sticky are not copied. A failure removes the new file and leaves `to` as it was. A process killed during the copy can leave a hidden `.agc-PID-N.tmp` file in the folder of `to`. Copying needs write permission on that folder.
-- `to` is replaced when it exists and made when it does not. A symbolic link at `to` is replaced itself, and the file it points to is untouched. A folder at `to` is `io.is_directory` and nothing is read. A symbolic link `from` is followed. A `from` that is not a regular file (a folder, a FIFO or a device) is `error("filesystem: path does not refer to a regular file")`.
+- The bytes go to a new file beside `to`, which on POSIX only the owner can read while it is written; it then takes the permission bits of `from`, is flushed to the disk and is renamed over `to`, as `Path.replace` does. The umask does not apply, and setuid, setgid and sticky are not copied. On a file system that cannot hold permission bits (vfat, exFAT) the new file keeps the bits the system gave it. A failure removes the new file and leaves `to` as it was. A process killed during the copy can leave a hidden `.agc-PID-N.tmp` file in the folder of `to`. Copying needs write permission on that folder.
+- `to` is replaced when it exists and made when it does not. A symbolic link at `to` is followed and stays a link, as with `File.replace` and `File.write_text`: the file it points to is the one replaced, and a dangling link is `io.not_found`. A folder at `to`, also behind a link, is `io.is_directory`, and one that is not a regular file (a FIFO, a device or a socket) is `io.exists`; nothing is read then. A symbolic link `from` is followed. A `from` that is not a regular file (a folder, a FIFO or a device) is `error("filesystem: path does not refer to a regular file")`, with no wait.
 - The new file belongs to the user who runs the program. The owner, the times and the other attributes of `from` are not copied, and a hard link of `to` keeps the old bytes. Copying a file onto itself leaves a copy of it.
 - The `details` of an error hold `from` under `"path"` and `to` under `"to"`.
+- A timeout ends the copy: it stops at its next block of 64 KiB, removes the new file and leaves `to` as it was. So does the end of the program, which waits for that short stop. A task that is cancelled only stops waiting: its copy runs to its end.
 - Windows keeps only the read-only bit of `from`, and refuses a read-only `to` with `io.permission`, leaving it as it was.
-- A timeout gives an error, but the started copy runs to its end.
 
 ## File.append_text
 
@@ -131,10 +131,9 @@ Gives a `File.Info`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`
 
 - `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"`, `"link"` (`File.lstat` of a reparse point) and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
 
-- To test that a path exists, use `File.stat(path, 1000).ok?` (`File.lstat` when a dangling link counts): there is no `File.exists?`, since the result already says it and a disk check needs a timeout and an error.
-
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
 - Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
+- To test that a path exists (Ruby's `File.exist?`), use `File.stat(path, 1000).ok?`, or `File.lstat` when a dangling link counts: there is no separate call, since the result already says it and a disk check needs a timeout and an error.
 
 ```agentica {mode="check"}
 def main() -> Void
