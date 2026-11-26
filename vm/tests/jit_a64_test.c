@@ -121,32 +121,35 @@ static void words(void) {
     0x54000121u, /* b.ne to the call of agc_op_eq */
   };
   expect_words(&e, start, equal, 5, "EQ");
-  /* LIST_GET reads the tail inline: the index is checked against the length, then against the tail's start. */
+  /* LIST_GET reads the tail inline: the index is checked against the length, then against the tail's start. A list of
+     Float32s has 4-byte items, so it takes the call. */
   start = e.len;
   agc_a64_emit_list_get(&e, (agc_instr){0, 1, 2, 3}, 0);
   static const uint32_t list_get[] = {
     0xB9402289u,                        /* ldr w9, [x20, #32] */
     0x7100013Fu | AGC_T_LIST << 10,     /* cmp w9, #LIST */
-    0x54000301u,                        /* b.ne to the call of agc_op_list_get */
+    0x54000341u,                        /* b.ne to the call of agc_op_list_get */
     0xB9403289u,                        /* ldr w9, [x20, #48] */
     0x7100013Fu | AGC_T_INT << 10,      /* cmp w9, #INT */
-    0x540002A1u,                        /* b.ne to the call */
+    0x540002E1u,                        /* b.ne to the call */
     0xF940168Bu,                        /* ldr x11, [x20, #40] */
     0xF9401E89u,                        /* ldr x9, [x20, #56] */
     0xF940016Au,                        /* ldr x10, [x11] */
     0xEB0A013Fu,                        /* cmp x9, x10 */
-    0x54000202u,                        /* b.hs to the call */
+    0x54000242u,                        /* b.hs to the call */
     0xD100054Au,                        /* sub x10, x10, #1 */
     0x927BE94Au,                        /* and x10, x10, #0xffffffffffffffe0 */
     0xEB0A0129u,                        /* subs x9, x9, x10 */
-    0x54000183u,                        /* b.lo to the call */
+    0x540001C3u,                        /* b.lo to the call */
     0xB940156Au,                        /* ldr w10, [x11, #20] */
     0x9100616Cu,                        /* add x12, x11, #24 */
     0x350000AAu,                        /* cbnz w10, to the 8-byte item */
     0x8B09118Cu,                        /* add x12, x12, x9, lsl #4 */
     0xF940018Au,                        /* ldr x10, [x12] */
     0xF9400589u,                        /* ldr x9, [x12, #8] */
-    0x14000002u,                        /* b to the stores */
+    0x14000004u,                        /* b to the stores */
+    0x7100015Fu | AGC_T_FLOAT32 << 10,  /* cmp w10, #FLOAT32 */
+    0x540000A0u,                        /* b.eq to the call */
     0xF8697989u,                        /* ldr x9, [x12, x9, lsl #3] */
     0xF9000A8Au,                        /* str x10, [x20, #16] */
     0xF9000E89u,                        /* str x9, [x20, #24] */

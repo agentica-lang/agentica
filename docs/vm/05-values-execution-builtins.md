@@ -20,9 +20,10 @@ does not make obvious:
   `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4,
   [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it
   returns it. It is a persistent vector (a 32-way trie with an inline tail) and
-  a list of all Ints or all Floats keeps 8 raw bytes per item
-  ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder picks the
-  kind from the values, so a mixed list from hostile bytecode is simply boxed.
+  a list of all Ints or all Floats keeps 8 raw bytes per item, and one of all
+  Float32s 4 ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder
+  picks the kind from the values, so a mixed list from hostile bytecode is
+  simply boxed.
   `append`, `set` and `get` are near constant time; `take`, `drop`, `reverse`
   and a `concat` with a long right list stay O(n) (§17.2).
 - **Map.** A persistent 32-way HAMT (`vm/map.c`) plus a persistent list of keys,
@@ -175,7 +176,8 @@ objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
   `agc_value` on every read.
 
 The direction, if memory or speed ever asks: use the static types, which make
-most tags redundant, as the unboxed `List[Int]` and `List[Float]` do
+most tags redundant, as the unboxed `List[Int]`, `List[Float]` and
+`List[Float32]` do
 (`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
 `Int` stays 64-bit, pointers stay aligned and visible to the GC, and
 `agc_value` stays the general form in registers, calls and generic code.

@@ -2,8 +2,8 @@
  * Lists in C: a persistent vector, a 32-way trie of leaves of 32 items plus an
  * inline tail. It owns the layout (list_impl.h is private to it, interp.c and
  * tests/list_test.c): the sized builder and cursor, get, append, set, slice and
- * concat that share leaves, reverse and repeat, and the unboxed leaves of Int
- * and Float lists. Core layer. Design: docs/vm/17-lists.md.
+ * concat that share leaves, reverse and repeat, and the unboxed leaves of Int,
+ * Float and Float32 lists. Core layer. Design: docs/vm/17-lists.md.
  */
 #include "core.h"
 #include "list_impl.h"
@@ -28,9 +28,13 @@ static uint32_t shift_for(size_t trie_len) {
   return s;
 }
 
-static size_t stride_of(uint32_t kind) { return kind ? sizeof(uint64_t) : sizeof(agc_value); }
+static size_t stride_of(uint32_t kind) {
+  return kind == AGC_T_FLOAT32 ? sizeof(uint32_t) : kind ? sizeof(uint64_t) : sizeof(agc_value);
+}
 
-static uint32_t kind_of(agc_value v) { return v.tag == AGC_T_INT || v.tag == AGC_T_FLOAT ? v.tag : 0; }
+static uint32_t kind_of(agc_value v) {
+  return v.tag == AGC_T_INT || v.tag == AGC_T_FLOAT || v.tag == AGC_T_FLOAT32 ? v.tag : 0;
+}
 
 static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_atomic(bytes) : agc_alloc(bytes); }
 
@@ -38,7 +42,10 @@ static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_
 static size_t slab_leaves(uint32_t kind) { return (SLAB_BYTES - 1) / (LIST_WIDTH * stride_of(kind)); }
 
 static void item_put(uint32_t kind, char *dst, agc_value v) {
-  if (kind) {
+  if (kind == AGC_T_FLOAT32) {
+    uint32_t word = agc_float32_word(v);
+    memcpy(dst, &word, sizeof word);
+  } else if (kind) {
     uint64_t word = agc_value_word(v);
     memcpy(dst, &word, sizeof word);
   } else {
@@ -234,8 +241,9 @@ static void builder_replay(agc_list_builder *wide, const agc_list *src, size_t c
 static void builder_demote(agc_list_builder *b) {
   const agc_list *half = b->out;
   size_t slab = (b->leaf - 1) / slab_leaves(b->kind) * slab_leaves(b->kind);
-  size_t done = b->after ? slab * LIST_WIDTH + (size_t)(b->next - leaf_of(half, slab)) / sizeof(uint64_t)
-                         : trie_items(b->n) + (size_t)(b->next - (char *)half->tail) / sizeof(uint64_t);
+  size_t stride = stride_of(b->kind);
+  size_t done = b->after ? slab * LIST_WIDTH + (size_t)(b->next - leaf_of(half, slab)) / stride
+                         : trie_items(b->n) + (size_t)(b->next - (char *)half->tail) / stride;
   agc_list_builder wide;
   builder_begin(&wide, b->n, 0, NULL, 0, 0);
   builder_replay(&wide, half, done);
@@ -283,8 +291,10 @@ static agc_list *join_wide(const agc_list *a, const agc_list *b) {
 }
 
 static void copy_reversed(char *dst, const char *end, size_t count, uint32_t kind) {
-  const size_t word = sizeof(uint64_t), value = sizeof(agc_value);
-  if (kind) {
+  const size_t half = sizeof(uint32_t), word = sizeof(uint64_t), value = sizeof(agc_value);
+  if (kind == AGC_T_FLOAT32) {
+    for (size_t k = 0; k < count; k++) memcpy(dst + k * half, end - (k + 1) * half, half);
+  } else if (kind) {
     for (size_t k = 0; k < count; k++) memcpy(dst + k * word, end - (k + 1) * word, word);
   } else {
     for (size_t k = 0; k < count; k++) memcpy(dst + k * value, end - (k + 1) * value, value);
@@ -295,6 +305,20 @@ agc_value agc_list_trie_get(const agc_list *l, size_t i) {
   const list_branch *node = l->root;
   for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) node = node->child[(i >> s) & LIST_MASK];
   return list_item(l->kind, node->child[(i >> LIST_BITS) & LIST_MASK], i & LIST_MASK);
+}
+
+agc_value agc_list_narrow_get(const agc_list *l, size_t i) {
+  size_t off = list_tail_off(l->len);
+  const char *items = (const char *)l->tail;
+  if (i < off) {
+    const list_branch *node = l->root;
+    for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) node = node->child[(i >> s) & LIST_MASK];
+    items = node->child[(i >> LIST_BITS) & LIST_MASK];
+    off = i & ~(size_t)LIST_MASK;
+  }
+  uint32_t word;
+  memcpy(&word, items + (i - off) * sizeof word, sizeof word);
+  return agc_word_float32(word);
 }
 
 size_t agc_list_len(const agc_list *l) { return list_len(l); }

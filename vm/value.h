@@ -816,6 +816,21 @@ static inline agc_value agc_float32(double f) {
   return v;
 }
 
+/* The 4 bytes of a Float32 in a packed list (17.12): its binary32 bits. The double is exactly a binary32, so both
+   conversions lose nothing, the sign and payload of a NaN included. */
+static inline uint32_t agc_float32_word(agc_value v) {
+  float narrow = (float)v.as.f;
+  uint32_t word;
+  memcpy(&word, &narrow, sizeof word);
+  return word;
+}
+
+static inline agc_value agc_word_float32(uint32_t word) {
+  float narrow;
+  memcpy(&narrow, &word, sizeof narrow);
+  return agc_float32((double)narrow);
+}
+
 static inline agc_value agc_string_value(agc_string *s) {
   agc_value v;
   v.tag = AGC_T_STRING;
@@ -1101,6 +1116,10 @@ uint32_t agc_list_kind(const agc_list *l);
 static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
   if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
     agc_list_builder_more(b, v);
+  } else if (b->kind == AGC_T_FLOAT32) {
+    uint32_t word = agc_float32_word(v);
+    memcpy(b->next, &word, sizeof word);
+    b->next += sizeof word;
   } else if (b->kind) {
     *(uint64_t *)b->next = agc_value_word(v);
     b->next += sizeof(uint64_t);
@@ -1113,7 +1132,11 @@ static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
 static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
   size_t k = c->index++ - c->start;
-  if (c->kind) {
+  if (c->kind == AGC_T_FLOAT32) {
+    uint32_t word;
+    memcpy(&word, c->chunk + k * sizeof word, sizeof word);
+    *out = agc_word_float32(word);
+  } else if (c->kind) {
     uint64_t word;
     memcpy(&word, c->chunk + k * sizeof word, sizeof word);
     *out = agc_word_value(c->kind, word);

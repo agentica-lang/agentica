@@ -1175,9 +1175,17 @@ static AGC_JIT_CALLER void helpers(void) {
   binary(AGC_OP_LIST_GET, agc_int(3), agc_int(0), AGC_STATUS_WRONG_TAG, any);
   binary(AGC_OP_LIST_GET, vm.rt->empty_list, agc_int(0), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
   /* The tail is read inline in both item layouts (Ints or Floats as 8 bytes, any other list as agc_values), and the
-     trie of a list above 32 items through the helper. */
+     trie of a list above 32 items, or a list of Float32s (4-byte items), through the helper. */
   agc_value floats[2] = {agc_float(1.5), agc_float(-0.0)};
   binary(AGC_OP_LIST_GET, agc_list_value(agc_list_from_array(floats, 2)), agc_int(1), AGC_STATUS_OK, agc_float(-0.0));
+  agc_value narrow[40];
+  for (int64_t k = 0; k < 40; k++) narrow[k] = agc_float32(k * 0.25 - 3.0);
+  agc_value narrow_tail = agc_list_value(agc_list_from_array(narrow, 2));
+  agc_value narrow_long = agc_list_value(agc_list_from_array(narrow, 40));
+  binary(AGC_OP_LIST_GET, narrow_tail, agc_int(1), AGC_STATUS_OK, agc_float32(-2.75));
+  binary(AGC_OP_LIST_GET, narrow_long, agc_int(3), AGC_STATUS_OK, agc_float32(-2.25));
+  binary(AGC_OP_LIST_GET, narrow_long, agc_int(39), AGC_STATUS_OK, agc_float32(6.75));
+  binary(AGC_OP_LIST_GET, narrow_tail, agc_int(2), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
   agc_value mixed[3] = {agc_int(7), hello, agc_float(1.5)};
   agc_value mixed_list = agc_list_value(agc_list_from_array(mixed, 3));
   binary(AGC_OP_LIST_GET, mixed_list, agc_int(0), AGC_STATUS_OK, agc_int(7));

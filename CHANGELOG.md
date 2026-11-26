@@ -12,6 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
+### Changed
+
+- A `List[Float32]` is stored packed, 4 bytes per item instead of 16, so 10 million items take about 40 MB (#2019).
+
 ## [0.39.1] - 2026-11-26
 
 ### Fixed
