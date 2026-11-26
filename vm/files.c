@@ -660,7 +660,9 @@ static bool names_output_fd(const agc_runtime *rt, const char *path) {
 static int open_for(op *o, bool reading, bool append) {
   if (o->kind == OP_OPEN_CREATE || o->kind == OP_OPEN_TEMP) {
     /* O_EXCL fails on any existing entry, a dangling link included, and never follows one. */
-    int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE);
+    /* A temp file is moved to its final name while its handle is open. */
+    unsigned shared = o->kind == OP_OPEN_TEMP ? AGC_FS_SHARE_DELETE : 0;
+    int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE | shared);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return fd;
   }

@@ -31,7 +31,10 @@ enum {
   AGC_FS_READ = 0, AGC_FS_WRITE = 1, AGC_FS_CREATE = 2, AGC_FS_EXCLUSIVE = 4,
   AGC_FS_APPEND = 8, AGC_FS_TRUNCATE = 16, AGC_FS_PRIVATE = 32,
   /* With APPEND: the handle may be locked (File.try_lock). Windows then adds read access, which LockFileEx needs. */
-  AGC_FS_LOCKABLE = 64
+  AGC_FS_LOCKABLE = 64,
+  /* With PRIVATE: the open file may be renamed or removed by path while it is open, as a POSIX file always may. Only
+     Windows needs it, where a share mode without delete refuses both. */
+  AGC_FS_SHARE_DELETE = 128
 };
 
 int agc_fs_open(const char *path, unsigned flags);
@@ -93,7 +96,7 @@ CC_OWNS char *agc_fs_realpath(const char *path);
 #ifdef _WIN32
 void agc_fs_set_error(int result);
 int agc_fs_try_lock(int fd);
-int agc_fs_private_create(const char *path, bool directory);
+int agc_fs_private_create(const char *path, bool directory, bool share_delete);
 int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
 /* The errno of the Win32 ERROR that CreateSymbolicLinkW gave: ENOTSUP when the privilege is not held, EEXIST for an
    access denied where LINK_EXISTS (a folder at the link says that, not "exists"), else libuv's translation. */

@@ -44,17 +44,18 @@ static void copy_info(agc_fs_info *to, const uv_stat_t *from) {
 
 int agc_fs_open(const char *path, unsigned flags) {
   unsigned changes = AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_APPEND | AGC_FS_TRUNCATE | AGC_FS_PRIVATE;
-  if (!path || !*path || (flags & ~(changes | AGC_FS_WRITE | AGC_FS_LOCKABLE)) ||
+  if (!path || !*path || (flags & ~(changes | AGC_FS_WRITE | AGC_FS_LOCKABLE | AGC_FS_SHARE_DELETE)) ||
       ((flags & AGC_FS_LOCKABLE) && !(flags & AGC_FS_APPEND)) ||
       ((flags & changes) && !(flags & AGC_FS_WRITE)) ||
       ((flags & AGC_FS_PRIVATE) && !(flags & AGC_FS_EXCLUSIVE)) ||
+      ((flags & AGC_FS_SHARE_DELETE) && !(flags & AGC_FS_PRIVATE)) ||
       ((flags & AGC_FS_EXCLUSIVE) && !(flags & AGC_FS_CREATE)) ||
       ((flags & AGC_FS_APPEND) && (flags & AGC_FS_TRUNCATE))) {
     errno = EINVAL;
     return -1;
   }
 #ifdef _WIN32
-  if (flags & AGC_FS_PRIVATE) return agc_fs_private_create(path, false);
+  if (flags & AGC_FS_PRIVATE) return agc_fs_private_create(path, false, flags & AGC_FS_SHARE_DELETE);
 #endif
   int native = flags & AGC_FS_WRITE ? UV_FS_O_WRONLY : UV_FS_O_RDONLY;
 #ifdef _WIN32
@@ -175,7 +176,7 @@ int agc_fs_mkdir(const char *path, bool private) {
     return -1;
   }
 #ifdef _WIN32
-  if (private) return agc_fs_private_create(path, true);
+  if (private) return agc_fs_private_create(path, true, false);
 #endif
   uv_fs_t req;
   int result = uv_fs_mkdir(NULL, &req, path, private ? 0700 : 0777, NULL);

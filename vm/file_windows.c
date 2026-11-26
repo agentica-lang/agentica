@@ -154,7 +154,7 @@ static bool private_object(HANDLE file, bool directory) {
          (directory || info.nNumberOfLinks == 1) && owner_only(file);
 }
 
-int agc_fs_private_create(const char *path, bool directory) {
+int agc_fs_private_create(const char *path, bool directory, bool share_delete) {
   wchar_t *wide = native_path(path);
   if (!wide) return -1;
   private_security security;
@@ -169,7 +169,8 @@ int agc_fs_private_create(const char *path, bool directory) {
         file = CreateFileW(wide, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
     } else {
-      file = CreateFileW(wide, GENERIC_WRITE | READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, &attributes, CREATE_NEW,
+      file = CreateFileW(wide, GENERIC_WRITE | READ_CONTROL | FILE_READ_ATTRIBUTES,
+                         FILE_SHARE_READ | (share_delete ? FILE_SHARE_DELETE : 0), &attributes, CREATE_NEW,
                          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
       made = file != INVALID_HANDLE_VALUE;
     }
