@@ -663,6 +663,9 @@ def test_option_ranges_and_output_caps(tmp_path, driver):
     assert lines == ["m0 error archive: options.max_output_bytes must be 1..1073741824", ""]
     lines = run_zip(driver, work, "mbig", "stored.zip", ["plain.txt"], "o1", limits(max_out=1073741825))
     assert lines == ["mbig error archive: options.max_output_bytes must be 1..1073741824", ""]
+    lines = run_zip(driver, work, "keep", "stored.zip", ["plain.txt"], "o1", limits(keep_mode=True))
+    assert lines == ["keep error archive: options.keep_mode applies to extract_tar only", ""]
+    assert not (work / "o1").exists()
     lines = run_zip(driver, work, "exact", "stored.zip", ["plain.txt"], "o1", limits(max_out=len(STORED_HELLO)))
     assert lines == ["exact ok [%d]" % len(STORED_HELLO), ""]
     lines = run_zip(driver, work, "short", "stored.zip", ["plain.txt", "empty.txt"], "o2",

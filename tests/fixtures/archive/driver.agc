@@ -6,6 +6,7 @@ import Archive from "std/archive"
 struct Limits
   timeout_ms: Int
   max_output_bytes: Int
+  keep_mode: Bool
 end
 
 # `kind` is "zip", "tar" or "defaults" (the default Options). With no `options` the call leaves the argument to its
@@ -22,7 +23,11 @@ end
 def flat(text: String) -> String = text.split("\n").join(" | ")
 
 def options(limits: Limits) -> Archive.Options
-  Archive.Options(timeout_ms: limits.timeout_ms, max_output_bytes: limits.max_output_bytes)
+  Archive.Options(
+    timeout_ms: limits.timeout_ms,
+    max_output_bytes: limits.max_output_bytes,
+    keep_mode: limits.keep_mode,
+  )
 end
 
 def extract_zip(c: Case) -> Result[List[Int]]
