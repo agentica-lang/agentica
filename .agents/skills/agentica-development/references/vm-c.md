@@ -113,9 +113,10 @@ C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
   check that rejects hostile input. Short `/* */` blocks; no narration, no
   commented-out code. Tool markers (`// NOLINT(...)`) are not comments.
 - Only `value.c` and the inline constructors and accessors of `value.h` read the
-  value union (`docs/vm/05-values-execution-builtins.md` §5.2), besides the two
-  inline word helpers (`agc_value_word`, `agc_word_value`) that list leaves use
-  for the 8-byte payload of an Int or Float. Immediates write the full word. A
+  value union (`docs/vm/05-values-execution-builtins.md` §5.2), besides the
+  four inline word helpers (`agc_value_word`, `agc_word_value`,
+  `agc_float32_word`, `agc_word_float32`) that list leaves use for the payload
+  of an Int, Float or Float32. Immediates write the full word. A
   new constructor or accessor for a hot type goes inline in `value.h`; one for a
   service resource stays in `value.c`.
 

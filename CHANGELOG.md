@@ -17,6 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A `List[Float32]` is stored packed, 4 bytes per item instead of 16, so 10 million items take about 40 MB (#2019).
 - **Breaking:** an error of a file call with the errno `ENOTSUP` or `EOPNOTSUPP` has the kind `io.unsupported`, not `io.failed`; on Windows this includes a named pipe or a device refused as a file (#1866).
 
 ## [0.39.1] - 2026-11-26

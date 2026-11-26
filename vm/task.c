@@ -1384,7 +1384,7 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
         break;
       }
       case AGC_T_LIST: {
-        /* A packed list (Int, Float) or one whose items cannot hold a handle is skipped. */
+        /* A packed list (Int, Float, Float32) or one whose items cannot hold a handle is skipped. */
         const agc_list *x = agc_as_list(vm, v);
         if (!agc_list_len(x) || agc_list_kind(x) || !may_hold(agc_list_get(x, 0)) || !pointer_set_add(&seen, x))
           break;

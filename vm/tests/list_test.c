@@ -1,5 +1,5 @@
 /*
- * The list API at the lengths around the 32-way boundaries, for Int, Float and
+ * The list API at the lengths around the 32-way boundaries, for Int, Float, Float32 and
  * boxed items: trie shape, builder, append, set, slice, concat, reverse and
  * repeat, cursors, persistence, the kind of a list (unboxed leaves, 17.12) and
  * the conversion to boxed leaves when kinds mix.
@@ -29,15 +29,18 @@
 
 static agc_vm vm;
 
-typedef enum { FLAVOR_INT, FLAVOR_FLOAT, FLAVOR_BOXED, FLAVORS } flavor_t;
+typedef enum { FLAVOR_INT, FLAVOR_FLOAT, FLAVOR_FLOAT32, FLAVOR_BOXED, FLAVORS } flavor_t;
 
 static flavor_t flavor;
 
-static uint32_t kind_of_flavor(flavor_t f) { return f == FLAVOR_INT ? AGC_T_INT : f == FLAVOR_FLOAT ? AGC_T_FLOAT : 0; }
+static uint32_t kind_of_flavor(flavor_t f) {
+  return f == FLAVOR_INT ? AGC_T_INT : f == FLAVOR_FLOAT ? AGC_T_FLOAT : f == FLAVOR_FLOAT32 ? AGC_T_FLOAT32 : 0;
+}
 
 static agc_value make_as(flavor_t f, int64_t n) {
   if (f == FLAVOR_INT) return agc_int(n);
   if (f == FLAVOR_FLOAT) return agc_float((double)n);
+  if (f == FLAVOR_FLOAT32) return agc_float32((double)n);
   return agc_range_value(n, 0, false);
 }
 
@@ -49,6 +52,10 @@ static int64_t number_as(flavor_t f, agc_value v) {
   if (f == FLAVOR_FLOAT) {
     assert(agc_is(v, AGC_T_FLOAT));
     return (int64_t)agc_as_float(&vm, v);
+  }
+  if (f == FLAVOR_FLOAT32) {
+    assert(agc_is(v, AGC_T_FLOAT32));
+    return (int64_t)agc_as_float32(&vm, v);
   }
   assert(agc_is(v, AGC_T_RANGE));
   return agc_as_range(&vm, v)->start;
@@ -285,6 +292,15 @@ static void expect_repeated(size_t n) {
   expect_same(agc_list_slice(r, n / 2, n - n / 2), n - n / 2, 0, false);
 }
 
+/* A packed leaf is 32 items of 4 bytes (Float32), 8 (Int, Float) or 16 (agc_value): the leaves of one build follow
+   each other in a slab. */
+static void expect_leaf_bytes(void) {
+  size_t want = flavor == FLAVOR_FLOAT32 ? 4 : flavor == FLAVOR_BOXED ? sizeof(agc_value) : sizeof(uint64_t);
+  agc_list *l = built(3 * LIST_WIDTH + 1);
+  assert(l->root->child[1] == (char *)l->root->child[0] + LIST_WIDTH * want);
+  assert(l->root->child[2] == (char *)l->root->child[1] + LIST_WIDTH * want);
+}
+
 static void expect_debug(void) {
   char want[1024];
   size_t at = 0;
@@ -453,6 +469,7 @@ static void run_lengths(void) {
   agc_list_builder_sized(&empty, 0);
   assert(agc_list_len(agc_list_builder_finish(&empty)) == 0);
   if (flavor == FLAVOR_INT) expect_debug();
+  expect_leaf_bytes();
   expect_versions();
   expect_sharing();
   expect_shared_leaves();
@@ -495,14 +512,16 @@ static void expect_mixed(const agc_list *l, flavor_t base, flavor_t odd, size_t 
 }
 
 static void expect_builder_mixing(flavor_t base, flavor_t odd) {
-  /* 8225 and 16449 fill one and two slabs of numeric leaves (255 leaves, 8160 items) and more */
-  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113, 8225, 16449};
+  /* 8225 and 16449 fill one and two slabs of 8-byte leaves (255 leaves, 8160 items), 16449 and 32801 one and two of
+     Float32 leaves (511 leaves, 16352 items), and more */
+  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113, 8225, 16449, 32801};
   for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
     size_t n = sizes[s];
     if (n < 2) continue;
     size_t trie = list_tail_off(n);
-    size_t spots[] = {0,    1,    31,   32,   33,    trie ? trie - 1 : 0, trie,  trie + 1, n / 2,
-                      8159, 8160, 8161, 8191, 8192, 8193,  16319,               16320, 16321,    n - 1};
+    size_t spots[] = {0,     1,     31,    32,    33,    trie ? trie - 1 : 0, trie,  trie + 1, n / 2,   8159,
+                      8160,  8161,  8191,  8192,  8193,  16319,               16320, 16321,    16351, 16352,
+                      16353, 32703, 32704, 32705, n - 1};
     for (size_t t = 0; t < sizeof spots / sizeof spots[0]; t++) {
       size_t at = spots[t];
       if (at >= n) continue;
@@ -575,6 +594,11 @@ static void expect_from_array_kinds(void) {
   assert(floats->kind == AGC_T_FLOAT);
   expect_samples(floats, FLAVOR_FLOAT, 39);
   expect_mixed(agc_list_from_array(mixed, 40), FLAVOR_FLOAT, FLAVOR_INT, 40, 39);
+  for (size_t k = 0; k < 40; k++) mixed[k] = sample(k == 39 ? FLAVOR_FLOAT : FLAVOR_FLOAT32, k);
+  agc_list *narrow = agc_list_from_array(mixed, 39);
+  assert(narrow->kind == AGC_T_FLOAT32);
+  expect_samples(narrow, FLAVOR_FLOAT32, 39);
+  expect_mixed(agc_list_from_array(mixed, 40), FLAVOR_FLOAT32, FLAVOR_FLOAT, 40, 39);
 }
 
 static void expect_empty_kinds(void) {
@@ -585,6 +609,7 @@ static void expect_empty_kinds(void) {
   assert(agc_list_builder_finish(&b)->kind == 0);
   assert(agc_list_slice(sampled(FLAVOR_INT, 40), 40, 0)->kind == 0);
   assert(agc_list_slice(sampled(FLAVOR_FLOAT, 40), 3, 0)->kind == 0);
+  assert(agc_list_slice(sampled(FLAVOR_FLOAT32, 40), 3, 0)->kind == 0);
   assert(agc_list_repeat(sample(FLAVOR_INT, 0), 0)->kind == 0);
   assert(agc_list_concat(empty, empty)->kind == 0);
   agc_list *ints = sampled(FLAVOR_INT, 5);
@@ -593,6 +618,7 @@ static void expect_empty_kinds(void) {
   assert(agc_list_concat(empty, wide) == wide);
   assert(agc_list_append(empty, sample(FLAVOR_INT, 0))->kind == AGC_T_INT);
   assert(agc_list_append(empty, sample(FLAVOR_FLOAT, 0))->kind == AGC_T_FLOAT);
+  assert(agc_list_append(empty, sample(FLAVOR_FLOAT32, 0))->kind == AGC_T_FLOAT32);
   assert(agc_list_append(empty, sample(FLAVOR_BOXED, 0))->kind == 0);
   assert(agc_list_append(wide, sample(FLAVOR_INT, 0))->kind == 0);
   agc_list_builder first;
@@ -601,6 +627,10 @@ static void expect_empty_kinds(void) {
   agc_list_builder_push(&first, sample(FLAVOR_FLOAT, 1));
   agc_list_builder_push(&first, sample(FLAVOR_FLOAT, 2));
   assert(agc_list_builder_finish(&first)->kind == AGC_T_FLOAT);
+  agc_list_builder narrow;
+  agc_list_builder_sized(&narrow, 3);
+  for (size_t i = 0; i < 3; i++) agc_list_builder_push(&narrow, sample(FLAVOR_FLOAT32, i));
+  assert(agc_list_builder_finish(&narrow)->kind == AGC_T_FLOAT32);
 }
 
 static bool same_word(agc_value a, agc_value b) { return a.tag == b.tag && agc_value_word(a) == agc_value_word(b); }
@@ -610,7 +640,10 @@ static agc_value special_value(flavor_t k, size_t i) {
   static const uint64_t floats[] = {0x8000000000000000ull, 0, 0x7ff8dead00000001ull, 0xfff8000000000000ull,
                                     0x7ff0000000000000ull, 0xfff0000000000000ull, 0x0010000000000000ull,
                                     1, 0x7fefffffffffffffull};
+  static const uint32_t narrow[] = {0x80000000u, 0, 0x7fc00001u, 0xffc00000u, 0x7f800000u,
+                                    0xff800000u, 0x00800000u, 1, 0x7f7fffffu, 0x007fffffu};
   if (k == FLAVOR_INT) return agc_int(ints[i % (sizeof ints / sizeof ints[0])]);
+  if (k == FLAVOR_FLOAT32) return agc_word_float32(narrow[i % (sizeof narrow / sizeof narrow[0])]);
   return agc_word_value(AGC_T_FLOAT, floats[i % (sizeof floats / sizeof floats[0])]);
 }
 
@@ -640,11 +673,12 @@ static void expect_specials(flavor_t k) {
   for (size_t i = 0; i < n; i++) assert(same_word(agc_list_get(back, i), special_value(k, n - 1 - i)));
   agc_list *joined = agc_list_concat(l, l);
   expect_special_run(agc_list_slice(joined, n, n), k, 0, n);
-  for (size_t i = 0; i < 9; i++) {
+  for (size_t i = 0; i < 10; i++) {
     agc_list *same = agc_list_repeat(special_value(k, i), 70);
     for (size_t j = 0; j < 70; j++) assert(same_word(agc_list_get(same, j), special_value(k, i)));
   }
   assert(isnan(agc_as_float(&vm, special_value(FLAVOR_FLOAT, 2))));
+  assert(isnan(agc_as_float32(&vm, special_value(FLAVOR_FLOAT32, 2))));
 }
 
 static void expect_kind_persistence(void) {
@@ -695,6 +729,7 @@ int main(void) {
   expect_empty_kinds();
   expect_specials(FLAVOR_INT);
   expect_specials(FLAVOR_FLOAT);
+  expect_specials(FLAVOR_FLOAT32);
   expect_kind_persistence();
 
   puts("list tests passed");

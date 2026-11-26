@@ -21,10 +21,11 @@ typedef struct {
 } list_branch;
 
 /*
- * kind is 0 when the items are agc_values, else AGC_T_INT or AGC_T_FLOAT when all of them
- * have that tag and each is stored as its 8 raw bytes (17.12); an empty list has kind 0. A
- * leaf is 32 items of that kind. tail holds the last ((len - 1) & 31) + 1 items (none when
- * len is 0); root is NULL exactly when len <= 32.
+ * kind is 0 when the items are agc_values, else AGC_T_INT, AGC_T_FLOAT or AGC_T_FLOAT32 when
+ * all of them have that tag and each is stored without it, as its 8 raw bytes (4 for a
+ * Float32: its binary32 bits) (17.12); an empty list has kind 0. A leaf is 32 items of that
+ * kind. tail holds the last ((len - 1) & 31) + 1 items (none when len is 0); root is NULL
+ * exactly when len <= 32.
  */
 struct agc_list {
   size_t len;
@@ -51,9 +52,17 @@ static inline agc_value list_item(uint32_t kind, const char *items, size_t k) {
   return v;
 }
 
+/* The item of the trie, not for a list of Float32s: list_at sends those to agc_list_narrow_get. */
 agc_value agc_list_trie_get(const agc_list *l, size_t i);
 
+/* The item of a list of Float32s (4-byte items), out of line: the hot loops read 8-byte and 16-byte items inline. */
+agc_value agc_list_narrow_get(const agc_list *l, size_t i);
+
 static inline agc_value list_at(const agc_list *l, size_t i) {
+  if (l->kind) {
+    /* kept nested: see 17.12 */
+    if (l->kind == AGC_T_FLOAT32) return agc_list_narrow_get(l, i);
+  }
   size_t off = list_tail_off(l->len);
   if (i >= off) return list_item(l->kind, (const char *)l->tail, i - off);
   return agc_list_trie_get(l, i);

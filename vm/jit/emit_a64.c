@@ -595,7 +595,8 @@ static size_t other_tag(agc_emitter *e, uint32_t r, agc_tag tag, size_t *slow, s
   return slows + 1;
 }
 
-/* x11 = the list, x9 = the index, then x9 = the index in the tail, as on x86-64. */
+/* x11 = the list, x9 = the index, then x9 = the index in the tail, as on x86-64 (a list of Float32s takes the helper
+   too). */
 void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
   size_t slow[2], slows = 0;
   slows = other_tag(e, in.b, AGC_T_LIST, slow, slows);
@@ -617,6 +618,8 @@ void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
   load(e, T0, T3, 8);
   size_t write = skip(e);
   land(e, packed);
+  compare_imm(e, false, T1, AGC_T_FLOAT32);
+  size_t narrow = skip_if(e, CC_EQ);
   put32(e, 0xF8607800u | (uint32_t)T0 << 16 | (uint32_t)T3 << 5 | (uint32_t)T0); /* ldr x9, [x12, x9, lsl #3] */
   land(e, write);
   store(e, REGS, TAG(in.a), T1);
@@ -625,6 +628,7 @@ void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
   while (slows) land(e, slow[--slows]);
   land(e, outside);
   land(e, in_trie);
+  land(e, narrow);
   call_helper(e, (uint64_t)(uintptr_t)agc_op_list_get, in, true, pc);
   land(e, done);
 }

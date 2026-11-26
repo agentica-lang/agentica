@@ -24,8 +24,8 @@ see a mutation: lists stay immutable values (§17.6).
 - No cursor opcode for `for`: `for x in xs` is `LIST_LEN` once and `LIST_GET`
   per item, O(n log32 n).
 
-Unboxed `List[Int]` and `List[Float]` leaves are the first step of
-[§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes), built as
+Unboxed `List[Int]`, `List[Float]` and `List[Float32]` leaves are the first
+step of [§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes), built as
 §17.12. Every site goes through the API of §17.4, so the VM decides the kind of
 a list from its values and the front end passes nothing.
 
@@ -35,7 +35,7 @@ A 32-way trie with a tail buffer, as in Clojure. The width is that of the map's
 HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
 `vm/list.c` and the private `vm/list_impl.h`; outside them the type is opaque
 (§17.4). A branch is 32 child pointers. A leaf is 32 items of the list's kind
-(512 bytes, or 256 for numeric kinds, §17.12).
+(512 bytes, 256 for Int and Float, 128 for Float32, §17.12).
 
 - `tail_len(n)` is 0 for n = 0, else `((n - 1) & 31) + 1`; `tail_off(n)` is
   `n - tail_len(n)`.
@@ -191,7 +191,8 @@ vm-latency`, run alone, must still pass its 250 ms limit.
   leaves of `agc_list_repeat`; the whole API with Int, Float and boxed items,
   mixed lists built by hand, and `-0.0`, NaN and the Int limits through each
   operation. Goldens: `tests/fixtures/vm/list-vector.agc` and
-  `list-unboxed.agc`.
+  `list-unboxed.agc`, `list-float32.agc` and `list-float32-vectors.agc` (the bits
+  of every item and of each operation against a Python peer).
 - **Benchmark gates** (`make bench`; `benchmarks/programs/list-build.agc` and
   `list-bulk.agc`): 160,000 pushes in a loop run in under 1 s, and 2n pushes
   take under 2.5 times as long as n; `maze-bfs` is a no-regression check. A loop
@@ -242,6 +243,10 @@ bits.
 - 0: boxed. The items are 16-byte `agc_value`s (§17.2).
 - `AGC_T_INT` or `AGC_T_FLOAT`: every item has that tag. A leaf and the tail
   hold the 8 raw bytes of each item and no tag. A leaf is 256 bytes, not 512.
+- `AGC_T_FLOAT32`: every item is a Float32. A leaf and the tail hold the 4 bytes
+  of its binary32 bits (`agc_float32_word`, `agc_word_float32` in `value.h`: a
+  Float32 is a double that holds exactly a binary32, so the conversion loses
+  nothing, a NaN's sign included). A leaf is 128 bytes.
 
 An empty list has kind 0, and its first item decides. In a valid program a list
 never changes kind, because a `List[T]` has one element type (there is no `Any`,
@@ -256,14 +261,23 @@ value. `concat` gives the kind of both lists when equal; an empty side gives the
 other list as it is.
 
 **Reads and writes.** `list_at` and `agc_list_trie_get` rebuild the value from
-the kind: the tag is the kind and the payload is the 8 bytes. The cursor and the
-inline builder push carry the kind in their structs. Two details keep the boxed
-path as fast as it was. The stores of `push` are typed (`uint64_t` and
-`agc_value`): a `char *` store may alias the builder's own fields, and then the
-compiler reloads them for every item. And a value is built from its two 8-byte
-words (`agc_word_value` and `agc_value_word`, both in `value.h`), because the
-field-by-field form made the compiler merge the boxed and numeric paths with
-masks.
+the kind: the tag is the kind and the payload is the 8 bytes. A Float32 list is
+read out of line (`agc_list_narrow_get`, which `list_at` calls inside its test
+of a non-zero kind, so a boxed list pays one compare; `agc_list_trie_get` is not
+for Float32 lists), so the turn loop's inline read keeps the code it had for
+8 and 16 byte items; the compiled `LIST_GET` takes the helper for it, since its
+inline tail read has an 8-byte stride. The cursor and the inline builder push
+carry the kind in their structs, and test for Float32 inside their non-zero
+kind arm too, where `agc_list_item_narrow` and `agc_list_builder_push_narrow`
+(out of line, in `list.c`) do the 4-byte read and write. Three details keep the
+boxed and the 8-byte paths as fast as they were. The stores of `push` are typed
+(`uint64_t` and `agc_value`): a `char *` store may alias the builder's own
+fields, and then the compiler reloads them for every item. A value is built
+from its two 8-byte words (`agc_word_value` and `agc_value_word`, both in
+`value.h`), because the field-by-field form made the compiler merge the boxed
+and numeric paths with masks. And `item_put` tests the item size, not the kind:
+a test of the kind made GCC split `append` and `set` by kind, and `list-build`
+ran 15% slower with `--jit off`.
 
 **Memory and the GC.**
 
@@ -277,9 +291,10 @@ masks.
   pointer can keep garbage alive for as long as its list lives. Boehm already
   accepts that for the stack and the registers.
 - A build (the sized builder, `slice`, `concat`, `reverse`) puts its new
-  leaves in slabs of at most `SLAB_BYTES - 1` bytes: 65280 for Int and Float
-  leaves, 65024 for boxed ones. Boehm adds a byte to each object, so such a
-  slab fits in 16 heap blocks. The branches hold interior pointers into them.
+  leaves in slabs of at most `SLAB_BYTES - 1` bytes: 65408 for Float32 leaves,
+  65280 for Int and Float leaves, 65024 for boxed ones. Boehm adds a byte to
+  each object, so such a slab fits in 16 heap blocks. The branches hold interior
+  pointers into them.
   `GC_set_all_interior_pointers(1)` keeps a slab alive. `list_test.c` forces
   collections while only such pointers refer to a slab, for each kind.
 - No node is larger than a slab: each branch is its own object. Marking is
@@ -313,9 +328,11 @@ meet, the result is boxed, and no operation fails:
 **Sort.** `List.sort` of a numeric list puts the raw 8 bytes of each number in
 the entry and pushes the sorted words, with the same order keys, checks and
 merge, so the order is the same: stable, `-0.0` equal to `0.0`, every NaN last
-and equal. `sort_by` and the sort of Strings are unchanged.
+and equal. `sort_by` and the sort of Strings are unchanged. `List.sort` does not
+take a List[Float32]: the checker refuses it, and a hand-made `.agcb` fails at
+the first key's tag check.
 
-**Costs.** A numeric item takes 8 bytes instead of 16. Step counts, turn costs
-and the `.agcb` format do not change. `filter` still stages `agc_value`s before
-`from_array` packs the result. Registers, calls, structs, maps and Json values
-stay `agc_value`.
+**Costs.** A numeric item takes 8 bytes (4 for a Float32) instead of 16. Step
+counts, turn costs and the `.agcb` format do not change. `filter` still stages
+`agc_value`s before `from_array` packs the result. Registers, calls, structs,
+maps and Json values stay `agc_value`.

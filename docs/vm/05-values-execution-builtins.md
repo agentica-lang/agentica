@@ -20,9 +20,10 @@ does not make obvious:
   `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4,
   [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it
   returns it. It is a persistent vector (a 32-way trie with an inline tail) and
-  a list of all Ints or all Floats keeps 8 raw bytes per item
-  ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder picks the
-  kind from the values, so a mixed list from hostile bytecode is simply boxed.
+  a list of all Ints or all Floats keeps 8 raw bytes per item, and one of all
+  Float32s 4 ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder
+  picks the kind from the values, so a mixed list from hostile bytecode is
+  simply boxed.
   `append`, `set` and `get` are near constant time; `take`, `drop`, `reverse`
   and a `concat` with a long right list stay O(n) (§17.2).
 - **Map.** A persistent 32-way HAMT (`vm/map.c`) plus a persistent list of keys,
@@ -175,7 +176,8 @@ objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
   `agc_value` on every read.
 
 The direction, if memory or speed ever asks: use the static types, which make
-most tags redundant, as the unboxed `List[Int]` and `List[Float]` do
+most tags redundant, as the unboxed `List[Int]`, `List[Float]` and
+`List[Float32]` do
 (`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
 `Int` stays 64-bit, pointers stay aligned and visible to the GC, and
 `agc_value` stays the general form in registers, calls and generic code.
@@ -329,8 +331,8 @@ returns.
   that cannot fail once their arguments pass a check (`plain_leaves` in
   `vm/jit/jit.c`) are called at any depth with no catch and no tail. The code
   reads a list's length (`LIST_LEN`, `List.size`) and a `LIST_GET` of the tail
-  itself, in both item layouts (§17.12); an item of the trie goes through
-  `agc_op_list_get`.
+  itself, for 8-byte and 16-byte items (§17.12); an item of the trie, or of a
+  `List[Float32]`, goes through `agc_op_list_get`.
   Compiled code returns `{status, pc}` at its first exit, and `run_compiled` (`vm/interp.c`) handles it as the
   interpreter handles the instruction at `pc`; the exit kinds are the
   `AGC_JIT_EXIT_*` values of `vm/jit/jit.h`. A block's `RETURN` to a block call

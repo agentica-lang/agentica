@@ -581,10 +581,11 @@ void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, 
 
 _Static_assert(AGC_JIT_LIST_TAIL + 8 < 128, "the tail reads below use an 8-bit displacement");
 _Static_assert(AGC_JIT_LIST_MASK == 31, "the tail index below is masked with an 8-bit ~31");
+_Static_assert(AGC_T_FLOAT32 < 128, "the kind of a list is compared below as an 8-bit immediate");
 
 /* rcx = the list, rax = the index, then rax = the index in the tail: an index outside the list (a negative one is
-   above every length as unsigned) or below the tail takes the helper. An item of kind 0 is an agc_value; else the
-   kind is the tag and the item the payload (17.12). */
+   above every length as unsigned) or below the tail takes the helper, and so does a list of Float32s, whose items
+   are 4 bytes. An item of kind 0 is an agc_value; else the kind is the tag and the item the payload (17.12). */
 void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
   size_t slow[2], slows = 0;
   slows = other_tag(e, in.b, AGC_T_LIST, slow, slows);
@@ -605,6 +606,8 @@ void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
   BYTES(e, 0x48, 0x8B, 0x44, 0x01, AGC_JIT_LIST_TAIL);         /* mov rax, [rcx + rax + tail] */
   size_t write = jump_to_patch(e, -1);
   land(e, packed);
+  compare_imm8(e, false, RCX, AGC_JIT_LIST_KIND, AGC_T_FLOAT32);
+  size_t narrow = jump_to_patch(e, CC_E);
   BYTES(e, 0x48, 0x8B, 0x54, 0xC1, AGC_JIT_LIST_TAIL);         /* mov rdx, [rcx + rax * 8 + tail] */
   op_mem(e, false, 0x8B, RAX, RCX, AGC_JIT_LIST_KIND);         /* mov eax, [rcx + kind] */
   land(e, write);
@@ -614,6 +617,7 @@ void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
   while (slows) land(e, slow[--slows]);
   land(e, outside);
   land(e, in_trie);
+  land(e, narrow);
   call_helper(e, binary(agc_op_list_get), in, true, pc);
   land(e, done);
 }
