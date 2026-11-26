@@ -54,14 +54,14 @@
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
   FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_CHMOD,
-  FS_SYMLINK, FS_READLINK, FS_NO_MEMORY
+  FS_SYMLINK, FS_READLINK, FS_COPY, FS_NO_MEMORY
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
   OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD,
-  OP_SYMLINK, OP_READLINK
+  OP_SYMLINK, OP_READLINK, OP_COPY
 } op_kind;
 
 typedef struct {
@@ -1207,6 +1207,86 @@ static void work_replace(op *o) {
   }
 }
 
+/* File.copy: the bytes of the regular file from (a link is followed) go to a new file beside to, which only the owner
+   can read while it is written; it then takes the permission bits of from (setuid, setgid and sticky are not copied),
+   is flushed to the disk and is renamed over to in one step, as Path.replace does, so to names the old file or the
+   whole copy, never a part, and a link at to is replaced itself. A failure of the source is that of a read of it; every
+   other failure is FS_COPY, removes the new file and leaves to as it was. A directory at to is refused before any
+   byte is read. */
+static void work_copy(op *o) {
+  int source = open_for(o, true, false);
+  if (source < 0) return;
+  agc_fs_info info;
+  if (agc_fs_fstat(source, &info) != 0) {
+    int err = errno;
+    agc_fs_close(source);
+    fail_op(o, FS_READ, err);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    agc_fs_close(source);
+    fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info.mode) ? EISDIR : 0);
+    return;
+  }
+  agc_fs_info over;
+  if (agc_fs_stat(o->to, &over, false) == 0 && AGC_FS_ISDIR(over.mode)) {
+    agc_fs_close(source);
+    fail_op(o, FS_COPY, EISDIR);
+    return;
+  }
+  agc_fs_blocking(source);
+  char *fresh = NULL;
+  int copy = agc_fs_open_beside(o->to, &fresh);
+  uint8_t *buf = copy < 0 ? NULL : malloc(CHUNK);
+  if (!buf) {
+    int err = errno;
+    agc_fs_close(source);
+    if (copy >= 0) {
+      agc_fs_close(copy);
+      agc_fs_unlink(fresh);
+      no_memory(o);
+    } else {
+      fail_op(o, FS_COPY, err);
+    }
+    free(fresh);
+    return;
+  }
+  int err = 0;
+  fs_status status = FS_OK;
+  for (;;) {
+    int64_t n = agc_fs_read(source, buf, CHUNK);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) {
+      err = errno;
+      status = FS_READ;
+      break;
+    }
+    if (n == 0) break;
+    if (!write_all(copy, buf, (size_t)n, &err)) {
+      status = FS_COPY;
+      break;
+    }
+  }
+  free(buf);
+  agc_fs_close(source);
+  if (status == FS_OK && (agc_fs_fchmod(copy, (int)(info.mode & 0777)) != 0 || agc_fs_fsync(copy) != 0)) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (agc_fs_close(copy) != 0 && status == FS_OK) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (status == FS_OK && agc_fs_replace(fresh, o->to) != 0) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (status == FS_OK) agc_fs_sync_folder(o->to);
+  else agc_fs_unlink(fresh);
+  free(fresh);
+  if (status != FS_OK) fail_op(o, status, err);
+}
+
 /* A `regular` open (File.chunks) is refused unless the descriptor itself is a regular file, decided by its fstat as in
    work_sha256, so a pipe or a device swapped in after the path stat is never read. The open is non-blocking. */
 static void work_open(op *o) {
@@ -1381,6 +1461,7 @@ static void work(void *data) {
     case OP_CHMOD: work_chmod(o); break;
     case OP_SYMLINK: work_symlink(o); break;
     case OP_READLINK: work_readlink(o); break;
+    case OP_COPY: work_copy(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1551,7 +1632,7 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_TOO_BIG: return error_of(vm, AGC_KIND_IO_TOO_LARGE, "filesystem: file exceeds 1048576 bytes");
     case FS_OPEN:
       if (o->kind == OP_LIST) return os_error(vm, "filesystem: cannot open directory", o->path, path_len, o->err);
-      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
+      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256 || o->kind == OP_COPY)
         return os_error(vm, "filesystem: cannot open file for reading", o->path, path_len, o->err);
       return os_error(vm, "filesystem: cannot open file for writing", o->path, path_len, o->err);
     case FS_IS_DIR: {
@@ -1585,9 +1666,11 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       put_system_error(vm, &t, o->err);
       return error_text(vm, agc_errno_kind(AGC_FAMILY_IO, o->err), &t, o->err);
     }
-    case FS_RENAME: {
+    case FS_RENAME:
+    case FS_COPY: {
       text t = {0};
-      puts_text(&t, "filesystem: cannot rename path\n  from: ");
+      puts_text(&t, o->status == FS_COPY ? "filesystem: cannot copy file\n  from: "
+                                         : "filesystem: cannot rename path\n  from: ");
       put(&t, o->path, path_len);
       puts_text(&t, "\n  to: ");
       put(&t, o->to, strlen(o->to));
@@ -1919,7 +2002,7 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
   return path_op(vm, OP_REMOVE, args[0], agc_as_int(vm, args[1]));
 }
 
-/* Path.rename and Path.replace: the two paths checked, then the pool job of kind. */
+/* Path.rename, Path.replace and File.copy: the two paths checked, then the pool job of kind. */
 static agc_value rename_call(agc_vm *vm, agc_value *args, uint32_t span, op_kind kind) {
   if (fs_denied(vm, span)) {
     const agc_string *target = agc_as_string(vm, args[1]);
@@ -1945,6 +2028,11 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
 /* Path.replace(from, to, timeout_ms): see work_rename_over. */
 static agc_value builtin_rename_over(agc_vm *vm, agc_value *args, uint32_t span) {
   return rename_call(vm, args, span, OP_RENAME_OVER);
+}
+
+/* File.copy(from, to, timeout_ms): see work_copy. */
+static agc_value builtin_copy(agc_vm *vm, agc_value *args, uint32_t span) {
+  return rename_call(vm, args, span, OP_COPY);
 }
 
 /* File.replace(path, data, timeout_ms): see work_replace. */
@@ -2702,6 +2790,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.chmod", 3, builtin_chmod, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.symlink", 3, builtin_symlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.readlink", 2, builtin_readlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.copy", 3, builtin_copy, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

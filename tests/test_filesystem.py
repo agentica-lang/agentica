@@ -1301,3 +1301,121 @@ end
 ''', cwd=root)
     assert output == "text.encoding invalid UTF-8 at byte 0\n"
     assert os.readlink(os.fsencode(root / "bad.txt")) == b"\xff"
+
+
+COPY_PROGRAM = r"""def show(r: Result[Void]) -> Void
+  case r
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{e.message.split("\n")[0]} #{e.details.get("path").unwrap_or("-")} #{e.details.get("to").unwrap_or("-")}")
+  end
+end
+
+def mode(path: String) -> Int = File.stat(path).unwrap!.mode
+
+def main() -> Void
+  show(File.copy("tool.sh", "tool-copy.sh"))
+  puts(mode("tool-copy.sh") == mode("tool.sh"))
+  show(File.copy("secret.txt", "secret-copy.txt"))
+  puts(mode("secret-copy.txt") == mode("secret.txt"))
+  show(File.copy("empty.txt", "empty-copy.txt"))
+  show(File.copy("big.bin", "big-copy.bin"))
+  show(File.copy("link.txt", "from-link.txt"))
+  show(File.copy("tool.sh", "old.txt"))
+  puts(mode("old.txt") == mode("tool.sh"))
+  show(File.copy("tool.sh", "target-link.txt"))
+  show(File.copy("tool.sh", "tool.sh"))
+  show(File.copy("tool.sh", "folder"))
+  show(File.copy("folder", "folder-copy"))
+  show(File.copy("missing.txt", "missing-copy.txt"))
+  show(File.copy("tool.sh", "nowhere/copy.sh"))
+  show(File.copy("tool.sh", "", 1000))
+  show(File.copy("tool.sh", "late.sh", 0))
+  show(File.copy("tool.sh", "locked.txt"))
+end
+"""
+
+
+def test_file_copy_keeps_the_mode_replaces_a_file_or_a_link_whole_and_leaves_the_destination_on_a_failure(new_dir,
+                                                                                                          run_program):
+    root = new_dir()
+    big = os.urandom(200_000)
+    (root / "tool.sh").write_text("echo hi\n")
+    (root / "tool.sh").chmod(0o755)
+    (root / "secret.txt").write_text("secret")
+    (root / "secret.txt").chmod(0o600)
+    (root / "empty.txt").write_bytes(b"")
+    (root / "big.bin").write_bytes(big)
+    (root / "old.txt").write_text("old")
+    (root / "old.txt").chmod(0o640)
+    (root / "folder").mkdir()
+    (root / "kept.txt").write_text("kept")
+    (root / "locked.txt").write_text("locked")
+    (root / "locked.txt").chmod(0o444)
+    symlink("tool.sh", root / "link.txt")
+    symlink("kept.txt", root / "target-link.txt")
+    output = run_program(COPY_PROGRAM, cwd=root).splitlines()
+    # A read-only destination: POSIX renames over it (the folder decides), Windows refuses and keeps it.
+    locked = "io.permission filesystem: cannot copy file tool.sh locked.txt" if WINDOWS else "ok"
+    assert output == [
+        "ok", "true",
+        "ok", "true",
+        "ok",
+        "ok",
+        "ok",
+        "ok", "true",
+        "ok",
+        "ok",
+        "io.is_directory filesystem: cannot copy file tool.sh folder",
+        "io.is_directory filesystem: path does not refer to a regular file folder folder-copy",
+        "io.not_found filesystem: path does not refer to a regular file missing.txt missing-copy.txt",
+        "io.not_found filesystem: cannot copy file tool.sh nowhere/copy.sh",
+        "argument filesystem: invalid path \"\" - -",
+        "argument filesystem: timeout must be positive milliseconds - -",
+        locked,
+    ], output
+    assert (root / "tool-copy.sh").read_text() == "echo hi\n" and (root / "empty-copy.txt").read_bytes() == b""
+    assert (root / "big-copy.bin").read_bytes() == big and (root / "from-link.txt").read_text() == "echo hi\n"
+    assert (root / "old.txt").read_text() == "echo hi\n"
+    # The link at the destination is replaced itself: the file it pointed to is untouched.
+    assert not (root / "target-link.txt").is_symlink() and (root / "target-link.txt").read_text() == "echo hi\n"
+    assert (root / "kept.txt").read_text() == "kept" and (root / "tool.sh").read_text() == "echo hi\n"
+    assert not (root / "from-link.txt").is_symlink() and (root / "link.txt").is_symlink()
+    assert (root / "folder").is_dir() and not list((root / "folder").iterdir())
+    if not WINDOWS:
+        assert (root / "tool-copy.sh").stat().st_mode & 0o7777 == 0o755
+        assert (root / "secret-copy.txt").stat().st_mode & 0o7777 == 0o600
+        assert (root / "old.txt").stat().st_mode & 0o7777 == 0o755
+    else:
+        assert (root / "locked.txt").read_text() == "locked"
+    assert sorted(path.name for path in root.iterdir() if ".agc-" in path.name) == []
+
+
+@host_only(WINDOWS, "POSIX folder and file permissions; Windows does not enforce them on a folder or an owner")
+def test_file_copy_fails_with_a_permission_error_when_the_source_or_the_folder_refuses_and_leaves_nothing(new_dir,
+                                                                                                         run_program):
+    if os.geteuid() == 0:
+        pytest.skip("host-only: a mode of 000 stops nothing for root")
+    root = new_dir()
+    (root / "source.txt").write_text("source")
+    (root / "sealed.txt").write_text("sealed")
+    (root / "sealed.txt").chmod(0)
+    (root / "closed").mkdir()
+    (root / "closed" / "kept.txt").write_text("kept")
+    (root / "closed").chmod(0o555)
+    try:
+        output = run_program(r"""def main() -> Void
+  for pair in [["sealed.txt", "a.txt"], ["source.txt", "closed/b.txt"], ["source.txt", "closed/kept.txt"]]
+    case File.copy(pair[0], pair[1])
+      ok(_) -> puts("ok")
+      error(e) -> puts("#{e.kind} #{e.message.split("\n")[0]}")
+    end
+  end
+end
+""", cwd=root).splitlines()
+    finally:
+        (root / "closed").chmod(0o755)
+        (root / "sealed.txt").chmod(0o600)
+    assert output == ["io.permission filesystem: cannot open file for reading",
+                      "io.permission filesystem: cannot copy file", "io.permission filesystem: cannot copy file"]
+    assert not (root / "a.txt").exists() and (root / "closed" / "kept.txt").read_text() == "kept"
+    assert sorted(path.name for path in (root / "closed").iterdir()) == ["kept.txt"]

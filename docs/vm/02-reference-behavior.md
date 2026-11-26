@@ -415,6 +415,17 @@ Every failure is an error value. The checks run in this order:
   can leave it behind. It works by path, like `Path.rename`: a folder of the
   path swapped between the `realpath` and the rename is not defended. After a
   timeout the job runs to its end (14.3).
+- `File.copy(from, to, timeout_ms)` is one pool job with the paths checked as
+  for `Path.rename`. `from` is opened as a read is (non-blocking, so a FIFO
+  never blocks the thread) and must be a regular file by its `fstat`, else the
+  error of a read of it; a directory at `to` (lstat) is `EISDIR` before any
+  byte is read. The bytes go in `CHUNK` blocks to `.agc-PID-N.tmp` beside `to`
+  (as `File.replace`: exclusive, no link followed, mode 0600 while written), then
+  `fchmod` to `from`'s mode & 0777, `fsync` and `agc_fs_replace` over `to`, so a
+  link at `to` is replaced itself; the folder is then flushed on POSIX. Every
+  failure after the source is open is `filesystem: cannot copy file` with `from`
+  and `to`, removes the new file, and leaves `to` as it was. After a timeout the
+  job runs to its end (14.3).
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

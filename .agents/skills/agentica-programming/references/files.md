@@ -23,6 +23,7 @@ File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
+File.copy(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
@@ -113,6 +114,13 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   16 MiB of bytes in one rename: a reader never sees a part or no file. It keeps
   the permission bits and writes through a symlink, which stays a link. A
   missing file is an error; Windows refuses a read-only one.
+- `File.copy(from, to, ms)` copies a regular file of any size with its
+  permission bits (not setuid, setgid or sticky), in one rename like
+  `Path.replace`: `to` is replaced or made, a symlink at `to` is replaced itself,
+  a directory is `io.is_directory`; a failure leaves `to` as it was. The error
+  `details` hold `from` and `to`. Windows refuses a read-only `to`.
+- A path exists when `File.stat(path, ms).ok?` (`File.lstat` for a dangling
+  link); there is no separate exists call.
 - `Path.rename(from, to, ms)` moves a file, a symlink (as a link) or a directory
   to a path that does not exist, atomically: an existing target, even an empty
   directory, is an error and never replaced, so racing programs get one winner.

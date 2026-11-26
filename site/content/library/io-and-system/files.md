@@ -51,6 +51,30 @@ end
 - The file must exist and be a regular file: a missing path is `error("filesystem: cannot resolve path ...")`, a directory or a FIFO `error("filesystem: path does not refer to a regular file")`. Use `File.write_text` to create a file.
 - On Windows a read-only file is an error, and nothing is written. Of the old file's attributes only the read-only bit is kept: the access list comes from the folder, and the hidden and system attributes are dropped.
 
+## File.copy
+
+```signature
+File.copy(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Copies the regular file `from` to `to` with the permission bits of `from`, so a program saved as `0o755` is still executable. A reader of `to` sees the old file or the whole copy, never a part. The file may be of any size.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("tool.sh", "echo hi\n", 1000).unwrap!
+  File.chmod("tool.sh", 0o755, 1000).unwrap!
+  File.copy("tool.sh", "tool-backup.sh", 1000).unwrap!
+  puts(File.stat("tool-backup.sh", 1000).unwrap!.mode)
+end
+```
+
+- The bytes go to a new file beside `to`, which only the owner can read while it is written; it then takes the permission bits of `from`, is flushed to the disk and is renamed over `to`, as `Path.replace` does. The umask does not apply, and setuid, setgid and sticky are not copied. A failure removes the new file and leaves `to` as it was. A process killed during the copy can leave a hidden `.agc-PID-N.tmp` file in the folder of `to`. Copying needs write permission on that folder.
+- `to` is replaced when it exists and made when it does not. A symbolic link at `to` is replaced itself, and the file it points to is untouched. A folder at `to` is `io.is_directory` and nothing is read. A symbolic link `from` is followed. A `from` that is not a regular file (a folder, a FIFO or a device) is `error("filesystem: path does not refer to a regular file")`.
+- The new file belongs to the user who runs the program. The owner, the times and the other attributes of `from` are not copied, and a hard link of `to` keeps the old bytes. Copying a file onto itself leaves a copy of it.
+- The `details` of an error hold `from` under `"path"` and `to` under `"to"`.
+- Windows keeps only the read-only bit of `from`, and refuses a read-only `to` with `io.permission`, leaving it as it was.
+- A timeout gives an error, but the started copy runs to its end.
+
 ## File.append_text
 
 ```signature
@@ -106,6 +130,8 @@ File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 Gives a `File.Info`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
 
 - `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"`, `"link"` (`File.lstat` of a reparse point) and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
+
+- To test that a path exists, use `File.stat(path, 1000).ok?` (`File.lstat` when a dangling link counts): there is no `File.exists?`, since the result already says it and a disk check needs a timeout and an error.
 
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
 - Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
