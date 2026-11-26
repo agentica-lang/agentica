@@ -460,10 +460,10 @@ static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint
 /* Reads one type at *AT, before END, with no recursion: NEED[d] counts the type arguments still to read at depth d.
    Gives the kind of the outer type, with in *ID the program's index of a struct or enum kind, or the position in
    BLOCKS of a resource's block (agc_native_bind turns it into the row), or -1 when the text is no canonical type. A
-   name that is no kind is the type of a block of BLOCKS. Each turn of the loop reads a name or fails, so the loop
+   Float32 is one only as the item of a List. A name that is no kind is the type of a block of BLOCKS. Each turn of the loop reads a name or fails, so the loop
    ends. */
 static int parse_type(const char **at, const char *end, const block_list *blocks, uint32_t *id) {
-  uint8_t need[TYPE_MAX_DEPTH];
+  uint8_t need[TYPE_MAX_DEPTH], parent[TYPE_MAX_DEPTH];
   size_t depth = 0;
   int outer = -1;
   for (;;) {
@@ -476,7 +476,7 @@ static int parse_type(const char **at, const char *end, const block_list *blocks
       block_kind b = blocks->items[at_block].kind;
       kind = b == B_ENUM ? K_ENUM : b == B_STRUCT ? K_STRUCT : K_RESOURCE;
     }
-    if (kind < 0) return -1;
+    if (kind < 0 || (kind == K_FLOAT32 && (depth == 0 || parent[depth - 1] != K_LIST))) return -1;
     if (outer < 0) {
       outer = kind;
       // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: kinds >= K_STRUCT come from a found block
@@ -484,6 +484,7 @@ static int parse_type(const char **at, const char *end, const block_list *blocks
     }
     if (kind < K_STRUCT && KINDS[kind].arity) {
       if (depth == TYPE_MAX_DEPTH || !skip(at, end, "[")) return -1;
+      parent[depth] = (uint8_t)kind;
       need[depth++] = KINDS[kind].arity;
       continue;
     }
@@ -1576,6 +1577,7 @@ static an_term api_list_end(an_env *env, an_list_builder *b) {
 
 /* A List of the N Float32 at DATA, or for a dirty call a node over a copy in the arena. */
 static an_term api_make_float32s(an_env *env, const float *data, size_t n) {
+  if (n && !data) return env_refuse(env, "an_float32s got no items");
   size_t bytes = agc_size_mul(n, sizeof(float));
   agc_native_dirty *d = env->dirty;
   if (d) {

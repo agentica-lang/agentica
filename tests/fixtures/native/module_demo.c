@@ -12,8 +12,8 @@
 
 #include <errno.h>
 #include <stdalign.h>
-#include <stdint.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -106,8 +106,7 @@ static an_term sum32_after_first(an_env *env, int argc, const an_term *argv) {
 static an_term runs32(an_env *env, int argc, const an_term *argv) {
   size_t runs = 0;
   (void)argc;
-  an_term sum = sum_runs(env, argv, 0, &runs);
-  (void)sum;
+  sum_runs(env, argv, 0, &runs);
   return an_int(env, (int64_t)runs);
 }
 
@@ -121,6 +120,74 @@ static an_term run_of_ints(an_env *env, int argc, const an_term *argv) {
   return an_int(env, an_float32_run(env, &c, &data, &n));
 }
 
+/* Reads a list of the items 0.5 * k by runs, after FIRST items passed with an_list_next, and BETWEEN more after each
+   run: every run item must be the list's item at its place, and the runs and the passed items must be the whole list.
+   Gives how many items an_list_next passed after a run. */
+static an_term iota_runs32(an_env *env, int argc, const an_term *argv) {
+  an_list_cursor c;
+  an_term item;
+  const float *data;
+  size_t len, n, pos = 0, skips = 0;
+  int64_t first, between;
+  int got;
+  (void)argc;
+  if (!an_list_cursor_begin(env, argv[0], &c, &len)) return an_badarg(env, 0);
+  if (!an_get_int(env, argv[1], &first) || first < 0) return an_badarg(env, 1);
+  if (!an_get_int(env, argv[2], &between) || between < 0) return an_badarg(env, 2);
+  for (int64_t k = 0; k < first; k++) {
+    if (!an_list_next(env, &c, &item)) return an_badarg(env, 1);
+    pos++;
+  }
+  while ((got = an_float32_run(env, &c, &data, &n)) == 1) {
+    for (size_t k = 0; k < n; k++)
+      if (data[k] != 0.5f * (float)(pos + k)) return an_raise(env, "a run holds another item than the list");
+    pos += n;
+    for (int64_t k = 0; k < between && an_list_next(env, &c, &item); k++) {
+      pos++;
+      skips++;
+    }
+  }
+  if (got < 0 || pos != len) return an_badarg(env, 0);
+  return an_int(env, (int64_t)skips);
+}
+
+/* inf, -inf, NaN, -0.0, the greatest finite and the least subnormal, as the bits of binary32. */
+static an_term specials32(an_env *env, int argc, const an_term *argv) {
+  static const uint32_t bits[] = {0x7f800000u, 0xff800000u, 0x7fc00000u, 0x80000000u, 0x7f7fffffu, 0x00000001u};
+  float data[sizeof bits / sizeof bits[0]];
+  (void)argc;
+  (void)argv;
+  memcpy(data, bits, sizeof data);
+  return an_float32s(env, data, sizeof data / sizeof data[0]);
+}
+
+/* The items of a List[Float32] as they are, bit for bit, read by runs and made again. */
+static an_term echo32(an_env *env, int argc, const an_term *argv) {
+  an_list_cursor c;
+  const float *data;
+  size_t len, n, at = 0;
+  int got;
+  (void)argc;
+  if (!an_list_cursor_begin(env, argv[0], &c, &len)) return an_badarg(env, 0);
+  float *out = len ? malloc(len * sizeof *out) : NULL;
+  if (len && !out) return an_raise(env, "out of memory");
+  while ((got = an_float32_run(env, &c, &data, &n)) == 1) {
+    memcpy(out + at, data, n * sizeof *data);
+    at += n;
+  }
+  an_term t = got < 0 ? an_badarg(env, 0) : an_float32s(env, out, at);
+  free(out);
+  return t;
+}
+
+/* an_float32s with no items for a count that is not 0: the call fails. */
+static an_term null32(an_env *env, int argc, const an_term *argv) {
+  int64_t n;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n) || n < 0) return an_badarg(env, 0);
+  return an_float32s(env, NULL, (size_t)n);
+}
+
 /* The N items 0.5 * k, k from 0, as a List[Float32] made from one C array. */
 static an_term iota32(an_env *env, int argc, const an_term *argv) {
   int64_t n;
@@ -132,6 +199,12 @@ static an_term iota32(an_env *env, int argc, const an_term *argv) {
   an_term t = an_float32s(env, data, (size_t)n);
   free(data);
   return t;
+}
+
+/* ok(the N items 0.5 * k): a List[Float32] inside a Result. */
+static an_term ok32(an_env *env, int argc, const an_term *argv) {
+  an_term list = iota32(env, argc, argv);
+  return an_ok(env, list);
 }
 
 /* Each item of a List[Float32] times a Float, in binary32: runs in, an_float32s out. */
@@ -776,6 +849,11 @@ static const an_function functions[] = {
   {"scale32", "(List[Float32], Float) -> List[Float32]", scale32, AN_SHORT},
   {"dirty_scale32", "(List[Float32], Float) -> List[Float32]", scale32, AN_DIRTY},
   {"dirty_iota32", "(Int) -> List[Float32]", iota32, AN_DIRTY},
+  {"iota_runs32", "(List[Float32], Int, Int) -> Int", iota_runs32, AN_SHORT},
+  {"specials32", "() -> List[Float32]", specials32, AN_SHORT},
+  {"echo32", "(List[Float32]) -> List[Float32]", echo32, AN_SHORT},
+  {"null32", "(Int) -> List[Float32]", null32, AN_SHORT},
+  {"ok32", "(Int) -> Result[List[Float32]]", ok32, AN_SHORT},
   {"row", "(Int) -> Map[String, Int]", row, AN_SHORT},
   {"pairs", "(Map[String, Int]) -> List[String]", pairs, AN_SHORT},
   {"lookup", "(Map[String, Int], String) -> Optional[Int]", lookup, AN_SHORT},

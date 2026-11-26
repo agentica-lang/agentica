@@ -53,6 +53,9 @@ MODULE = """extern module "LIBRARY"
   def sum32_after_first(samples: List[Float32]) -> Float
   def runs32(samples: List[Float32]) -> Int
   def iota32(n: Int) -> List[Float32]
+  def specials32() -> List[Float32]
+  def echo32(samples: List[Float32]) -> List[Float32]
+  def ok32(n: Int) -> Result[List[Float32]]
   def scale32(samples: List[Float32], by: Float) -> List[Float32]
   compute def dirty_scale32(samples: List[Float32], by: Float) -> List[Float32]
   compute def dirty_iota32(n: Int) -> List[Float32]
@@ -138,12 +141,17 @@ def test_a_list_of_float32_crosses_as_c_floats(tmp_path, demo):
   puts(sum32(samples))
   puts(sum32_after_first(samples))
   puts(sum32(samples.drop(45)))
+  puts(sum32(samples + samples))
   puts(runs32(samples) <= 6)
   puts(scale32(samples, 3.0).map do |x: Float32| x.to_bits.to_i end)
   puts(dirty_scale32(samples, 3.0).map do |x: Float32| x.to_bits.to_i end)
   puts(iota32(70).map do |x: Float32| x.to_bits.to_i end)
   puts(dirty_iota32(0))
   puts(scale32([], 2.0))
+  puts(specials32().map do |x: Float32| x.to_bits.to_i end)
+  puts(echo32(specials32()).map do |x: Float32| x.to_bits.to_i end)
+  puts(ok32(3))
+  puts(ok32(0))
 """ % literal_items
     result = run_main(tmp_path, demo, body)
     assert (result.code, result.stderr) == (0, "")
@@ -156,11 +164,17 @@ def test_a_list_of_float32_crosses_as_c_floats(tmp_path, demo):
     tail = 0.0
     for x in items[45:]:
         tail += x
+    twice = 0.0
+    for x in items + items:
+        twice += x
     scaled = [bits32(x * 3.0) for x in items]
     halves = [bits32(0.5 * k) for k in range(70)]
     lines = result.stdout.split("\n")
-    assert [float(line) for line in lines[:3]] == [total, after, tail]
-    assert lines[3:] == ["true", str(scaled), str(scaled), str(halves), "[]", "[]", ""]
+    assert [float(line) for line in lines[:4]] == [total, after, tail, twice]
+    # Inf, -Inf, NaN, -0.0, the greatest finite and the least subnormal keep their bits.
+    specials = str([0x7F800000, 0xFF800000, 0x7FC00000, 0x80000000, 0x7F7FFFFF, 0x00000001])
+    assert lines[4:] == ["true", str(scaled), str(scaled), str(halves), "[]", "[]", specials, specials,
+                         "ok([0.0, 0.5, 1.0])", "ok([])", ""]
 
 
 # The structs and enums of an imported file cross too: the module knows them by their bare names.

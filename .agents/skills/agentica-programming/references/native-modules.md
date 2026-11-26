@@ -85,7 +85,7 @@ end
   the next run: `n` aligned, read-only floats inside the list, valid until the
   function returns; loop until it gives 0 (a list is a chain of runs), -1 for
   another list kind. `an_float32s(env, data, n)` makes a list from C floats
-  (copied). Needs agentica 0.40.0.
+  (copied). Needs agentica 0.40.0 (after 0.40.0-beta.1).
 - `an_error_kind(env, kind, message, len, keys, values, n)` (API 1.4) makes
   `error(message, kind: kind, details: {...})` from NUL-terminated C
   strings; a kind that is not a dotted name fails the call.

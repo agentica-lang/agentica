@@ -262,7 +262,8 @@ static inline bool an_list_next(an_env *env, an_list_cursor *c, an_term *item) {
    list is a chain of runs, which the VM joins when they lie one after the other, so one run is not always the whole
    list. It gives 1 for a run, 0 at the end of the list (an empty list included), and -1, leaving the cursor and the
    outputs alone, for a list that is not a List[Float32]. A run starts at the cursor, so it follows an_list_next.
-   an_float32s makes a List[Float32] of the N items at DATA (NULL when N is 0), which it copies and does not keep. */
+   an_float32s makes a List[Float32] of the N items at DATA (NULL when N is 0; NULL for another N fails the call), which
+   it copies and does not keep. The items are bit-exact binary32, NaN and Inf included. */
 static inline int an_float32_run(an_env *env, an_list_cursor *c, const float **data, size_t *n) {
   return an_api_of(env)->float32_run(env, c, data, n);
 }
