@@ -12,11 +12,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Archive.Options(keep_mode: true)` gives each file `extract_tar` writes the permission bits of its TAR header, masked by `0o755`, so an executable from a release archive can run (#1864).
 - `File.chmod(path, mode)` sets the permission bits of a file or directory; on Windows it sets the read-only attribute (#1864).
+- `File.symlink(target, link)` makes a symbolic link and `File.readlink(path)` reads its text; Windows without the right to make links, or a system that answers `ENOTSUP`, gives the new error kind `io.unsupported` (#1866).
 - `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
 ### Changed
 
 - A `List[Float32]` is stored packed, 4 bytes per item instead of 16, so 10 million items take about 40 MB (#2019).
+- **Breaking:** an error of a file call with the errno `ENOTSUP` or `EOPNOTSUPP` has the kind `io.unsupported`, not `io.failed`; on Windows this includes a named pipe or a device refused as a file (#1866).
 
 ## [0.39.1] - 2026-11-26
 

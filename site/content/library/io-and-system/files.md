@@ -146,6 +146,47 @@ def main() -> Void
 end
 ```
 
+## File.symlink
+
+```signature
+File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Makes the symbolic link `link` whose text is `target`, as Ruby's `File.symlink` does (the target first, the link second).
+
+- The text is kept as given, and `target` need not exist: a link to a missing path (a dangling link) is made, and it works once the target appears. A relative `target` is read from the folder of `link`, not from the working directory, so `File.symlink("a.txt", "dir/b.txt")` links `dir/b.txt` to `dir/a.txt`.
+- It never replaces anything: when `link` exists (a file, a folder or another link, dangling or not), the call fails with `io.exists` and nothing changes. A missing folder in `link` is `io.not_found`. An empty `target` or `link`, one with a NUL, and on Windows one that starts with `\\.\` or `\\?\` give an `argument` error. The `details` of an error hold the `link` as given under `"path"` and the `target` under `"to"`.
+- Windows makes the link with `CreateSymbolicLinkW` and the flag that lets a user without the privilege make it (it needs Developer Mode on; an administrator needs nothing). When the system refuses for want of that right, or answers `ENOTSUP`, the error has the kind `io.unsupported`. A `/` in `target` becomes `\`. A `target` that is a folder when the call is made gives a folder link, and one that does not exist yet gives a file link, so make the folder first.
+- A timeout gives an error, but the started call runs to its end.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("model-v2.gguf", "weights", 1000).unwrap!
+  File.symlink("model-v2.gguf", "model.gguf", 1000).unwrap!
+  puts(File.readlink("model.gguf", 1000).unwrap!)
+end
+```
+
+## File.readlink
+
+```signature
+File.readlink(path: String, timeout_ms: Int = 30000) -> Result[String]
+```
+
+Gives the text of the symbolic link at `path` as it was made, with no check that it names anything, so a dangling link reads fine. A `path` that is not a link is an `io.failed` error, and a missing one is `io.not_found`. The text must be UTF-8: a link made by another program with other bytes is a `text.encoding` error, never a changed text. The last name of `path` is not followed, but a link in a folder above it is.
+
+- To tell a link from other files, `File.lstat(path).unwrap!.kind == "link"` (a missing `path` is an error there).
+- Windows gives `/` for each `\` of the text, which `File.symlink` writes back as `\`: `File.symlink(File.readlink(a).unwrap!, b)` makes a link with the same text on every system.
+
+```agentica {mode="check"}
+def main() -> Void
+  case File.readlink("model.gguf", 1000)
+    ok(text) -> puts("model.gguf -> #{text}")
+    error(e) -> puts(e.kind)
+  end
+end
+```
+
 ## File.open and File.close
 
 ```signature
@@ -170,7 +211,7 @@ Opens a file for streaming.
 - At program end the run waits for open files to be written and for `puts` and `IO.warn` output to reach its pipe or file, at most 30 seconds (`--flush-timeout MS` or `AGENTICA_FLUSH_TIMEOUT_MS`; the flag wins). When time runs out the exit code stays and stderr gets one line saying file data may not be written.
 - On `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1` or `SIGUSR2` that the program has not subscribed to ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)): child programs stop first, then files are written, then the program ends by that signal. `SIGQUIT` does the same and exits with 131, without a core dump. A second signal ends it at once, once the children have stopped. Under `agentica`, Ctrl-C reaches the program directly; `agentica` waits 2 seconds, sends `SIGTERM`, waits 2 more, then kills it.
 - A path that reopens one of the program's own internal pipes, or the descriptor behind stdout or stderr (`/proc/self/fd/5`), gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got at start (stdin, stdout, stderr, a shell `<(...)`) open by path.
-- Windows: file calls accept only regular files (and folders where a folder is meant); a named pipe or a device is refused at once.
+- Windows: file calls accept only regular files (and folders where a folder is meant); a named pipe or a device is refused at once with `io.unsupported`.
 
 ```agentica {mode="check"}
 def main() -> Void

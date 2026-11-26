@@ -232,7 +232,7 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
         if reached:
             # The stat of the call takes one instance and the open another, which gets to probe() and its close: the
             # error is the ENOTSUP of probe (a busy pipe would say EBUSY), and both instances are let go.
-            assert "errno=%d" % errno.ENOTSUP in answer, (where, answer)
+            assert "errno=%d" % errno.ENOTSUP in answer and 'kind: "io.unsupported"' in answer, (where, answer)
             assert state.count("gone") >= 2, "%s: the VM reached the pipe and let go of it: %s" % (where, state)
 
 

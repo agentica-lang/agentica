@@ -543,6 +543,7 @@ ERROR_KINDS: List[String] = [
   "system.signal",
   "term.encode",
   "term.decode",
+  "io.unsupported",
   "archive.format",
   "archive.not_found",
   "archive.timeout",

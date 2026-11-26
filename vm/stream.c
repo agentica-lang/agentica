@@ -48,6 +48,10 @@ agc_error_kind agc_errno_kind(agc_error_family family, int err) {
       if (err == ENOTDIR) return AGC_KIND_IO_NOT_DIRECTORY;
       if (err == EFBIG) return AGC_KIND_IO_TOO_LARGE;
       if (err == EBADF) return AGC_KIND_IO_CLOSED;
+      if (err == ENOTSUP) return AGC_KIND_IO_UNSUPPORTED;
+#if defined(EOPNOTSUPP) && EOPNOTSUPP != ENOTSUP
+      if (err == EOPNOTSUPP) return AGC_KIND_IO_UNSUPPORTED;
+#endif
       return AGC_KIND_IO_FAILED;
     case AGC_FAMILY_NET:
       if (err == ETIMEDOUT) return AGC_KIND_NET_TIMEOUT;

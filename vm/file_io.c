@@ -194,8 +194,7 @@ int agc_fs_unlink(const char *path) {
   return os_result(result);
 }
 
-/* The length of the folder part of PATH, its last separator included (0 for a bare name). */
-static size_t folder_length(const char *path) {
+size_t agc_fs_folder_length(const char *path) {
   size_t cut = 0;
   for (size_t k = 0; path[k]; k++) {
 #ifdef _WIN32
@@ -206,6 +205,37 @@ static size_t folder_length(const char *path) {
   return cut;
 }
 
+/* The text that a realpath or readlink request gave, as a malloc'd copy (a '\\' is a '/' on Windows), or NULL with
+   errno. The request is cleaned up. */
+static char *path_text(int result, uv_fs_t *req) {
+  char *copy = result == 0 ? strdup(req->ptr) : NULL;
+  uv_fs_req_cleanup(req);
+  if (result < 0) os_result(result);
+  else if (!copy) errno = ENOMEM;
+#ifdef _WIN32
+  for (char *p = copy; p && *p; p++) if (*p == '\\') *p = '/';
+#endif
+  return copy;
+}
+
+#ifndef _WIN32
+int agc_fs_symlink(const char *target, const char *link) {
+  if (!target || !*target || !link || !*link) {
+    errno = EINVAL;
+    return -1;
+  }
+  uv_fs_t req;
+  int result = uv_fs_symlink(NULL, &req, target, link, 0, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+#endif
+
+char *agc_fs_readlink(const char *path) {
+  uv_fs_t req;
+  return path_text(uv_fs_readlink(NULL, &req, path, NULL), &req);
+}
+
 int agc_fs_open_beside(const char *path, CC_OWNS_OUT char **name) {
   static atomic_uint counter;
   *name = NULL;
@@ -213,7 +243,7 @@ int agc_fs_open_beside(const char *path, CC_OWNS_OUT char **name) {
     errno = EINVAL;
     return -1;
   }
-  size_t folder = folder_length(path);
+  size_t folder = agc_fs_folder_length(path);
   size_t cap = folder + 48;
   char *candidate = malloc(cap);
   if (!candidate) {
@@ -249,7 +279,7 @@ void agc_fs_sync_folder(const char *path) {
 #ifdef _WIN32
   (void)path;
 #else
-  size_t folder = folder_length(path);
+  size_t folder = agc_fs_folder_length(path);
   char *copy = folder ? strndup(path, folder) : strdup(".");
   if (!copy) return;
   int fd = open(copy, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
@@ -328,15 +358,7 @@ int agc_fs_list(const char *path, char **names, size_t *size, size_t *count) {
 
 char *agc_fs_realpath(const char *path) {
   uv_fs_t req;
-  int result = uv_fs_realpath(NULL, &req, path, NULL);
-  char *copy = result == 0 ? strdup(req.ptr) : NULL;
-  uv_fs_req_cleanup(&req);
-  if (result < 0) os_result(result);
-  else if (!copy) errno = ENOMEM;
-#ifdef _WIN32
-  for (char *p = copy; p && *p; p++) if (*p == '\\') *p = '/';
-#endif
-  return copy;
+  return path_text(uv_fs_realpath(NULL, &req, path, NULL), &req);
 }
 
 char *agc_fs_cwd(void) {

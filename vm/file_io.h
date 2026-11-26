@@ -57,9 +57,19 @@ int agc_fs_fsync(int fd);
 void agc_fs_sync_folder(const char *path);
 /* The permission bits of the open file FD; on Windows only the owner write bit counts (read-only or not). */
 int agc_fs_fchmod(int fd, int mode);
+/* The length of the folder part of PATH, its last separator included (0 for a bare name). */
+size_t agc_fs_folder_length(const char *path);
 /* The permission bits of PATH, a link followed (on Windows through its real path); on Windows only the owner write bit
    counts (read-only or not). */
 int agc_fs_chmod(const char *path, int mode);
+/* Makes the symbolic link LINK whose text is TARGET (any text, no check that it names something): 0, or -1 with errno
+   (EEXIST when LINK exists, ENOTSUP when the system refuses links, as Windows does without the right to make them).
+   On Windows a '/' of TARGET becomes '\\', and a target that is a folder (a relative one is read from the folder of LINK)
+   makes a folder link. */
+int agc_fs_symlink(const char *target, const char *link);
+/* The text of the symbolic link at PATH, malloc'd (the caller frees it), or NULL with errno (EINVAL when PATH is not
+   a link); on Windows its '\\' are '/'. */
+CC_OWNS char *agc_fs_readlink(const char *path);
 /* Renames FROM to TO, replacing a file at TO in one step (rename on POSIX, MoveFileExW REPLACE_EXISTING on Windows). */
 int agc_fs_replace(const char *from, const char *to);
 #ifdef _WIN32
@@ -79,6 +89,9 @@ void agc_fs_set_error(int result);
 int agc_fs_try_lock(int fd);
 int agc_fs_private_create(const char *path, bool directory);
 int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
+/* The errno of the Win32 ERROR that CreateSymbolicLinkW gave: ENOTSUP when the privilege is not held, EEXIST for an
+   access denied where LINK_EXISTS (a folder at the link says that, not "exists"), else libuv's translation. */
+int agc_fs_symlink_errno(uint32_t error, bool link_exists);
 char *agc_fs_absolute(const char *path);
 /* PATH (UTF-8) as a malloc'd UTF-16 string for the wide Windows calls; NULL with errno (EINVAL for bad UTF-8, an
    empty path or a device path such as //./x or //?/x, ENOMEM). */

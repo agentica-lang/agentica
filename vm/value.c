@@ -146,6 +146,7 @@ static const char *const kind_names[AGC_KIND_COUNT] = {
   [AGC_KIND_SYSTEM_SIGNAL] = "system.signal",
   [AGC_KIND_TERM_ENCODE] = "term.encode",
   [AGC_KIND_TERM_DECODE] = "term.decode",
+  [AGC_KIND_IO_UNSUPPORTED] = "io.unsupported",
 };
 
 #ifdef AGC_NO_GC
