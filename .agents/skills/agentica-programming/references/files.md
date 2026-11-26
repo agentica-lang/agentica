@@ -88,8 +88,10 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   `target` (a relative text is read from the folder of `link`; it may name
   nothing). It never replaces: an existing `link` is `io.exists`. Windows needs
   Developer Mode or an administrator, else `io.unsupported`; make a folder
-  target first. `File.readlink(path, ms)` gives the text (`io.failed` for a
-  path that is not a link; Windows shows `/` for `\`). A link is told by
+  target first; a Windows target starting `\\.\` or `\\?\` is an `argument`
+  error. `File.readlink(path, ms)` gives the text (`io.failed` for a path that
+  is not a link; `text.encoding` when the text is not UTF-8; Windows shows `/`
+  for `\`). A link is told by
   `File.lstat(path).unwrap!.kind == "link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one

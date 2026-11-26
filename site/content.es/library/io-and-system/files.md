@@ -2,7 +2,7 @@
 title: File, Dir y Path
 weight: 2
 description: Lee y escribe archivos, lista y crea directorios, y crea rutas.
-source_hash: "8c21d550f958"
+source_hash: "3c5563e68a75"
 ---
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
@@ -156,8 +156,8 @@ File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Vo
 Crea el enlace simbólico `link` cuyo texto es `target`, como el `File.symlink` de Ruby (primero el destino, después el enlace).
 
 - El texto se guarda tal como se da, y `target` no tiene que existir: se crea un enlace a una ruta que no existe (un enlace roto), y funciona cuando el destino aparece. Un `target` relativo se lee desde la carpeta de `link`, no desde el directorio de trabajo, así que `File.symlink("a.txt", "dir/b.txt")` enlaza `dir/b.txt` con `dir/a.txt`.
-- Nunca reemplaza nada: cuando `link` existe (un archivo, una carpeta u otro enlace, roto o no), la llamada falla con `io.exists` y nada cambia. Una carpeta que falta en `link` da `io.not_found`. Un `target` o un `link` vacío, o con un NUL, da un error `argument`. Los `details` de un error guardan el `link` tal como se dio bajo `"path"` y el `target` bajo `"to"`.
-- Windows crea el enlace con `CreateSymbolicLinkW` y la opción que deja crearlo a un usuario sin el privilegio (necesita el Modo de desarrollador activado; un administrador no necesita nada). Cuando el sistema lo rechaza por falta de ese derecho, el error tiene la clase `io.unsupported`. Una `/` de `target` pasa a `\`. Un `target` que es una carpeta al hacer la llamada da un enlace de carpeta, y uno que aún no existe da un enlace de archivo, así que crea primero la carpeta.
+- Nunca reemplaza nada: cuando `link` existe (un archivo, una carpeta u otro enlace, roto o no), la llamada falla con `io.exists` y nada cambia. Una carpeta que falta en `link` da `io.not_found`. Un `target` o un `link` vacío, con un NUL, y en Windows uno que empieza por `\\.\` o `\\?\` dan un error `argument`. Los `details` de un error guardan el `link` tal como se dio bajo `"path"` y el `target` bajo `"to"`.
+- Windows crea el enlace con `CreateSymbolicLinkW` y la opción que deja crearlo a un usuario sin el privilegio (necesita el Modo de desarrollador activado; un administrador no necesita nada). Cuando el sistema lo rechaza por falta de ese derecho, o responde `ENOTSUP`, el error tiene la clase `io.unsupported`. Una `/` de `target` pasa a `\`. Un `target` que es una carpeta al hacer la llamada da un enlace de carpeta, y uno que aún no existe da un enlace de archivo, así que crea primero la carpeta.
 - Un tiempo de espera da un error, pero la llamada ya iniciada llega hasta el final.
 
 ```agentica {mode="check"}
@@ -174,7 +174,7 @@ end
 File.readlink(path: String, timeout_ms: Int = 30000) -> Result[String]
 ```
 
-Da el texto del enlace simbólico en `path` tal como se creó, sin comprobar que nombre algo, así que un enlace roto se lee bien. Una `path` que no es un enlace es un error `io.failed`, y una que no existe es `io.not_found`. El último nombre de `path` no se sigue, pero un enlace en una carpeta superior sí.
+Da el texto del enlace simbólico en `path` tal como se creó, sin comprobar que nombre algo, así que un enlace roto se lee bien. Una `path` que no es un enlace es un error `io.failed`, y una que no existe es `io.not_found`. El texto debe ser UTF-8: un enlace creado por otro programa con otros bytes es un error `text.encoding`, nunca un texto cambiado. El último nombre de `path` no se sigue, pero un enlace en una carpeta superior sí.
 
 - Para distinguir un enlace de otros archivos, `File.lstat(path).unwrap!.kind == "link"` (una `path` que no existe es un error ahí).
 - Windows da `/` por cada `\` del texto, que `File.symlink` vuelve a escribir como `\`: `File.symlink(File.readlink(a).unwrap!, b)` crea un enlace con el mismo texto en todos los sistemas.

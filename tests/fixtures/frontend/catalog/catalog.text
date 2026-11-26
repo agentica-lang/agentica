@@ -218,7 +218,7 @@ builtin File.sha256 forms=1
 builtin File.stat forms=1
   File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info] shape=(String, Int = 30000) -> Result(Struct(File.Info)) rule=Plain impl="File.stat" effects=["filesystem"] desc="Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic links."
 builtin File.symlink forms=1
-  File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.symlink" effects=["filesystem"] desc="Make the symbolic link link whose text is target, which need not exist and is read from the folder of link when relative; an existing path at link is an error, never replaced; io.unsupported when the system cannot make links; VM only."
+  File.symlink(target: String, link: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.symlink" effects=["filesystem"] desc="Make the symbolic link link whose text is target, which need not exist and is read from the folder of link when relative; an existing path at link is an error, never replaced; io.unsupported on Windows without the right to make links or where the system answers ENOTSUP; VM only."
 builtin File.try_lock forms=1
   File.try_lock(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Bool] shape=(Opaque(File.Handle), Int = 30000) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
 builtin File.write forms=1

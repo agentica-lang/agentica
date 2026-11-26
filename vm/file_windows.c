@@ -590,6 +590,59 @@ int agc_fs_rename_noreplace(const char *from, const char *to) {
   return -1;
 }
 
+#ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
+#define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2
+#endif
+
+/* CreateSymbolicLinkW with the flag that lets a user without the privilege make the link (Developer Mode on, or an
+   administrator). The text works only with '\\', and a relative TARGET is read from the folder of LINK, which also
+   decides between a folder link and a file link (a target that is not there yet gets a file link). A system older
+   than the flag answers ERROR_INVALID_PARAMETER and gets the call without it, for this call only: libuv would clear
+   the flag for the whole process. */
+int agc_fs_symlink_windows(const char *target, const char *link) {
+  size_t length = strlen(target), folder = 0;
+  for (size_t k = 0; link[k]; k++) {
+    if (link[k] == '/' || link[k] == '\\') folder = k + 1;
+  }
+  char *native = malloc(folder + length + 1);
+  if (!native) {
+    errno = ENOMEM;
+    return -1;
+  }
+  char *text = native + folder;
+  for (size_t k = 0; k <= length; k++) text[k] = target[k] == '/' ? '\\' : target[k];
+  bool rooted = agc_fs_rooted(text, length);
+  if (!rooted) memcpy(native, link, folder);
+  agc_fs_info info;
+  DWORD flags = agc_fs_stat(rooted ? text : native, &info, true) == 0 && AGC_FS_ISDIR(info.mode)
+                    ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0;
+  wchar_t *wide_link = native_path(link);
+  wchar_t *wide_target = wide_link ? native_path(text) : NULL;
+  free(native);
+  if (!wide_target) {
+    free(wide_link);
+    return -1;
+  }
+  BOOLEAN made = CreateSymbolicLinkW(wide_link, wide_target, flags | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE);
+  DWORD error = made ? 0 : GetLastError();
+  if (!made && error == ERROR_INVALID_PARAMETER) {
+    made = CreateSymbolicLinkW(wide_link, wide_target, flags);
+    error = made ? 0 : GetLastError();
+  }
+  free(wide_link);
+  free(wide_target);
+  if (made) return 0;
+  if (error == ERROR_PRIVILEGE_NOT_HELD) {
+    errno = ENOTSUP;
+  } else if (error == ERROR_ACCESS_DENIED && agc_fs_stat(link, &info, false) == 0) {
+    /* An existing folder at LINK is access denied here, not "exists"; every other existing path is EEXIST. */
+    errno = EEXIST;
+  } else {
+    agc_fs_set_error(uv_translate_sys_error((int)error));
+  }
+  return -1;
+}
+
 int agc_fs_try_lock(int fd) {
   /* Avoid the CRT invalid-parameter handler for a closed descriptor. */
   if (fd < 0) {

@@ -489,7 +489,9 @@ section says how the scheduler and the loop keep them.
     (`names_output_fd` in `vm/files.c`, comparing directories by device and
     inode). Other `/proc/<pid>/task/<tid>/fd` paths reach the same pipe as
     `/dev/stdout` does, and they stay open, as `/dev/stdout`, `/dev/stderr`,
-    `/proc/self/fd/1` and `/proc/self/fd/2` do (§2.8).
+    `/proc/self/fd/1` and `/proc/self/fd/2` do (§2.8). The check reads the text
+    of the path before any link is resolved, so a symbolic link to such a path
+    (`File.symlink` makes one) is not named by it.
   - **Write errors.** A write error (`EPIPE`, `EIO`, `ENOSPC`) is final for the
     stream. The buffered data and the queued notices are dropped, the waiters
     wake, and the print that notices it fails with `RUNTIME-INTERNAL` (`cannot

@@ -351,13 +351,20 @@ Every failure is an error value. The checks run in this order:
 - `File.symlink(target, link, timeout_ms)` is one pool job: `symlink` with the
   text `target` (not checked, not resolved) at the absolute `link`, which must
   not exist (`EEXIST` is `io.exists`). The error holds `link` under `path` and
-  `target` under `to`. Windows is `CreateSymbolicLinkW` through libuv with the
-  unprivileged-create flag: a `/` of the text becomes `\`, a target that is a
-  folder when the call is made gives a folder link (stat from the folder of the
-  link when the text is relative), and `ERROR_PRIVILEGE_NOT_HELD` is `ENOTSUP`,
-  the kind `io.unsupported`. `File.readlink(path, timeout_ms)` is `readlink`
-  (one pool job; the text must be UTF-8, else `text.encoding`); Windows shows
-  `/` for each `\`. A path that is not a link is `EINVAL`, `io.failed`.
+  `target` under `to`, and its message shows the target in its printed form, cut
+  at 256 characters. A `target` that is empty, holds a NUL or (Windows) starts
+  `\\.\` or `\\?\` is an `argument` error before the job starts, as for a
+  path. Windows is `CreateSymbolicLinkW` itself (`agc_fs_symlink_windows`), not
+  libuv's call, which clears the unprivileged-create flag for the whole process
+  when one call answers `ERROR_INVALID_PARAMETER`; ours retries without the flag
+  for that call alone. A `/` of the text becomes `\`, a target that is a folder
+  when the call is made gives a folder link (stat from the folder of the link
+  when the text is relative), and `ERROR_PRIVILEGE_NOT_HELD` is `ENOTSUP`.
+  `ENOTSUP` (and `EOPNOTSUPP`) of a file call is the kind `io.unsupported`
+  (`agc_errno_kind`). `File.readlink(path, timeout_ms)` is `readlink` (one pool
+  job); a text that is not UTF-8 is `text.encoding`, as for a read of a file;
+  Windows shows `/` for each `\`. A path that is not a link is `EINVAL`,
+  `io.failed`.
 - `File.open` mode `create_private` is `open` with `O_WRONLY | O_CREAT | O_EXCL
   | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any existing
   entry, a dangling link included, is an error.

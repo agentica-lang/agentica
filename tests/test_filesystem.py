@@ -1193,12 +1193,22 @@ def main() -> Void
   puts(text(File.readlink("link.txt")))
   show(File.symlink("folder", "folder-link"))
   puts(text(File.read_text("folder-link/inner.txt")))
+  show(File.symlink("../folder", "sub/folder-up"))
+  puts(text(File.read_text("sub/folder-up/inner.txt")))
   show(File.symlink("../target.txt", "folder/up.txt"))
   puts(text(File.read_text("folder/up.txt")))
   show(File.symlink(text(File.readlink("folder/up.txt")), "folder/again.txt"))
   puts(text(File.readlink("folder/again.txt")))
   show(File.symlink(root + "/target.txt", "absolute.txt"))
   puts(text(File.readlink("absolute.txt")))
+  long = System.args()[1]
+  show(File.symlink(long, "long.txt"))
+  show(File.symlink(text(File.readlink("long.txt")), "long-again.txt"))
+  puts(text(File.readlink("long.txt")) == long && text(File.readlink("long-again.txt")) == long)
+  nul = String.from_code(0)
+  show(File.symlink("a" + nul, "nul-target"))
+  show(File.symlink("target.txt", "nul" + nul))
+  puts(text(File.readlink("nul" + nul)))
   show(File.symlink("target.txt", "nowhere/link.txt"))
   show(File.symlink("", "empty-target"))
   show(File.symlink("target.txt", ""))
@@ -1217,8 +1227,9 @@ def test_file_symlink_makes_a_link_readlink_reads_it_even_dangling_and_an_existi
     (root / "target.txt").write_text("hello")
     (root / "folder").mkdir()
     (root / "folder" / "inner.txt").write_text("inside")
+    (root / "sub").mkdir()
     symlink("target.txt", root / "peer.txt")
-    output = run_program(SYMLINK_PROGRAM, [str(root)], cwd=root).splitlines()
+    output = run_program(SYMLINK_PROGRAM, [str(root), "d/" * 500], cwd=root).splitlines()
     absolute = (str(root) + "/target.txt").replace("\\", "/")
     exists = "io.exists filesystem: cannot make symbolic link"
     assert output == [
@@ -1229,9 +1240,14 @@ def test_file_symlink_makes_a_link_readlink_reads_it_even_dangling_and_an_existi
         f"{exists} folder other.txt",
         "target.txt",
         "ok", "inside",
+        "ok", "inside",
         "ok", "hello",
         "ok", "../target.txt",
         "ok", absolute,
+        "ok", "ok", "true",
+        'argument filesystem: invalid path "a\\u0000" - -',
+        'argument filesystem: invalid path "nul\\u0000" - -',
+        'argument filesystem: invalid path "nul\\u0000"',
         "io.not_found filesystem: cannot make symbolic link nowhere/link.txt target.txt",
         "argument filesystem: invalid path \"\" - -",
         "argument filesystem: invalid path \"\" - -",
@@ -1248,4 +1264,35 @@ def test_file_symlink_makes_a_link_readlink_reads_it_even_dangling_and_an_existi
     assert (root / "folder" / "again.txt").read_text() == "hello"
     assert not (root / "nowhere").exists() and not (root / "late.txt").is_symlink()
     assert sorted(path.name for path in root.iterdir()) == [
-        "absolute.txt", "dangling.txt", "folder", "folder-link", "link.txt", "peer.txt", "target.txt"]
+        "absolute.txt", "dangling.txt", "folder", "folder-link", "link.txt", "long-again.txt", "long.txt", "peer.txt",
+        "sub", "target.txt"]
+    assert os.readlink(root / "sub" / "folder-up").replace("\\", "/") == "../folder"
+    assert (root / "sub" / "folder-up").is_dir() and os.readlink(root / "long.txt").replace("\\", "/") == "d/" * 500
+    if WINDOWS:
+        output = run_program(r'''def main() -> Void
+  for target in ["\\\\?\\C:\\x", "\\\\.\\x"]
+    case File.symlink(target, "device.txt")
+      ok(_) -> puts("ok")
+      error(e) -> puts("#{e.kind} #{e.message}")
+    end
+  end
+end
+''', cwd=root).splitlines()
+        assert output == [r'argument filesystem: invalid path "\\\\?\\C:\\x"',
+                          r'argument filesystem: invalid path "\\\\.\\x"'], output
+        assert not (root / "device.txt").is_symlink()
+
+
+@host_only(WINDOWS, "a link text of bytes that are not UTF-8, which Windows cannot hold (it keeps the text as UTF-16)")
+def test_file_readlink_refuses_a_link_text_that_is_not_utf_8_and_the_text_stays_as_it_was(new_dir, run_program):
+    root = new_dir()
+    os.symlink(b"\xff", os.fsencode(root / "bad.txt"))
+    output = run_program(r'''def main() -> Void
+  case File.readlink("bad.txt")
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{e.message}")
+  end
+end
+''', cwd=root)
+    assert output == "text.encoding invalid UTF-8 at byte 0\n"
+    assert os.readlink(os.fsencode(root / "bad.txt")) == b"\xff"

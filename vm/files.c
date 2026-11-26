@@ -902,8 +902,8 @@ static void work_readlink(op *o) {
     fail_op(o, FS_READLINK, errno);
     return;
   }
-  o->out = (uint8_t *)link_text;
   o->out_len = strlen(link_text);
+  o->out = (uint8_t *)link_text;
 }
 
 static void work_list(op *o) {
@@ -1578,11 +1578,12 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       puts_text(&t, "filesystem: cannot make symbolic link\n  link: ");
       put(&t, o->path, path_len);
       puts_text(&t, "\n  target: ");
-      put(&t, o->to, strlen(o->to));
+      size_t target_bytes = strlen(o->to), target_chars = 0;
+      if (agc_utf8_chars((const uint8_t *)o->to, target_bytes, &target_chars)) {
+        put_form(&t, agc_make_string(o->to, target_bytes, target_chars));
+      }
       put_system_error(vm, &t, o->err);
-      /* ENOTSUP: the system cannot make links at all (Windows without the privilege). */
-      return error_text(vm, o->err == ENOTSUP ? AGC_KIND_IO_UNSUPPORTED : agc_errno_kind(AGC_FAMILY_IO, o->err), &t,
-                        o->err);
+      return error_text(vm, agc_errno_kind(AGC_FAMILY_IO, o->err), &t, o->err);
     }
     case FS_RENAME: {
       text t = {0};
@@ -1879,7 +1880,7 @@ static agc_value builtin_symlink(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *link = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
   if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
-  if (!target->bytes || memchr(target->data, 0, target->bytes)) return bad_path(vm, target);
+  if (!path_string(target)) return bad_path(vm, target);
   if (!path_string(link)) return bad_path(vm, link);
   agc_value named_by[] = {args[1], args[0]};
   op *o = call_op(vm, OP_SYMLINK, NULL);

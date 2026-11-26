@@ -12,7 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Archive.Options(keep_mode: true)` gives each file `extract_tar` writes the permission bits of its TAR header, masked by `0o755`, so an executable from a release archive can run (#1864).
 - `File.chmod(path, mode)` sets the permission bits of a file or directory; on Windows it sets the read-only attribute (#1864).
-- `File.symlink(target, link)` makes a symbolic link and `File.readlink(path)` reads its text; a system that cannot make links gives the new error kind `io.unsupported` (#1866).
+- `File.symlink(target, link)` makes a symbolic link and `File.readlink(path)` reads its text; Windows without the right to make links, or a system that answers `ENOTSUP`, gives the new error kind `io.unsupported` (#1866).
 - `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
 ## [0.39.1] - 2026-11-26

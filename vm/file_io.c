@@ -224,36 +224,14 @@ int agc_fs_symlink(const char *target, const char *link) {
     errno = EINVAL;
     return -1;
   }
-  int flags = 0;
 #ifdef _WIN32
-  /* CreateSymbolicLinkW stores the target as it gets it and resolves a relative one only with '\\', and a link to a
-     folder must be made as a folder link. A relative target is looked up from the folder of the link. */
-  size_t length = strlen(target), folder = folder_length(link);
-  char *native = malloc(folder + length + 1);
-  if (!native) {
-    errno = ENOMEM;
-    return -1;
-  }
-  char *text = native + folder;
-  for (size_t k = 0; k <= length; k++) text[k] = target[k] == '/' ? '\\' : target[k];
-  agc_fs_info info;
-  bool rooted = agc_fs_rooted(text, length);
-  if (!rooted) memcpy(native, link, folder);
-  if (agc_fs_stat(rooted ? text : native, &info, true) == 0 && AGC_FS_ISDIR(info.mode)) flags = UV_FS_SYMLINK_DIR;
-  target = text;
-#endif
+  return agc_fs_symlink_windows(target, link);
+#else
   uv_fs_t req;
-  int result = uv_fs_symlink(NULL, &req, target, link, flags, NULL);
-#ifdef _WIN32
-  /* An existing folder at LINK is ERROR_ACCESS_DENIED there, not "exists". */
-  if (result == UV_EPERM && agc_fs_stat(link, &info, false) == 0) result = UV_EEXIST;
-  else if (result == UV_EPERM && req.sys_errno_ == ERROR_PRIVILEGE_NOT_HELD) result = UV_ENOTSUP;
-#endif
+  int result = uv_fs_symlink(NULL, &req, target, link, 0, NULL);
   uv_fs_req_cleanup(&req);
-#ifdef _WIN32
-  free(native);
-#endif
   return os_result(result);
+#endif
 }
 
 char *agc_fs_readlink(const char *path) {

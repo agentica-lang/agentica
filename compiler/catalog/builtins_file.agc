@@ -298,8 +298,8 @@ ROWS: List[Model.Builtin] = [
     effects: ["filesystem"],
     description: (
       "Make the symbolic link link whose text is target, which need not exist and is read from the folder of link " +
-      "when relative; an existing path at link is an error, never replaced; io.unsupported when the system cannot " +
-      "make links; VM only."
+      "when relative; an existing path at link is an error, never replaced; io.unsupported on Windows without the " +
+      "right to make links or where the system answers ENOTSUP; VM only."
     ),
     alternatives: [],
   ),
