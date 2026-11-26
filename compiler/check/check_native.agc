@@ -59,8 +59,8 @@ KEYS = Set.new(["Int", "String", "Bytes"])
 WRAPPERS = Set.new(["List", "Optional", "Result"])
 CROSSING_HELP = (
   "a native module takes and returns Int, Float, Bool, String, Bytes, Void as the result, a List, Optional or " +
-  "Result of them, a List of Float32, a Map with Int, String or Bytes keys, and the structs and enums of the program " +
-  "that are not generic"
+  "Result of them, a List of Float32, a Map with Int, String or Bytes keys, and the structs and enums of the " +
+  "program that are not generic"
 )
 
 RESOURCE_HELP = (

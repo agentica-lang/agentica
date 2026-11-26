@@ -11,6 +11,8 @@
 #include "../../../vm/agentica_native.h"
 
 #include <errno.h>
+#include <stdalign.h>
+#include <stdint.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,6 +80,7 @@ static an_term sum_runs(an_env *env, const an_term *argv, size_t skip, size_t *r
   if (!an_list_cursor_begin(env, argv[0], &c, &len)) return an_badarg(env, 0);
   for (size_t k = 0; k < skip && an_list_next(env, &c, &item); k++) {}
   while ((got = an_float32_run(env, &c, &data, &n)) == 1) {
+    if ((uintptr_t)data % alignof(float) != 0) return an_raise(env, "a run of floats is not aligned");
     for (size_t k = 0; k < n; k++) total += (double)data[k];
     count += n;
     (*runs)++;

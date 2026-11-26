@@ -6,6 +6,7 @@ module's table; outputs are written out here, and failures assert the code and t
 (AGENTS.md). A module opens its library through the loader of the extern blocks, so it runs where they do.
 """
 import re
+import struct
 
 import pytest
 
@@ -48,6 +49,13 @@ MODULE = """extern module "LIBRARY"
   def area(shape: Shape) -> Int
   def grow(shape: Shape, n: Int) -> Shape
   def points(n: Int) -> List[Point]
+  def sum32(samples: List[Float32]) -> Float
+  def sum32_after_first(samples: List[Float32]) -> Float
+  def runs32(samples: List[Float32]) -> Int
+  def iota32(n: Int) -> List[Float32]
+  def scale32(samples: List[Float32], by: Float) -> List[Float32]
+  compute def dirty_scale32(samples: List[Float32], by: Float) -> List[Float32]
+  compute def dirty_iota32(n: Int) -> List[Float32]
   def call_kept(n: Int) -> Int
   def bad_text() -> String
   def bad_type(n: Int) -> Point
@@ -109,6 +117,50 @@ def test_each_kind_of_value_crosses_a_module_call(tmp_path, demo):
         "some(1)", "none", "ok(123)", 'error("not a number")', "5", "2.5", "Point(x: 2, y: 1)", str(6 + 25 + 0),
         "Shape.Circle(3)", "Shape.Rect(Point(x: 0, y: 0), Point(x: 3, y: 3))", "Shape.Dot",
         "[Point(x: 0, y: 0), Point(x: 1, y: 2), Point(x: 2, y: 4)]", ""])
+
+
+def binary32(x):
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def bits32(x):
+    return struct.unpack("<I", struct.pack("<f", x))[0]
+
+
+# A List[Float32] is read in place as C floats and made from a C array, in a short and in a compute call; a Python
+# struct peer computes the binary32 values the module must see and make.
+@NATIVE_CALLS
+def test_a_list_of_float32_crosses_as_c_floats(tmp_path, demo):
+    count = 150
+    items = [binary32(0.37 * k - 11.1) for k in range(count)]
+    literal_items = ", ".join(repr(x) for x in items)
+    body = """  samples: List[Float32] = [%s]
+  puts(sum32(samples))
+  puts(sum32_after_first(samples))
+  puts(sum32(samples.drop(45)))
+  puts(runs32(samples) <= 6)
+  puts(scale32(samples, 3.0).map do |x: Float32| x.to_bits.to_i end)
+  puts(dirty_scale32(samples, 3.0).map do |x: Float32| x.to_bits.to_i end)
+  puts(iota32(70).map do |x: Float32| x.to_bits.to_i end)
+  puts(dirty_iota32(0))
+  puts(scale32([], 2.0))
+""" % literal_items
+    result = run_main(tmp_path, demo, body)
+    assert (result.code, result.stderr) == (0, "")
+    total = 0.0
+    for x in items:
+        total += x
+    after = 0.0
+    for x in items[1:]:
+        after += x
+    tail = 0.0
+    for x in items[45:]:
+        tail += x
+    scaled = [bits32(x * 3.0) for x in items]
+    halves = [bits32(0.5 * k) for k in range(70)]
+    lines = result.stdout.split("\n")
+    assert [float(line) for line in lines[:3]] == [total, after, tail]
+    assert lines[3:] == ["true", str(scaled), str(scaled), str(halves), "[]", "[]", ""]
 
 
 # The structs and enums of an imported file cross too: the module knows them by their bare names.

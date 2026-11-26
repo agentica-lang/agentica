@@ -342,7 +342,9 @@ one exit path are as in §16.1 to §16.6. What differs:
   native module (`vm/native_module.c`) is the exception: the job's context is
   the List of its arguments, a GC root until the job ends, detached or not, so
   C reads them in place; what C makes is staged in `malloc` memory and built
-  into values by the `done` half, outside `rt->sync`, or dropped, with the
+  into values by the `done` half (a List[Float32] is staged as a copy of its C
+  floats, and its arguments are read in place as runs of C floats), outside
+  `rt->sync`, or dropped, with the
   states of the resources it made freed, when no task takes it. An item that
   ends goes back to the loop's thread through the pool's own inbox, which
   exists at N = 1 too and keeps the loop alive only while items run. So a

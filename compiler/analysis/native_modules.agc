@@ -258,9 +258,9 @@ end
 
 # Whether a function of the block, or a struct or enum that crosses, names a List of Float32 (API 1.6).
 def floats?(functions: List[Model.NativeFunction], types: List[Model.NativeType]) -> Bool
-  return true if functions.any? do |function: Model.NativeFunction| function.signature.include?(NativeShape.FLOAT32_LIST) end
-
-  types.any? do |type: Model.NativeType| type.shape.include?(NativeShape.FLOAT32_LIST) end
+  signatures = functions.map do |function: Model.NativeFunction| function.signature end
+  shapes = types.map do |type: Model.NativeType| type.shape end
+  (signatures + shapes).any? do |text: String| text.include?(NativeShape.FLOAT32_LIST) end
 end
 
 def doc_text(doc: Optional[String]) -> String = DocModel.cleaned(doc).unwrap_or("")

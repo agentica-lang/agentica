@@ -236,17 +236,6 @@ static void test_float32_lists(void) {
   const agc_list *scaled = agc_as_list(&vm, call("module (List[Float32], Float) -> List[Float32] scale32 demo", args, 2));
   assert(agc_list_len(scaled) == 40 && agc_list_get(scaled, 39).as.f == 58.5);
 
-  /* The same on the pool: the list is read in place there and the result is staged as C floats, built on return. */
-  made = agc_as_list(&vm, dirty("compute module (Int) -> List[Float32] dirty_iota32 demo", &fifty, 1));
-  assert(agc_list_len(made) == 50 && agc_list_kind(made) == AGC_T_FLOAT32 && agc_list_get(made, 49).as.f == 24.5);
-  scaled = agc_as_list(
-      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", args, 2));
-  assert(agc_list_len(scaled) == 40 && agc_list_get(scaled, 39).as.f == 58.5);
-  agc_value huge[2] = {half_steps(100000, false), agc_float(2.0)};
-  scaled = agc_as_list(
-      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", huge, 2));
-  assert(agc_list_len(scaled) == 100000 && agc_list_get(scaled, 99999).as.f == 99999.0);
-
   /* A list of another kind has no runs: -1 for items, 0 for none, and the module's bad argument fails the call. */
   const int64_t numbers[3] = {1, 2, 3};
   agc_value ints_list = ints(numbers, 3), empty = ints(numbers, 0);
@@ -1090,6 +1079,21 @@ static void test_blocking(void) {
   uv_mutex_destroy(&gc_lock);
 }
 
+/* The same on the pool: the list is read in place there and the result is staged as C floats, built on return. */
+static void test_float32_lists_on_the_pool(void) {
+  agc_value fifty = agc_int(50);
+  agc_value args[2] = {half_steps(40, false), agc_float(3.0)};
+  const agc_list *made = agc_as_list(&vm, dirty("compute module (Int) -> List[Float32] dirty_iota32 demo", &fifty, 1));
+  assert(agc_list_len(made) == 50 && agc_list_kind(made) == AGC_T_FLOAT32 && agc_list_get(made, 49).as.f == 24.5);
+  const agc_list *scaled = agc_as_list(
+      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", args, 2));
+  assert(agc_list_len(scaled) == 40 && agc_list_get(scaled, 39).as.f == 58.5);
+  agc_value huge[2] = {half_steps(100000, false), agc_float(2.0)};
+  scaled = agc_as_list(
+      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", huge, 2));
+  assert(agc_list_len(scaled) == 100000 && agc_list_get(scaled, 99999).as.f == 99999.0);
+}
+
 int main(int argc, char **argv) {
   (void)argc;
   agc_test_io_vm(&vm);
@@ -1141,6 +1145,7 @@ int main(int argc, char **argv) {
   test_types();
   test_a_dirty_call_that_cannot_start();
   test_dirty();
+  test_float32_lists_on_the_pool();
   test_dirty_calls_charge_on_the_scheduler();
   test_resources();
   test_close_during_a_dirty_call();
