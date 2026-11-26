@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `File.chmod(path, mode)` sets the permission bits of a file or directory; on Windows it sets the read-only attribute (#1864).
 - `Color.values` lists the variants of an enum with no payloads, `Color.parse(text)` reads one from its name, and `value.name` is the bare variant name of any enum value (#1847).
 
 ### Changed

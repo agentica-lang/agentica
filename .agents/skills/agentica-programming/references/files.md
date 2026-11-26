@@ -26,6 +26,7 @@ File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
+File.chmod(path: String, mode: Int, timeout_ms: Int = 30000) -> Result[Void]
 File.try_lock(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Bool]
 Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -76,6 +77,11 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   `File::Stat#ftype` name: `"file"` (regular only), `"directory"`, `"link"`,
   `"fifo"`, `"socket"`, `"characterSpecial"`, `"blockSpecial"` or `"unknown"`.
   `File.lstat` does not follow a final symlink: `kind` is `"link"`.
+- `File.chmod(path, mode, ms)` sets the permission bits of a file or directory
+  (a symlink is followed); `mode` is octal, so write `0o755` (`755` is
+  `0o1363`), 0 to 4095, else an `argument` error. Windows keeps only the owner
+  write bit of a file, as the read-only attribute (`File.stat` then gives 438
+  or 292); a folder's attribute is not enforced there.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one
   directory only you can use and fails if the path exists or the parent is

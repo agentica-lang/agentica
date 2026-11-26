@@ -267,6 +267,22 @@ int agc_fs_fchmod(int fd, int mode) {
   return os_result(result);
 }
 
+int agc_fs_chmod(const char *path, int mode) {
+#ifdef _WIN32
+  /* libuv calls _wchmod there, which changes the attribute of a link itself; chmod(2) follows the link. */
+  char *real = agc_fs_realpath(path);
+  if (!real) return -1;
+  path = real;
+#endif
+  uv_fs_t req;
+  int result = uv_fs_chmod(NULL, &req, path, mode, NULL);
+  uv_fs_req_cleanup(&req);
+#ifdef _WIN32
+  free(real);
+#endif
+  return os_result(result);
+}
+
 int agc_fs_replace(const char *from, const char *to) {
   uv_fs_t req;
   int result = uv_fs_rename(NULL, &req, from, to, NULL);
