@@ -246,7 +246,10 @@ bits.
 - `AGC_T_FLOAT32`: every item is a Float32. A leaf and the tail hold the 4 bytes
   of its binary32 bits (`agc_float32_word`, `agc_word_float32` in `value.h`: a
   Float32 is a double that holds exactly a binary32, so the conversion loses
-  nothing, a NaN's sign included). A leaf is 128 bytes.
+  nothing, a NaN's sign included). A leaf is 128 bytes. A native module reads
+  it in place: `an_float32_run` gives the items of a chunk, and of the chunks
+  after it while each begins where the one before ends, as one run of C floats
+  (4-byte aligned); `agc_list_of_float32` makes one from a C array in one pass.
 
 An empty list has kind 0, and its first item decides. In a valid program a list
 never changes kind, because a `List[T]` has one element type (there is no `Any`,

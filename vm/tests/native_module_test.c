@@ -175,6 +175,132 @@ static void test_values(void) {
   assert(agc_is(call("module () -> Void nothing demo", NULL, 0), AGC_T_VOID));
 }
 
+/* A List[Float32] of N items 0.5 * k, from one C array or pushed one at a time (two ways to lay out its leaves). */
+static agc_value half_steps(size_t n, bool pushed) {
+  float *data = malloc((n ? n : 1) * sizeof *data);
+  assert(data);
+  for (size_t k = 0; k < n; k++) data[k] = 0.5f * (float)k;
+  agc_list *l;
+  if (pushed) {
+    agc_list_builder b;
+    agc_list_builder_sized(&b, n);
+    for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_float32((double)data[k]));
+    l = agc_list_builder_finish(&b);
+  } else {
+    l = agc_list_of_float32(data, n);
+  }
+  free(data);
+  return agc_list_value(l);
+}
+
+/* A List[Float32] of the N items 0.5 * k for k from FROM, from one C array. */
+static agc_value half_range(size_t from, size_t n) {
+  float *data = malloc((n ? n : 1) * sizeof *data);
+  assert(data);
+  for (size_t k = 0; k < n; k++) data[k] = 0.5f * (float)(from + k);
+  agc_list *l = agc_list_of_float32(data, n);
+  free(data);
+  return agc_list_value(l);
+}
+
+/* The sum of 0.5 * k over the first N items from FROM: exact in a double for the sizes used here. */
+static double half_sum(size_t from, size_t n) {
+  double total = 0;
+  for (size_t k = from; k < n; k++) total += 0.5 * (double)k;
+  return total;
+}
+
+/* A List[Float32] is read in runs of C floats and made from one C array, in a short and in a dirty call. */
+static void test_float32_lists(void) {
+  const char *sum = "module (List[Float32]) -> Float sum32 demo";
+  const char *after = "module (List[Float32]) -> Float sum32_after_first demo";
+  const char *runs = "module (List[Float32]) -> Int runs32 demo";
+  const size_t sizes[] = {0, 1, 31, 32, 33, 100, 5000, 100000};
+  for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
+    for (int pushed = 0; pushed < 2; pushed++) {
+      size_t n = sizes[s];
+      agc_value list = half_steps(n, pushed);
+      assert(agc_as_float(&vm, call(sum, &list, 1)) == half_sum(0, n));
+      if (n) assert(agc_as_float(&vm, call(after, &list, 1)) == half_sum(1, n));
+      int64_t joined = agc_as_int(&vm, call(runs, &list, 1));
+      assert(joined == 0 ? n == 0 : (size_t)joined <= n / 32 + 2);
+      /* A slice that starts inside a leaf: the first run is the rest of that leaf. */
+      if (n > 40) {
+        agc_value cut = agc_list_value(agc_list_slice(agc_as_list(&vm, list), 7, n - 7));
+        assert(agc_as_float(&vm, call(sum, &cut, 1)) == half_sum(7, n));
+      }
+    }
+  }
+  /* Two lists joined are two builds, so a gap lies between their leaves: the runs are not joined across it, and the
+     items are still those of the list, with an_list_next between the runs, from the first chunk or from the second. */
+  agc_value joined = agc_list_value(
+      agc_list_concat(agc_as_list(&vm, half_range(0, 5000)), agc_as_list(&vm, half_range(5000, 5000))));
+  assert(agc_as_float(&vm, call(sum, &joined, 1)) == half_sum(0, 10000));
+  assert(agc_as_int(&vm, call(runs, &joined, 1)) >= 2);
+  agc_value small = agc_list_value(
+      agc_list_concat(agc_as_list(&vm, half_range(0, 33)), agc_as_list(&vm, half_range(33, 40))));
+  agc_value contiguous = half_range(0, 100);
+  const char *iota = "module (List[Float32], Int, Int) -> Int iota_runs32 demo";
+  for (int64_t first = 0; first < 70; first += 5) {
+    for (int64_t between = 0; between < 3; between++) {
+      agc_value args[3] = {joined, agc_int(first), agc_int(between)};
+      assert(agc_as_int(&vm, call(iota, args, 3)) >= 0);
+      args[0] = small;
+      assert(agc_as_int(&vm, call(iota, args, 3)) >= 0);
+      args[0] = contiguous;
+      assert(agc_as_int(&vm, call(iota, args, 3)) >= 0);
+    }
+  }
+  agc_value skip_args[3] = {joined, agc_int(0), agc_int(1)};
+  assert(agc_as_int(&vm, call(iota, skip_args, 3)) >= 1);
+
+  /* A build puts its leaves one after the other, so the runs are joined: 100000 items take far fewer than 3125. */
+  agc_value big = half_steps(100000, false);
+  assert(agc_as_int(&vm, call(runs, &big, 1)) <= 8);
+
+  /* Made from C floats: a packed list of the items, empty for none. */
+  agc_value fifty = agc_int(50), none = agc_int(0);
+  const agc_list *made = agc_as_list(&vm, call("module (Int) -> List[Float32] iota32 demo", &fifty, 1));
+  assert(agc_list_len(made) == 50 && agc_list_kind(made) == AGC_T_FLOAT32 && agc_list_get(made, 49).tag == AGC_T_FLOAT32);
+  assert(agc_list_get(made, 49).as.f == 24.5);
+  made = agc_as_list(&vm, call("module (Int) -> List[Float32] iota32 demo", &none, 1));
+  assert(agc_list_len(made) == 0);
+  agc_value args[2] = {half_steps(40, false), agc_float(3.0)};
+  const agc_list *scaled = agc_as_list(&vm, call("module (List[Float32], Float) -> List[Float32] scale32 demo", args, 2));
+  assert(agc_list_len(scaled) == 40 && agc_list_get(scaled, 39).as.f == 58.5);
+
+  /* A list of another kind has no runs: -1 for items, 0 for none, and the module's bad argument fails the call. */
+  const int64_t numbers[3] = {1, 2, 3};
+  agc_value ints_list = ints(numbers, 3), empty = ints(numbers, 0);
+  assert(agc_as_int(&vm, call("module (List[Int]) -> Int run_of_ints demo", &ints_list, 1)) == -1);
+  assert(agc_as_int(&vm, call("module (List[Int]) -> Int run_of_ints demo", &empty, 1)) == 0);
+  fails(sum, &ints_list, 1, "RUNTIME-NATIVE-ERROR");
+  assert(agc_as_float(&vm, call(sum, &empty, 1)) == 0.0);
+
+  /* The items are bit-exact: Inf, -0.0, NaN and the subnormals survive being made and read again. */
+  static const uint32_t specials[] = {0x7f800000u, 0xff800000u, 0x7fc00000u, 0x80000000u, 0x7f7fffffu, 0x00000001u};
+  agc_value made_specials = call("module () -> List[Float32] specials32 demo", NULL, 0);
+  agc_value echoed = call("module (List[Float32]) -> List[Float32] echo32 demo", &made_specials, 1);
+  for (size_t k = 0; k < sizeof specials / sizeof specials[0]; k++) {
+    assert(agc_float32_word(agc_list_get(agc_as_list(&vm, made_specials), k)) == specials[k]);
+    assert(agc_float32_word(agc_list_get(agc_as_list(&vm, echoed), k)) == specials[k]);
+  }
+
+  /* No items for a count that is not 0 fails the call. */
+  fails("module (Int) -> List[Float32] null32 demo", &fifty, 1, "RUNTIME-NATIVE-ERROR");
+  assert(agc_list_len(agc_as_list(&vm, call("module (Int) -> List[Float32] null32 demo", &none, 1))) == 0);
+
+  /* A Float32 crosses only as the item of a List: a signature of the bytecode that has one anywhere else is bad. */
+  const char *bad[] = {"module (Float32) -> Int sum demo", "module (Int) -> Float32 sum demo",
+                       "module (Optional[Float32]) -> Int sum demo", "module (Int) -> Result[Float32] sum demo",
+                       "module (Map[String, Float32]) -> Int sum demo", "module (List[Float32) -> Int sum demo",
+                       "module (Float32[Int]) -> Int sum demo"};
+  agc_value one = agc_int(1);
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
+  agc_value ok = call("module (Int) -> Result[List[Float32]] ok32 demo", &fifty, 1);
+  assert(agc_as_result(&vm, ok)->ok && agc_list_len(agc_as_list(&vm, agc_as_result(&vm, ok)->value)) == 50);
+}
+
 /* What the env holds fails the call after C returns; what the bytecode gets wrong fails before C runs. */
 static void test_failures(void) {
   agc_value mixed[2] = {agc_int(1), agc_test_str("two")};
@@ -1009,6 +1135,21 @@ static void test_blocking(void) {
   uv_mutex_destroy(&gc_lock);
 }
 
+/* The same on the pool: the list is read in place there and the result is staged as C floats, built on return. */
+static void test_float32_lists_on_the_pool(void) {
+  agc_value fifty = agc_int(50);
+  agc_value args[2] = {half_steps(40, false), agc_float(3.0)};
+  const agc_list *made = agc_as_list(&vm, dirty("compute module (Int) -> List[Float32] dirty_iota32 demo", &fifty, 1));
+  assert(agc_list_len(made) == 50 && agc_list_kind(made) == AGC_T_FLOAT32 && agc_list_get(made, 49).as.f == 24.5);
+  const agc_list *scaled = agc_as_list(
+      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", args, 2));
+  assert(agc_list_len(scaled) == 40 && agc_list_get(scaled, 39).as.f == 58.5);
+  agc_value huge[2] = {half_steps(100000, false), agc_float(2.0)};
+  scaled = agc_as_list(
+      &vm, dirty("compute module (List[Float32], Float) -> List[Float32] dirty_scale32 demo", huge, 2));
+  assert(agc_list_len(scaled) == 100000 && agc_list_get(scaled, 99999).as.f == 99999.0);
+}
+
 int main(int argc, char **argv) {
   (void)argc;
   agc_test_io_vm(&vm);
@@ -1052,6 +1193,7 @@ int main(int argc, char **argv) {
   vm.rt->program = &program;
   agc_native_register(&vm, "demo", agentica_native_init);
   test_values();
+  test_float32_lists();
   test_failures();
   test_error_record();
   test_binding();
@@ -1059,6 +1201,7 @@ int main(int argc, char **argv) {
   test_types();
   test_a_dirty_call_that_cannot_start();
   test_dirty();
+  test_float32_lists_on_the_pool();
   test_dirty_calls_charge_on_the_scheduler();
   test_resources();
   test_close_during_a_dirty_call();

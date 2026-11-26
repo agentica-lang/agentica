@@ -80,13 +80,14 @@ systems that run native code) are in those pages. The language fixes these:
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.
 - A function of an `extern module` block (section 5) takes and returns `Int`,
-  `Float`, `Bool`, `String`, `Bytes`, `Void` as the result, a `List`,
-  `Optional` or `Result` of these, a `Map` with `Int`, `String` or `Bytes` keys,
-  and the structs and enums of the program that are not generic, whose fields
-  and payloads cross too. A resource of the block crosses as the whole type of
-  a parameter, and anywhere in a result but in a field or payload. Any other
-  type, or two such types or resources of one bare name in one block, is
-  `CHECK-NATIVE-TYPE` at the type in the signature.
+  `Float`, `Bool`, `String`, `Bytes`, `Void` as the result, a `List`, `Optional`
+  or `Result` of these, a `List[Float32]` (the only place a `Float32` crosses,
+  as C floats read and made without a copy), a `Map` with `Int`, `String` or
+  `Bytes` keys, and the structs and enums of the program that are not generic,
+  whose fields and payloads cross too. A resource of the block crosses as the
+  whole type of a parameter, and anywhere in a result but in a field or payload.
+  Any other type, or two such types or resources of one bare name in one block,
+  is `CHECK-NATIVE-TYPE` at the type in the signature.
 - The first call of a module function loads the module and binds the function
   by name: the module's table must have the same canonical signature (aliases
   expanded, user types by their bare names), the same mode (`def` short,

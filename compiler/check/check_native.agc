@@ -1,7 +1,8 @@
 ## The functions of the `extern module "NAME"` blocks (#1149): the types that cross between the program and the C code
 ## of a native module. A type crosses when it is Int, Float, Bool, String or Bytes, Void where the language allows it,
 ## a List, Optional or Result of a crossing type, a Map with Int, String or Bytes keys and crossing values, or a struct
-## or enum of the program that is not generic and whose fields or payloads cross. A resource of the block crosses as a
+## or enum of the program that is not generic and whose fields or payloads cross. Float32 crosses only as the item of
+## a List (API 1.6), which a module reads and makes as C floats. A resource of the block crosses as a
 ## whole parameter type, and anywhere in a result but in the fields or payloads of a user type: the module reads only
 ## the resources that the call holds, and the shape of a user type names no resource. Anything else is
 ## CHECK-NATIVE-TYPE at the type in the signature, and so is a second user type or resource of the same bare name in
@@ -58,7 +59,8 @@ KEYS = Set.new(["Int", "String", "Bytes"])
 WRAPPERS = Set.new(["List", "Optional", "Result"])
 CROSSING_HELP = (
   "a native module takes and returns Int, Float, Bool, String, Bytes, Void as the result, a List, Optional or " +
-  "Result of them, a Map with Int, String or Bytes keys, and the structs and enums of the program that are not generic"
+  "Result of them, a List of Float32, a Map with Int, String or Bytes keys, and the structs and enums of the " +
+  "program that are not generic"
 )
 
 RESOURCE_HELP = (
@@ -181,6 +183,8 @@ def check_ref(
       end
 
       current = try bare_name(cx, current, ref, T.name(item))
+    elsif tag == "List" and T.tag(T.item(item)) == "Float32"
+      next
     elsif WRAPPERS.include?(tag)
       pending = pending.push(T.item(item))
     elsif tag == "Map" and KEYS.include?(T.tag(T.key(item)))

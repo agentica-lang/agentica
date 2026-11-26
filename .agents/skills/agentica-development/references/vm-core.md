@@ -140,7 +140,12 @@ The design (trie, unboxed Int, Float and Float32 leaves, builders, costs) is
   they are, or kind `error` and no details for a String payload. A resource
   that a row marked `AN_FRESH` (API 1.5) makes gets no `up` links
   (`origin_count`), so an arena that keeps it keeps nothing above it, and a
-  call that holds it holds nothing above it either.
+  call that holds it holds nothing above it either. `an_float32_run` and
+  `an_float32s` (API 1.6) read a List[Float32] in place as runs of C floats
+  (`api_float32_run` joins the chunks that lie one after the other) and make
+  one from a C array (`agc_list_of_float32`; a dirty call stages it as
+  `N_FLOAT32S`); a Float32 is a signature type only as the item of a List
+  (`parse_type`).
   `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's

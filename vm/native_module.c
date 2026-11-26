@@ -60,11 +60,14 @@
 /* The kinds of type a signature names; KINDS has the names and how many type arguments each takes of all but the last
    two, a struct and an enum of the program, which a signature names by the bare name of a type block. */
 typedef enum {
-  K_INT, K_FLOAT, K_BOOL, K_STRING, K_BYTES, K_VOID, K_LIST, K_MAP, K_OPTIONAL, K_RESULT, K_STRUCT, K_ENUM, K_RESOURCE
+  K_INT, K_FLOAT, K_BOOL, K_STRING, K_BYTES, K_VOID, K_LIST, K_MAP, K_OPTIONAL, K_RESULT, K_FLOAT32, K_STRUCT, K_ENUM,
+  K_RESOURCE
 } type_kind;
 
 /* What a node of a dirty call's arena stages (staged.kind). */
-enum { N_STRING, N_BYTES, N_LIST, N_MAP, N_PUT, N_SOME, N_OK, N_ERROR, N_ERROR_KIND, N_STRUCT, N_ENUM, N_RESOURCE };
+enum {
+  N_STRING, N_BYTES, N_LIST, N_MAP, N_PUT, N_SOME, N_OK, N_ERROR, N_ERROR_KIND, N_STRUCT, N_ENUM, N_RESOURCE, N_FLOAT32S
+};
 
 /* The parts of an an_error_kind, checked: KIND and the N keys and values NUL terminated, MESSAGE LEN bytes. */
 typedef struct {
@@ -240,10 +243,11 @@ static const struct {
   size_t len;
   uint8_t arity;
 } KINDS[] = {{"Int", 3, 0},  {"Float", 5, 0}, {"Bool", 4, 0}, {"String", 6, 0},   {"Bytes", 5, 0},
-             {"Void", 4, 0}, {"List", 4, 1},  {"Map", 3, 2},  {"Optional", 8, 1}, {"Result", 6, 1}};
-static const uint32_t KIND_TAGS[] = {AGC_T_INT,    AGC_T_FLOAT, AGC_T_BOOL, AGC_T_STRING, AGC_T_BYTES,
-                                     AGC_T_VOID,   AGC_T_LIST,  AGC_T_MAP,  AGC_T_ENUM,   AGC_T_RESULT,
-                                     AGC_T_STRUCT, AGC_T_ENUM,  AGC_T_C_RESOURCE};
+             {"Void", 4, 0}, {"List", 4, 1},  {"Map", 3, 2},  {"Optional", 8, 1}, {"Result", 6, 1},
+             {"Float32", 7, 0}};
+static const uint32_t KIND_TAGS[] = {AGC_T_INT,     AGC_T_FLOAT, AGC_T_BOOL, AGC_T_STRING, AGC_T_BYTES,
+                                     AGC_T_VOID,    AGC_T_LIST,  AGC_T_MAP,  AGC_T_ENUM,   AGC_T_RESULT,
+                                     AGC_T_FLOAT32, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_C_RESOURCE};
 static const an_api API;
 
 /* Terms and values have the same bytes; memcpy moves them between the two types. */
@@ -456,10 +460,10 @@ static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint
 /* Reads one type at *AT, before END, with no recursion: NEED[d] counts the type arguments still to read at depth d.
    Gives the kind of the outer type, with in *ID the program's index of a struct or enum kind, or the position in
    BLOCKS of a resource's block (agc_native_bind turns it into the row), or -1 when the text is no canonical type. A
-   name that is no kind is the type of a block of BLOCKS. Each turn of the loop reads a name or fails, so the loop
+   Float32 is one only as the item of a List. A name that is no kind is the type of a block of BLOCKS. Each turn of the loop reads a name or fails, so the loop
    ends. */
 static int parse_type(const char **at, const char *end, const block_list *blocks, uint32_t *id) {
-  uint8_t need[TYPE_MAX_DEPTH];
+  uint8_t need[TYPE_MAX_DEPTH], parent[TYPE_MAX_DEPTH];
   size_t depth = 0;
   int outer = -1;
   for (;;) {
@@ -472,7 +476,7 @@ static int parse_type(const char **at, const char *end, const block_list *blocks
       block_kind b = blocks->items[at_block].kind;
       kind = b == B_ENUM ? K_ENUM : b == B_STRUCT ? K_STRUCT : K_RESOURCE;
     }
-    if (kind < 0) return -1;
+    if (kind < 0 || (kind == K_FLOAT32 && (depth == 0 || parent[depth - 1] != K_LIST))) return -1;
     if (outer < 0) {
       outer = kind;
       // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: kinds >= K_STRUCT come from a found block
@@ -480,6 +484,7 @@ static int parse_type(const char **at, const char *end, const block_list *blocks
     }
     if (kind < K_STRUCT && KINDS[kind].arity) {
       if (depth == TYPE_MAX_DEPTH || !skip(at, end, "[")) return -1;
+      parent[depth] = (uint8_t)kind;
       need[depth++] = KINDS[kind].arity;
       continue;
     }
@@ -1207,6 +1212,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
   switch (s->kind) {
   case N_STRING: return text_of(vm, s);
   case N_BYTES: return agc_bytes_value(agc_make_bytes(s->data, s->n));
+  case N_FLOAT32S: return agc_list_value(agc_list_of_float32(s->data, s->n));
   case N_LIST: {
     agc_list_builder b;
     agc_list_builder_sized(&b, s->n);
@@ -1567,6 +1573,42 @@ static an_term api_list_end(an_env *env, an_list_builder *b) {
   memcpy(&build, b, sizeof build);
   if (env->dirty) return stage(env->dirty, N_LIST, 0, build.n, build.items);
   return term_of(agc_list_value(agc_list_from_array(build.items, build.n)));
+}
+
+/* A List of the N Float32 at DATA, or for a dirty call a node over a copy in the arena. */
+static an_term api_make_float32s(an_env *env, const float *data, size_t n) {
+  if (n && !data) return env_refuse(env, "an_float32s got no items");
+  size_t bytes = agc_size_mul(n, sizeof(float));
+  agc_native_dirty *d = env->dirty;
+  if (d) {
+    d->bytes += bytes;
+    return stage(d, N_FLOAT32S, 0, n, stage_bytes(d, data, bytes));
+  }
+  agc_charge_bytes(env->vm, bytes);
+  return term_of(agc_list_value(agc_list_of_float32(data, n)));
+}
+
+/* The next run of a cursor over a List[Float32], in the list itself: the rest of the chunk the cursor is in, then the
+   chunks after it while each begins where the one before ends (a build puts its leaves one after the other in a slab).
+   The first chunk after a gap stays filled in the cursor, as agc_list_cursor_next leaves a chunk it has not read. */
+static int api_float32_run(an_env *env, an_list_cursor *c, const float **data, size_t *n) {
+  (void)env;
+  agc_list_cursor cursor;
+  memcpy(&cursor, c, sizeof cursor);
+  if (cursor.kind != AGC_T_FLOAT32) return agc_list_len(cursor.list) == 0 ? 0 : -1;
+  if (cursor.index >= cursor.end && !agc_list_cursor_fill(&cursor)) return 0;
+  const char *first = cursor.chunk + (cursor.index - cursor.start) * sizeof(float);
+  size_t count = cursor.end - cursor.index;
+  cursor.index = cursor.end;
+  while (cursor.index < agc_list_len(cursor.list) && agc_list_cursor_fill(&cursor) &&
+         cursor.chunk == first + count * sizeof(float)) {
+    count += cursor.end - cursor.index;
+    cursor.index = cursor.end;
+  }
+  memcpy(c, &cursor, sizeof cursor);
+  *data = (const float *)(const void *)first;
+  *n = count;
+  return 1;
 }
 
 static bool api_list_cursor(an_env *env, an_term list, an_list_cursor *c, size_t *len) {
@@ -1970,5 +2012,5 @@ static const an_api API = {
   api_map_cursor,     api_map_next,     api_none,         api_some,         api_get_optional, api_ok,
   api_error,          api_get_result,   api_raise,        api_badarg,       api_struct,       api_get_field,
   api_enum,           api_get_variant,  api_get_payload,  api_resource_new, api_get_resource, api_blocking,
-  api_error_kind,     api_get_error,
+  api_error_kind,     api_get_error,    api_float32_run,  api_make_float32s,
 };

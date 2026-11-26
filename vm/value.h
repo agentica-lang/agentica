@@ -1102,6 +1102,9 @@ agc_list *agc_list_builder_finish(agc_list_builder *b);
 agc_list *agc_list_from_array(const agc_value *items, size_t n);
 /* A List of Int with one item per byte (0 to 255): the one copy of bytes into a list (Bytes.to_a). */
 agc_list *agc_list_of_bytes(const uint8_t *data, size_t n);
+/* A List of Float32 whose items are the N binary32 values at DATA, copied in one pass: the one copy of C floats into a
+   list (an_float32s). */
+agc_list *agc_list_of_float32(const float *data, size_t n);
 void agc_list_to_array(const agc_list *l, agc_value *out);
 void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at);
 bool agc_list_cursor_fill(agc_list_cursor *c);

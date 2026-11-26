@@ -896,6 +896,34 @@ def test_native_modules_lists_the_functions_resources_and_types_of_each_block(dr
     assert (other["span"]["range"]["start"]["line"], other["span"]["range"]["end"]["line"]) == (33, 34)
 
 
+def test_native_modules_asks_for_api_1_6_for_a_list_of_float32(driver, project):
+    clips = """struct Clip
+  samples: List[Float32]
+  rate: Int
+end
+
+extern module "audio"
+  def energy(samples: List[Float32]) -> Float
+end
+
+extern module "wrapped"
+  def rate(clip: Clip) -> Int
+end
+
+extern module "scalars"
+  def twice(n: Int) -> Int
+end
+
+def main() -> Void
+end
+"""
+    write_files(project, {"natives.agc": clips})
+    _answer, blocks = native_blocks(driver, project)
+    assert (blocks["audio"]["api"], blocks["wrapped"]["api"], blocks["scalars"]["api"]) == (
+        {"major": 1, "minor": 6}, {"major": 1, "minor": 6}, {"major": 1, "minor": 0})
+    assert blocks["audio"]["functions"][0]["signature"] == "(List[Float32]) -> Float"
+
+
 def test_native_modules_gives_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):
     write_files(project, {"natives.agc": NATIVE.replace("List[Float]", "Task[Int]")})
     out, err = library(driver, project, "native-modules", "natives.agc")
@@ -971,6 +999,7 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
     # The comment of the header says which minor version added what.
     assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
     assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
+    assert constants["API_MINOR_FLOAT32"] == int(re.search(r"List\[Float32\][^()]*\(1\.(\d)\)", header).group(1))
 
 
 # The bodies of `bodies` (#1159): a little of every node of the first subset, beside the readers of std/binary.

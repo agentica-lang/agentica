@@ -262,7 +262,7 @@ end
 ## overlap. `types` are the structs and enums that cross in its functions, each once, in the order the first function
 ## that reaches them meets them. `api_major` and `api_minor` are the least version of the C API (AN_API_MAJOR and
 ## AN_API_MINOR of vm/agentica_native.h) that has what the block needs: 1.0 for functions of scalars and collections,
-## 1.1 when a struct or enum crosses, 1.2 for a resource.
+## 1.1 when a struct or enum crosses, 1.2 for a resource, 1.6 for a List of Float32.
 struct NativeBlock
   library: String
   range: Diagnostics.Region

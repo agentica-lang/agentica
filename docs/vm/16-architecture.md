@@ -342,16 +342,17 @@ one exit path are as in §16.1 to §16.6. What differs:
   native module (`vm/native_module.c`) is the exception: the job's context is
   the List of its arguments, a GC root until the job ends, detached or not, so
   C reads them in place; what C makes is staged in `malloc` memory and built
-  into values by the `done` half, outside `rt->sync`, or dropped, with the
-  states of the resources it made freed, when no task takes it. An item that
-  ends goes back to the loop's thread through the pool's own inbox, which
-  exists at N = 1 too and keeps the loop alive only while items run. So a
-  compute job is a pool job: no deadline, no cancel half, and a cancel detaches
-  it. A detached item still in the queue skips its `work`; a running one drops
-  the result once the call returns. What the end of the run waits for is in
-  §14.4 (steps 0 and 3). A thread that ran an item spins briefly for the next
-  one before it waits on the condvar, as an idle scheduler does, so a run of
-  short calls hands over without a condvar wake (#1120).
+  into values by the `done` half (a List[Float32] is staged as a copy of its C
+  floats, and its arguments are read in place as runs of C floats), outside
+  `rt->sync`, or dropped, with the states of the resources it made freed, when
+  no task takes it. An item that ends goes back to the loop's thread through the
+  pool's own inbox, which exists at N = 1 too and keeps the loop alive only
+  while items run. So a compute job is a pool job: no deadline, no cancel half,
+  and a cancel detaches it. A detached item still in the queue skips its `work`;
+  a running one drops the result once the call returns. What the end of the run
+  waits for is in §14.4 (steps 0 and 3). A thread that ran an item spins briefly
+  for the next one before it waits on the condvar, as an idle scheduler does, so
+  a run of short calls hands over without a condvar wake (#1120).
   - At N > 1 a compute job skips the I/O thread. The builtin runs with
     `rt->sync` held, so its job waits until the turn is over and then goes to
     the pool, with no START. The pool thread ends the wait and nudges a

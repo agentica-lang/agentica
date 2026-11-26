@@ -79,6 +79,13 @@ end
   write to GC memory, no API calls. The argument data lasts until the call
   returns: copy what a library keeps across calls (a `_start` that a later
   `_cont` finishes) into the resource state or other `malloc` memory.
+- `List[Float32]` (API 1.6) crosses as C floats, only as a list (a bare
+  `Float32`, `Optional[Float32]` or `Map[_, Float32]` is `CHECK-NATIVE-TYPE`).
+  `an_float32_run(env, &cursor, &data, &n)` after `an_list_cursor_begin` gives
+  the next run: `n` aligned, read-only floats inside the list, valid until the
+  function returns; loop until it gives 0 (a list is a chain of runs), -1 for
+  another list kind. `an_float32s(env, data, n)` makes a list from C floats
+  (copied). Needs agentica 0.40.0 (after 0.40.0-beta.1).
 - `an_error_kind(env, kind, message, len, keys, values, n)` (API 1.4) makes
   `error(message, kind: kind, details: {...})` from NUL-terminated C
   strings; a kind that is not a dotted name fails the call.
