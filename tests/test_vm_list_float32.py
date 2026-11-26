@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import compile_agc, run, run_vm, vm_command, vm_environment
+from tests.agentica_test import compile_agc, host_only, run, run_vm, vm_command, vm_environment
 
 LINUX = sys.platform.startswith("linux")
 ITEMS = 10000000
@@ -63,7 +63,7 @@ def collected():
     return "no libgc" not in run([*vm_command(), "--version"]).stdout
 
 
-@pytest.mark.skipif(not LINUX, reason="the peak memory is read from /proc/self/status")
+@host_only(not LINUX, "the peak memory is read from /proc/self/status, which only Linux has")
 def test_ten_million_float32_items_take_about_40_mb_of_data_and_half_of_a_float_list(tmp_path):
     if not collected():
         pytest.skip("a VM without libgc keeps every list it makes")
