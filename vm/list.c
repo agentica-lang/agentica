@@ -41,8 +41,8 @@ static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_
 /* Boehm adds a byte to each object for interior pointers: SLAB_BYTES - 1 keeps a slab in 16 heap blocks, not 17. */
 static size_t slab_leaves(uint32_t kind) { return (SLAB_BYTES - 1) / (LIST_WIDTH * stride_of(kind)); }
 
-/* The Float32 case tests the item size: a test of the kind itself made GCC split append and set by kind, and list-build
-   ran 15% slower with --jit off. */
+/* Only a Float32 list has 4-byte items, so the item size tells it here. A test of the kind itself made GCC split append
+   and set by kind, and list-build ran 15% slower with --jit off. */
 static void item_put(uint32_t kind, char *dst, agc_value v) {
   if (stride_of(kind) == sizeof(uint32_t)) {
     uint32_t word = agc_float32_word(v);

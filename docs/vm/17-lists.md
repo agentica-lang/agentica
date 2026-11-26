@@ -329,7 +329,8 @@ meet, the result is boxed, and no operation fails:
 the entry and pushes the sorted words, with the same order keys, checks and
 merge, so the order is the same: stable, `-0.0` equal to `0.0`, every NaN last
 and equal. `sort_by` and the sort of Strings are unchanged. `List.sort` does not
-take a List[Float32] (the checker refuses it), so no sort reads that kind.
+take a List[Float32]: the checker refuses it, and a hand-made `.agcb` fails at
+the first key's tag check.
 
 **Costs.** A numeric item takes 8 bytes (4 for a Float32) instead of 16. Step
 counts, turn costs and the `.agcb` format do not change. `filter` still stages

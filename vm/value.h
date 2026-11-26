@@ -439,7 +439,7 @@ typedef struct {
      counts a step or asks to yield; it only returns a value or fails with agc_fail. Its work is O(1) or bounded, so a
      builtin whose work grows with a String or a list (a compare, a copy, a UTF-8 walk) is not a leaf even when it
      charges nothing today. List.append and List.set copy the whole list only when a value's tag does not match a packed
-     Int or Float list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
+     Int, Float or Float32 list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
      goes on without the generic tail; compiled code calls it below a native call (agc_jit_call_leaf). A leaf may take
      rt->sync and drop it before it returns to read shared state (Native.closed?). A leaf row is never shared, has
      AGC_NATIVE_NONE and AGC_COST_NONE (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds
@@ -1121,6 +1121,7 @@ static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
   if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
     agc_list_builder_more(b, v);
   } else if (b->kind) {
+    /* kept nested: see 17.12 */
     if (b->kind == AGC_T_FLOAT32) {
       agc_list_builder_push_narrow(b, v);
     } else {
@@ -1137,6 +1138,7 @@ static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
   size_t k = c->index++ - c->start;
   if (c->kind) {
+    /* kept nested: see 17.12 */
     if (c->kind == AGC_T_FLOAT32) {
       *out = agc_list_item_narrow(c->chunk, k);
     } else {

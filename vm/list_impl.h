@@ -60,6 +60,7 @@ agc_value agc_list_narrow_get(const agc_list *l, size_t i);
 
 static inline agc_value list_at(const agc_list *l, size_t i) {
   if (l->kind) {
+    /* kept nested: see 17.12 */
     if (l->kind == AGC_T_FLOAT32) return agc_list_narrow_get(l, i);
   }
   size_t off = list_tail_off(l->len);
