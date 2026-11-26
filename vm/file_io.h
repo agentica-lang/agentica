@@ -57,6 +57,9 @@ int agc_fs_fsync(int fd);
 void agc_fs_sync_folder(const char *path);
 /* The permission bits of the open file FD; on Windows only the owner write bit counts (read-only or not). */
 int agc_fs_fchmod(int fd, int mode);
+/* The permission bits of PATH, a link followed (on Windows through its real path); on Windows only the owner write bit
+   counts (read-only or not). */
+int agc_fs_chmod(const char *path, int mode);
 /* Renames FROM to TO, replacing a file at TO in one step (rename on POSIX, MoveFileExW REPLACE_EXISTING on Windows). */
 int agc_fs_replace(const char *from, const char *to);
 #ifdef _WIN32

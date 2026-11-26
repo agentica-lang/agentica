@@ -53,6 +53,7 @@ Enum.name
 Enum.parse
 Error.is_a?
 File.append_text
+File.chmod
 File.close
 File.each_line
 File.flush
