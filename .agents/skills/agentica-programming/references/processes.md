@@ -184,6 +184,7 @@ program inherited it.
 IO.read_bytes(count: Int) -> Result[Bytes]       # count 0..1048576
 IO.flush() -> Void                               # stdout only
 System.env(name: String) -> Result[String]       # error if unset or the name is empty, has = or NUL; ok("") if set empty
+System.hostname() -> Result[String]             # the machine's host name, no flag needed (an io error if unreadable)
 System.os() -> String                            # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
 System.pid() -> Int                              # the process id of this program (VM only)
 System.program_name() -> String                  # the main .agc or .agcb as given ($PROGRAM_NAME)
@@ -201,8 +202,8 @@ Process.pid(process: Process) -> Result[Int]     # the child's OS pid; error onc
   write one compact JSON message per line, flush after each response and send
   logs to `IO.warn`.
 - `System.env` needs no flag; `--deny-env` makes it an error starting `denied:
-  --deny-env` (`System.os` and `System.pid` stay on). The home directory is
-  `System.env("HOME")`. No call lists the variables.
+  --deny-env` (`System.hostname`, `System.os` and `System.pid` stay on). The
+  home directory is `System.env("HOME")`. No call lists the variables.
 - `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
   that VM checks that its parent is this process.
 - `System.program_name` is the path as typed (`app/tool.agc`, or the `.agcb`

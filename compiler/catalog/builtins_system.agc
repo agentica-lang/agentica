@@ -72,6 +72,16 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "System.hostname",
+    parameters: [],
+    result: Types.Type.Result(Types.Type.String),
+    rule: Model.Rule.Plain,
+    implementation: "System.hostname",
+    effects: ["process"],
+    description: "Return the host name of the machine; VM only.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "System.os",
     parameters: [],
     result: Types.Type.String,

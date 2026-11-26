@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `File.copy(from, to)` copies a file with its permission bits, in one step (#1422).
+- `System.hostname()` gives the host name of the machine (#1422).
 
 ## [0.40.0-beta.1] - 2026-11-26
 
