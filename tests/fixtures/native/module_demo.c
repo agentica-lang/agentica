@@ -65,6 +65,92 @@ static an_term sum(an_env *env, int argc, const an_term *argv) {
   return an_int(env, (int64_t)total);
 }
 
+/* The sum of a List[Float32] in doubles, read run by run. SKIP is how many items an_list_next passes first (0 or 1),
+   which leaves the cursor inside a chunk, and RUNS gets the number of runs; a list that is not a List[Float32] is a
+   bad argument. */
+static an_term sum_runs(an_env *env, const an_term *argv, size_t skip, size_t *runs) {
+  an_list_cursor c;
+  an_term item;
+  const float *data;
+  size_t len, n, count = 0;
+  double total = 0;
+  int got;
+  if (!an_list_cursor_begin(env, argv[0], &c, &len)) return an_badarg(env, 0);
+  for (size_t k = 0; k < skip && an_list_next(env, &c, &item); k++) {}
+  while ((got = an_float32_run(env, &c, &data, &n)) == 1) {
+    for (size_t k = 0; k < n; k++) total += (double)data[k];
+    count += n;
+    (*runs)++;
+  }
+  if (got < 0 || count + skip != len) return an_badarg(env, 0);
+  return an_float(env, total);
+}
+
+static an_term sum32(an_env *env, int argc, const an_term *argv) {
+  size_t runs = 0;
+  (void)argc;
+  return sum_runs(env, argv, 0, &runs);
+}
+
+/* The sum without the first item. */
+static an_term sum32_after_first(an_env *env, int argc, const an_term *argv) {
+  size_t runs = 0;
+  (void)argc;
+  return sum_runs(env, argv, 1, &runs);
+}
+
+/* How many runs the list is made of. */
+static an_term runs32(an_env *env, int argc, const an_term *argv) {
+  size_t runs = 0;
+  (void)argc;
+  an_term sum = sum_runs(env, argv, 0, &runs);
+  (void)sum;
+  return an_int(env, (int64_t)runs);
+}
+
+/* What an_float32_run gives for a List[Int]: -1 for items, 0 for none. */
+static an_term run_of_ints(an_env *env, int argc, const an_term *argv) {
+  an_list_cursor c;
+  const float *data;
+  size_t n;
+  (void)argc;
+  if (!an_list_cursor_begin(env, argv[0], &c, NULL)) return an_badarg(env, 0);
+  return an_int(env, an_float32_run(env, &c, &data, &n));
+}
+
+/* The N items 0.5 * k, k from 0, as a List[Float32] made from one C array. */
+static an_term iota32(an_env *env, int argc, const an_term *argv) {
+  int64_t n;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n) || n < 0) return an_badarg(env, 0);
+  float *data = n ? malloc((size_t)n * sizeof *data) : NULL;
+  if (n && !data) return an_raise(env, "out of memory");
+  for (int64_t k = 0; k < n; k++) data[k] = 0.5f * (float)k;
+  an_term t = an_float32s(env, data, (size_t)n);
+  free(data);
+  return t;
+}
+
+/* Each item of a List[Float32] times a Float, in binary32: runs in, an_float32s out. */
+static an_term scale32(an_env *env, int argc, const an_term *argv) {
+  an_list_cursor c;
+  const float *data;
+  size_t len, n, at = 0;
+  double factor;
+  int got;
+  (void)argc;
+  if (!an_list_cursor_begin(env, argv[0], &c, &len)) return an_badarg(env, 0);
+  if (!an_get_float(env, argv[1], &factor)) return an_badarg(env, 1);
+  float *out = len ? malloc(len * sizeof *out) : NULL;
+  if (len && !out) return an_raise(env, "out of memory");
+  while ((got = an_float32_run(env, &c, &data, &n)) == 1) {
+    for (size_t k = 0; k < n; k++) out[at++] = (float)((double)data[k] * factor);
+  }
+  an_term t = got < 0 ? an_badarg(env, 0) : an_float32s(env, out, at);
+  free(out);
+  return t;
+}
+
 /* [0, 1, ..., n - 1], one push at a time, with no hint, so the builder grows. */
 static an_term range(an_env *env, int argc, const an_term *argv) {
   an_list_builder b;
@@ -679,6 +765,14 @@ static const an_function functions[] = {
   {"reverse", "(Bytes) -> Bytes", reverse, AN_SHORT},
   {"sum", "(List[Int]) -> Int", sum, AN_SHORT},
   {"range", "(Int) -> List[Int]", range, AN_SHORT},
+  {"sum32", "(List[Float32]) -> Float", sum32, AN_SHORT},
+  {"sum32_after_first", "(List[Float32]) -> Float", sum32_after_first, AN_SHORT},
+  {"runs32", "(List[Float32]) -> Int", runs32, AN_SHORT},
+  {"run_of_ints", "(List[Int]) -> Int", run_of_ints, AN_SHORT},
+  {"iota32", "(Int) -> List[Float32]", iota32, AN_SHORT},
+  {"scale32", "(List[Float32], Float) -> List[Float32]", scale32, AN_SHORT},
+  {"dirty_scale32", "(List[Float32], Float) -> List[Float32]", scale32, AN_DIRTY},
+  {"dirty_iota32", "(Int) -> List[Float32]", iota32, AN_DIRTY},
   {"row", "(Int) -> Map[String, Int]", row, AN_SHORT},
   {"pairs", "(Map[String, Int]) -> List[String]", pairs, AN_SHORT},
   {"lookup", "(Map[String, Int], String) -> Optional[Int]", lookup, AN_SHORT},

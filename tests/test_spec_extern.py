@@ -1182,9 +1182,37 @@ end
     ("def f(n: Int) -> TaskExit", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
     ("def f(n: Int) -> Fn[Int, Int]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
     ("def f(m: Map[Float, Int]) -> Int", "CHECK-MAP-KEY-TYPE", (20, 16), (20, 21)),
+    ("def f(x: Float32) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 19)),
+    ("def f(n: Int) -> Float32", "CHECK-NATIVE-TYPE", (20, 20), (20, 27)),
+    ("def f(o: Optional[Float32]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 29)),
+    ("def f(m: Map[String, Float32]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 32)),
 ], NATIVE_TYPES)
 def test_only_agentica_values_cross_to_a_native_module(checked, signature, code, start, stop):
     assert at(checked(NATIVE_TYPES % signature)) == (code, start, stop)
+
+
+# A Float32 crosses only as the item of a List, which the module reads and makes as C floats: in a parameter, in a
+# result and in a wrapper, a Map value or a field of a struct of the program.
+def test_a_list_of_float32_crosses_to_a_native_module(tmp_path):
+    text = """struct Clip
+  samples: List[Float32]
+  rate: Int
+end
+
+extern module "demo"
+  def energy(samples: List[Float32]) -> Float
+  def scale(samples: List[Float32], by: Float) -> List[Float32]
+  def maybe(samples: Optional[List[Float32]]) -> Result[List[List[Float32]]]
+  def named(n: Int) -> Map[String, List[Float32]]
+  def clip(clip: Clip) -> Clip
+end
+
+def main() -> Void
+end
+"""
+    path = source(tmp_path, text)
+    assert_checks(diagnostic(check(path)), None, None, None)
+    assert run(cli() + ["compile", path, "-o", str(tmp_path / "float32.agcb")]).code == 0
 
 
 # A recursive type crosses: the checker and the lowering walk each user type once.

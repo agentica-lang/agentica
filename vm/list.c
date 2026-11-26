@@ -365,6 +365,17 @@ agc_list *agc_list_of_bytes(const uint8_t *data, size_t n) {
   return agc_list_builder_finish(&b);
 }
 
+agc_list *agc_list_of_float32(const float *data, size_t n) {
+  agc_list_builder b;
+  if (!n) {
+    agc_list_builder_sized(&b, 0);
+    return agc_list_builder_finish(&b);
+  }
+  builder_begin(&b, n, AGC_T_FLOAT32, NULL, 0, 0);
+  builder_put(&b, (const char *)data, agc_size_mul(n, sizeof(uint32_t)));
+  return agc_list_builder_finish(&b);
+}
+
 agc_list *agc_list_from_array(const agc_value *items, size_t n) {
   agc_list_builder b;
   uint32_t kind = n ? kind_of(items[0]) : 0;

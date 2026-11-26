@@ -1,11 +1,12 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.5: short and dirty calls of
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.6: short and dirty calls of
  * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1), the module's resources
- * (1.2), an_blocking, for C libraries that switch stacks (1.3), errors with a kind and details (1.4), and functions
- * whose resources do not come from their arguments, AN_FRESH (1.5). The VM half is vm/native_module.c; this header
- * is the contract, and it includes nothing of the VM.
+ * (1.2), an_blocking, for C libraries that switch stacks (1.3), errors with a kind and details (1.4), functions
+ * whose resources do not come from their arguments, AN_FRESH (1.5), and List[Float32] read and made as C floats,
+ * with no term per item (1.6). The VM half is vm/native_module.c; this header is the contract, and it includes
+ * nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
 #define AGENTICA_NATIVE_H
@@ -21,7 +22,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 5
+#define AN_API_MINOR 6
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -176,6 +177,8 @@ typedef struct an_api {
   an_term (*make_error_kind)(an_env *env, const char *kind, const char *message, size_t len, const char *const *keys,
                              const char *const *values, size_t details);
   bool (*get_error)(an_env *env, an_term t, an_term *kind, an_term *message, an_term *details);
+  int (*float32_run)(an_env *env, an_list_cursor *c, const float **data, size_t *n);
+  an_term (*make_float32s)(an_env *env, const float *data, size_t n);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
@@ -250,6 +253,21 @@ static inline bool an_list_cursor_begin(an_env *env, an_term list, an_list_curso
 }
 static inline bool an_list_next(an_env *env, an_list_cursor *c, an_term *item) {
   return an_api_of(env)->list_next(env, c, item);
+}
+
+/* List[Float32] (API 1.6, an_api_of(env)->minor >= 6). A List[Float32] holds 4 bytes per item, so a function that
+   takes or makes one reads and writes C floats, not a term per item. an_float32_run gives the next run of the items
+   of a cursor that an_list_cursor_begin started over a List[Float32]: *DATA points at the *N next items, inside the
+   list itself and in order, 4-byte aligned, read-only, valid until the function returns (copy them to keep them). A
+   list is a chain of runs, which the VM joins when they lie one after the other, so one run is not always the whole
+   list. It gives 1 for a run, 0 at the end of the list (an empty list included), and -1, leaving the cursor and the
+   outputs alone, for a list that is not a List[Float32]. A run starts at the cursor, so it follows an_list_next.
+   an_float32s makes a List[Float32] of the N items at DATA (NULL when N is 0), which it copies and does not keep. */
+static inline int an_float32_run(an_env *env, an_list_cursor *c, const float **data, size_t *n) {
+  return an_api_of(env)->float32_run(env, c, data, n);
+}
+static inline an_term an_float32s(an_env *env, const float *data, size_t n) {
+  return an_api_of(env)->make_float32s(env, data, n);
 }
 
 /* Map: persistent, so an_map_put returns a new Map. A key is an Int, a String or a Bytes; another key fails the

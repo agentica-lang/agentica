@@ -241,6 +241,10 @@ def block_of(found: Found, library: String) -> Model.NativeBlock
     minor = NativeShape.API_MINOR_RESOURCES
   end
 
+  if floats?(functions, types)
+    minor = NativeShape.API_MINOR_FLOAT32
+  end
+
   Model.NativeBlock(
     library: library,
     range: DiagnosticModel.range_of(found.spans[library]),
@@ -250,6 +254,13 @@ def block_of(found: Found, library: String) -> Model.NativeBlock
     resources: resources,
     types: types,
   )
+end
+
+# Whether a function of the block, or a struct or enum that crosses, names a List of Float32 (API 1.6).
+def floats?(functions: List[Model.NativeFunction], types: List[Model.NativeType]) -> Bool
+  return true if functions.any? do |function: Model.NativeFunction| function.signature.include?(NativeShape.FLOAT32_LIST) end
+
+  types.any? do |type: Model.NativeType| type.shape.include?(NativeShape.FLOAT32_LIST) end
 end
 
 def doc_text(doc: Optional[String]) -> String = DocModel.cleaned(doc).unwrap_or("")

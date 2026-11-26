@@ -18,10 +18,14 @@ RESOURCE = "Opaque"
 
 ## The version of the C API of native modules (AN_API_MAJOR of vm/agentica_native.h), and the least minor version that
 ## has what a block uses: 1.0 has functions of scalars and collections, 1.1 adds the program's structs and enums, 1.2
-## the module's resources. tests/test_std_analysis.py checks them against the header.
+## the module's resources, 1.6 a List of Float32. tests/test_std_analysis.py checks them against the header.
 API_MAJOR = 1
 API_MINOR_TYPES = 1
 API_MINOR_RESOURCES = 2
+API_MINOR_FLOAT32 = 6
+
+## The canonical text of the one type of Float32 that crosses.
+FLOAT32_LIST = "List[Float32]"
 
 ## One field of a struct or variant of an enum that crosses: its name and its canonical types, the field's type (one)
 ## or the payload of the variant.
