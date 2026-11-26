@@ -161,7 +161,12 @@ Order and rules: `docs/vm/10-io-scheduler.md` §10.2.2, "End of run", and
   (`watch_stdin`). A pipe or terminal is reopened through `/proc/self/fd/N` with
   `O_NONBLOCK`, so the inherited description keeps its flags; a socket uses
   `MSG_DONTWAIT`. Other stdin is read by one pool job. Its `done` half appends
-  the bytes and wakes the readers, which re-run (retry).
+  the bytes and wakes the readers, which re-run (retry). A cancel of the task
+  that started a read on the loop stops the poll (the poll kind's `cancel`
+  half) and ends the job with no bytes (`READ_CANCELLED`), so a later byte stays
+  for the next reader; the pool read and the Windows reader stay in flight. The
+  half returns false and calls `agc_io_ready`, so the job ends through `done`,
+  not `drop`.
 - Windows reads every stdin kind, console included, with one blocking `_read` on
   a reader thread of its own (`agc_stdin_*` in `vm/stdio_windows.c`), never in
   the pool. It is an `external` job that an async handle ends; cancellation

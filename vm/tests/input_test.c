@@ -1,7 +1,8 @@
 /*
  * vm/input.c with hand-made tasks and a pipe as stdin, with one pool thread: a waiting read leaves the pool free,
- * readers share the read in flight, EOF reaches each task once, the loop closes with a read still waiting, and a read
- * that a scheduler thread starts ends on the loop's thread.
+ * readers share the read in flight, EOF reaches each task once, a cancelled read leaves the pipe alone and hands the
+ * read to the next reader (also when a scheduler thread cancels it, and when the read ended before the cancel), the
+ * loop closes with a read still waiting, and a read that a scheduler thread starts ends on the loop's thread.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -15,6 +16,7 @@
 #include <fcntl.h>
 #include <io.h>
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 
@@ -137,6 +139,80 @@ static void test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eo
   close(pipe_fds[0]);
 }
 
+#ifndef _WIN32
+static int bytes_in_pipe(void) {
+  int waiting = -1;
+  assert(ioctl(pipe_fds[0], FIONREAD, &waiting) == 0);
+  return waiting;
+}
+
+/* Long enough for a read left behind to take what was just written. */
+static void let_the_loop_run(void) {
+  for (int round = 0; round < 50; round++) {
+    (void)agc_io_poll(&vm, false);
+    uv_sleep(1);
+  }
+}
+
+static void close_the_pipe(void) {
+  close(pipe_fds[0]);
+  close(pipe_fds[1]);
+}
+
+/* A fresh input where A starts the read and B waits for it. */
+static void two_readers_wait(agc_task **a, agc_task **b) {
+  fresh();
+  agc_string *line;
+  *a = agc_test_task();
+  *b = agc_test_task();
+  assert(gets_as(*a, &line) == AGC_INPUT_WAIT);
+  assert(gets_as(*b, &line) == AGC_INPUT_WAIT);
+}
+
+/* A cancelled task leaves its read: the bytes that come later stay in the pipe (for a child process, too), and a reader
+   that waited for that read starts its own. */
+static void test_a_cancelled_read_takes_no_byte_that_comes_later(void) {
+  agc_task *a, *b;
+  agc_string *line;
+  two_readers_wait(&a, &b);
+  agc_io_detach(&vm, a);
+  pump_until_ready(b);
+  put("late\n");
+  let_the_loop_run();
+  assert(bytes_in_pipe() == 5);
+  assert(gets_as(b, &line) == AGC_INPUT_WAIT);
+  pump_until_ready(b);
+  expect_line(b, "late");
+  /* The poll starts again for a new read, and stops again for a second cancel. */
+  assert(gets_as(b, &line) == AGC_INPUT_WAIT);
+  agc_io_detach(&vm, b);
+  agc_task *c = agc_test_task();
+  assert(gets_as(c, &line) == AGC_INPUT_WAIT);
+  pump_until_ready(c);
+  assert(gets_as(c, &line) == AGC_INPUT_WAIT);
+  put("more\n");
+  pump_until_ready(c);
+  expect_line(c, "more");
+  assert(agc_io_close(&vm));
+  close_the_pipe();
+}
+
+/* The read ended (its poll callback ran) before the cancel: the cancel half has nothing to stop, and the read keeps what
+   it took for the reader that waited. */
+static void test_a_read_that_ended_before_the_cancel_keeps_its_bytes(void) {
+  agc_task *a, *b;
+  two_readers_wait(&a, &b);
+  put("kept\n");
+  pump_until_ready(a);
+  agc_io_detach(&vm, a);
+  pump_until_ready(b);
+  assert(bytes_in_pipe() == 0);
+  expect_line(b, "kept");
+  assert(agc_io_close(&vm));
+  close_the_pipe();
+}
+#endif
+
 static void test_the_loop_closes_while_a_read_waits(void) {
   fresh();
   agc_task *a = agc_test_task();
@@ -179,6 +255,36 @@ static void test_a_read_started_by_another_thread_ends_on_the_loop(void) {
   close(pipe_fds[0]);
 }
 
+#ifndef _WIN32
+static void detach_on_thread(void *task) { agc_io_detach(&vm, task); }
+
+/* A scheduler thread cancels the task that waits in the read: the loop's thread stops the poll when it takes the request,
+   a scheduler ends the job, and the byte that comes later stays in the pipe for the next reader. */
+static void test_a_read_cancelled_from_another_thread_takes_no_byte_that_comes_later(void) {
+  fresh();
+  assert(agc_io_share(&vm, false));
+  agc_input_watch(&vm);
+  reader_call first = {.task = agc_test_task()};
+  agc_test_on_thread(gets_then_status, &first);
+  assert(first.status == AGC_INPUT_WAIT);
+  agc_test_on_thread(detach_on_thread, first.task);
+  agc_test_wait_for_hand_over(&vm);
+  agc_test_on_thread(agc_test_service, &vm);
+  put("late\n");
+  let_the_loop_run();
+  assert(bytes_in_pipe() == 5);
+  reader_call next = {.task = agc_test_task()};
+  agc_test_on_thread(gets_then_status, &next);
+  while (next.status == AGC_INPUT_WAIT) {
+    pump_until_ready(next.task);
+    agc_test_on_thread(gets_then_status, &next);
+  }
+  assert(next.status == AGC_INPUT_OK && next.line->bytes == 4 && memcmp(next.line->data, "late", 4) == 0);
+  agc_test_settle_loop(&vm);
+  close_the_pipe();
+}
+#endif
+
 int main(void) {
 #ifdef _WIN32
   _putenv("UV_THREADPOOL_SIZE=1");
@@ -189,8 +295,15 @@ int main(void) {
   agc_gc_allow_threads();
   agc_io_init();
   test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eof_once();
+#ifndef _WIN32
+  test_a_cancelled_read_takes_no_byte_that_comes_later();
+  test_a_read_that_ended_before_the_cancel_keeps_its_bytes();
+#endif
   test_the_loop_closes_while_a_read_waits();
   test_a_read_started_by_another_thread_ends_on_the_loop();
+#ifndef _WIN32
+  test_a_read_cancelled_from_another_thread_takes_no_byte_that_comes_later();
+#endif
   puts("input tests passed");
   return 0;
 }

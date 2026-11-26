@@ -414,18 +414,23 @@ section says how the scheduler and the loop keep them.
   device epoll refuses, a write-only stdin, a failed reopen (no `/proc`, or
   `EACCES` after `su` or `sudo -u`), or a failed poller stays a pool job with
   one blocking `read` (§14.1). One read of up to 1 MiB is in flight at a time,
-  and a second reader parks in the input's FIFO. A read with no data at the end
-  of the run is not waited for. On Windows every stdin kind is read by one
-  thread of the VM's own (`vm/stdio_windows.c`), never by the pool: it does one
-  blocking read when a read is asked for and wakes the loop with an async
-  handle. It reads a console with `ReadConsoleW` and hands the text on as UTF-8,
-  and anything else with `_read` in binary mode. The handle keeps the loop alive
-  only while a read is out. A cancelled reader leaves the read in flight, as on
-  Unix, and its bytes or EOF go to the next reader. At the end of the run the
-  read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read
-  that cannot be cancelled ends with the process, or, in an in-process harness,
-  when input comes, and then touches nothing of the closed loop. Other
-  unsupported hosts keep a blocking read on the interpreter thread.
+  and a second reader parks in the input's FIFO. When the task that started a
+  read on the loop is cancelled, the kind's `cancel` half stops the poll and the
+  read ends with no bytes: a byte that comes later stays for the next reader,
+  in this process or another, and a reader that waited for that read starts its
+  own. A pool read (the fallback) cannot be stopped and stays in flight. A read
+  with no data at the end of the run is not waited for. On Windows every stdin
+  kind is read by one thread of the VM's own (`vm/stdio_windows.c`), never by
+  the pool: it does one blocking read when a read is asked for and wakes the
+  loop with an async handle. It reads a console with `ReadConsoleW` and hands
+  the text on as UTF-8, and anything else with `_read` in binary mode. The
+  handle keeps the loop alive only while a read is out. A cancelled reader
+  leaves the read in flight, and its bytes or EOF go to the next reader (not a
+  child process). At the end of the run the read is cancelled where Windows can
+  (`CancelSynchronousIo`, a pipe); a read that cannot be cancelled ends with
+  the process, or, in an in-process harness, when input comes, and then touches
+  nothing of the closed loop. Other unsupported hosts keep a blocking read on
+  the interpreter thread.
 - **stdout and stderr (`vm/output.c`).** Each stream has one output buffer, a
   `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of waiting
   writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole text

@@ -2,9 +2,10 @@
 
 On Linux and macOS the peer is this test: it gives the VM a pty of its own (the VM's controlling terminal, in a new
 session), reads the pty's modes with termios, types keys into it, resizes it (the kernel then sends SIGWINCH) and
-checks that the VM gives the first mode back when it ends normally, on a crash and on a stop signal. On Windows a
-pseudo console is the console of a Python child that prints the console modes before and after a VM that turns raw
-mode on and then crashes. One case without a terminal runs everywhere.
+checks that the VM gives the first mode back when it ends normally, on a crash and on a stop signal, and that a
+cancelled read of stdin leaves the keys typed after it in the terminal (issue #2013). On Windows a pseudo console is
+the console of a Python child that prints the console modes before and after a VM that turns raw mode on and then
+crashes. One case without a terminal runs everywhere.
 """
 import os
 import signal
@@ -25,6 +26,32 @@ PROGRAM = """\
 def show(label: String) -> Void
   puts(label)
   IO.flush()
+end
+
+def read_byte() -> Void
+  _ = IO.read_bytes(1)
+end
+
+def read_line() -> Void
+  _ = IO.gets()
+end
+
+# A task that waits in a read of stdin is cancelled; the test then types and checks that the bytes are still in the
+# terminal (nothing took them), and signals the program, which reads them.
+def cancel_rounds(reader: Fn[Void]) -> Void
+  Terminal.raw().unwrap!
+  go = System.subscribe([System.Signal.Usr1]).unwrap!
+  round = 0
+  while round < 4
+    waiting = Task.spawn(reader)
+    Task.sleep(150)
+    Task.cancel(waiting)
+    show("cancelled #{round}")
+    go.recv(10000).unwrap!
+    puts("got #{round} #{IO.read_bytes(3).unwrap!.to_a}")
+    IO.flush()
+    round = round + 1
+  end
 end
 
 def main() -> Void
@@ -69,6 +96,8 @@ def main() -> Void
       Terminal.raw().unwrap!
       show("raw")
       Task.sleep(30000)
+    "cancel-bytes" -> cancel_rounds(&read_byte)
+    "cancel-line" -> cancel_rounds(&read_line)
     "resize" ->
       resized = System.subscribe([System.Signal.Winch]).unwrap!
       show("ready")
@@ -154,6 +183,11 @@ class Pty:
     def type(self, keys):
         os.write(self.master, keys)
 
+    def waiting(self):
+        """How many typed bytes the terminal still holds for a reader: none when a read of the VM took them."""
+        import fcntl
+        return struct.unpack("i", fcntl.ioctl(self.slave, self.termios.FIONREAD, b"\0\0\0\0"))[0]
+
     def wait(self):
         """The exit status, reading the output meanwhile."""
         deadline = time.monotonic() + WAIT_SECONDS
@@ -232,6 +266,23 @@ def test_a_stop_signal_gives_the_mode_back(program, ptys):
     pty.process.send_signal(signal.SIGTERM)
     assert pty.wait() == -signal.SIGTERM
     assert pty.mode() == pty.before
+
+
+@host_only(WINDOWS, POSIX)
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("reader", ["bytes", "line"])
+def test_a_cancelled_read_of_stdin_takes_nothing_that_comes_later(program, ptys, reader, schedulers):
+    """Issue #2013: a cancelled IO.read_bytes or IO.gets must not read what is typed after the cancel, so a child
+    process (or the next read) finds it in the terminal."""
+    pty = ptys(program, "cancel-" + reader, flags=("--schedulers", schedulers))
+    for turn in range(4):
+        pty.read_until(b"cancelled %d\r\n" % turn)
+        pty.type(b"ab\n")
+        time.sleep(scaled(0.1))  # long enough for a read left behind to take them
+        assert pty.waiting() == 3, pty.text
+        pty.process.send_signal(signal.SIGUSR1)
+        pty.read_until(b"got %d [97, 98, 10]\r\n" % turn)
+    assert pty.wait() == 0
 
 
 @host_only(WINDOWS, POSIX)
