@@ -57,6 +57,12 @@ int agc_fs_fsync(int fd);
 void agc_fs_sync_folder(const char *path);
 /* The permission bits of the open file FD; on Windows only the owner write bit counts (read-only or not). */
 int agc_fs_fchmod(int fd, int mode);
+/* agc_fs_fchmod for a copy of a file: 0 also when the file system cannot hold permission bits (EPERM, ENOTSUP or
+   EOPNOTSUPP, as on vfat and exFAT), where the file keeps what the system gave it. */
+int agc_fs_fchmod_if_able(int fd, int mode);
+/* Whether a rename can replace the file that INFO describes: false for a read-only file on Windows, where MoveFileExW
+   never replaces one; elsewhere the folder decides, so true. */
+bool agc_fs_replaceable(const agc_fs_info *info);
 /* The length of the folder part of PATH, its last separator included (0 for a bare name). */
 size_t agc_fs_folder_length(const char *path);
 /* The permission bits of PATH, a link followed (on Windows through its real path); on Windows only the owner write bit

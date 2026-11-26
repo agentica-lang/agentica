@@ -64,6 +64,24 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "File.copy",
+    parameters: [
+      Model.Named(name: "from", type: Types.Type.String),
+      Model.Named(name: "to", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "File.copy",
+    effects: ["filesystem"],
+    description: (
+      "Copy the regular file from to a new file beside to, which takes the permission bits of from and is renamed " +
+      "over to in one step, so a reader sees the old file or the whole copy; a link at to is replaced itself and a " +
+      "directory there is an error; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "File.each_line",
     parameters: [
       Model.Named(name: "path", type: Types.Type.String),

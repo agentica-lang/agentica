@@ -51,6 +51,30 @@ end
 - The file must exist and be a regular file: a missing path is `error("filesystem: cannot resolve path ...")`, a directory or a FIFO `error("filesystem: path does not refer to a regular file")`. Use `File.write_text` to create a file.
 - On Windows a read-only file is an error, and nothing is written. Of the old file's attributes only the read-only bit is kept: the access list comes from the folder, and the hidden and system attributes are dropped.
 
+## File.copy
+
+```signature
+File.copy(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Copies the regular file `from` to `to` with the permission bits of `from`, so a program saved as `0o755` is still executable. A reader of `to` sees the old file or the whole copy, never a part. The file may be of any size.
+
+```agentica {mode="check"}
+def main() -> Void
+  File.write_text("tool.sh", "echo hi\n", 1000).unwrap!
+  File.chmod("tool.sh", 0o755, 1000).unwrap!
+  File.copy("tool.sh", "tool-backup.sh", 1000).unwrap!
+  puts(File.stat("tool-backup.sh", 1000).unwrap!.mode)
+end
+```
+
+- The bytes go to a new file in the folder of `to`, or in the folder of the file that a link at `to` names. On POSIX only the owner can read it while it is written; it then takes the permission bits of `from`, is flushed to the disk and is renamed over the target, as `Path.replace` does. The umask does not apply, and setuid, setgid and sticky are not copied. On a file system that cannot hold permission bits (vfat, exFAT) the new file keeps the bits the system gave it. A failure removes the new file and leaves the target as it was. A process killed during the copy can leave a hidden `.agc-PID-N.tmp` file in that folder. Copying needs write permission on that folder.
+- `to` is replaced when it exists and made when it does not. A symbolic link at `to` is followed and stays a link, as with `File.replace` and `File.write_text`: the file it points to is the one replaced, and a dangling link is `io.not_found`. A folder at `to`, also behind a link, is `io.is_directory`, and a path that is not a regular file (a FIFO, a device or a socket) is `io.exists`; nothing is read then. A symbolic link `from` is followed. A `from` that is not a regular file (a folder, a FIFO or a device) is `error("filesystem: path does not refer to a regular file")`, with no wait.
+- The new file belongs to the user who runs the program. The owner, the times and the other attributes of `from` are not copied, and a hard link of `to` keeps the old bytes. Copying a file onto itself leaves a copy of it.
+- The `details` of an error hold `from` under `"path"` and `to` under `"to"`.
+- A timeout ends the copy: it stops at its next block of 64 KiB or before the rename, removes the new file and leaves `to` as it was; the final flush to the disk cannot be interrupted. So does the end of the program, which waits for that short stop. A task that is cancelled only stops waiting: its copy runs to its end.
+- Windows keeps only the read-only bit of `from`, and refuses a read-only `to` with `io.permission`, leaving it as it was.
+
 ## File.append_text
 
 ```signature
@@ -109,6 +133,7 @@ Gives a `File.Info`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`
 
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
 - Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
+- To test that a path exists (Ruby's `File.exist?`), use `File.stat(path, 1000).ok?`, or `File.lstat` when a dangling link counts: there is no separate call, since the result already says it and a disk check needs a timeout and an error.
 
 ```agentica {mode="check"}
 def main() -> Void

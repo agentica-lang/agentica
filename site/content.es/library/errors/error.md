@@ -2,7 +2,7 @@
 title: Error
 weight: 2
 description: El registro que guarda un Result fallido.
-source_hash: "03dad7fa1aec"
+source_hash: "e47251983b60"
 ---
 
 Un `Result` fallido guarda un `Error`, un registro integrado. `error("text")` crea uno, `error("text", kind: "db.constraint", code: 19)` fija más de sus campos, y el patrón `error(e)` lo vincula.
@@ -80,7 +80,7 @@ Las llamadas que apaga un flag `--deny-*` devuelven un error de la familia `deni
 
 Un error del sistema operativo (`File`, `Dir`, `TCP`, `TLS`, `Process`) tiene el errno como `code` y una clase elegida a partir de él: `ENOENT` es `io.not_found` (`process.not_found` para un programa), `EACCES` y `EPERM` son `io.permission`, `ECONNREFUSED` es `net.refused`, `ECONNRESET` y `EPIPE` son `net.closed`. `ENOTSUP` (y `EOPNOTSUPP`) de una llamada de `File`, `Dir` o `Path` es `io.unsupported`: un sistema que no puede hacer la llamada en absoluto, como `File.symlink` en un Windows sin permiso para crear enlaces, o una tubería con nombre que Windows rechaza como archivo. Un errno sin clase propia recibe la clase `failed` de su familia, y el errno sigue como código. El número es el del sistema, así que `ECONNREFUSED` es 111 en Linux, 61 en macOS y 107 en Windows; la clase es la misma en todas partes. Un host que no se encuentra no tiene código. Un bloque de cabeceras HTTP rechazado tiene su estado como código (`400`, `413`, ...). Cada límite de tamaño de HTTP (un bloque de cabeceras, una línea de cabecera, la cantidad de cabeceras, un cuerpo o una línea de trozo, leídos o escritos) es `http.too_large`, con el código `431` para un bloque de cabeceras y `413` para un cuerpo; un bloque de cabeceras de respuesta que el servidor de `std/http` no puede escribir no tiene código.
 
-Los `details` de un error de una llamada a archivo, rechazada por `--deny-fs` o fallida, guardan la ruta tal como se dio a la llamada bajo `"path"`: `File.read_text("conf/app.toml", 5000)` sin ese archivo da `{"path": "conf/app.toml"}`. `Path.rename` y `Path.replace` también guardan su destino bajo `"to"`, y `File.symlink` el texto del enlace. Un error de una llamada de red que nombra un host (`TCP.connect`, `TCP.listen`, `TLS.connect`, `DNS.lookup`) guarda el host bajo `"host"`: una conexión rechazada, un host que no se encuentra, un handshake TLS fallido y un rechazo de `--deny-net`. Las llamadas sobre un handle abierto (`File.write`, `TCP.send`, ...) no tienen detalles.
+Los `details` de un error de una llamada a archivo, rechazada por `--deny-fs` o fallida, guardan la ruta tal como se dio a la llamada bajo `"path"`: `File.read_text("conf/app.toml", 5000)` sin ese archivo da `{"path": "conf/app.toml"}`. `Path.rename`, `Path.replace` y `File.copy` también guardan su destino bajo `"to"`, y `File.symlink` el texto del enlace. Un error de una llamada de red que nombra un host (`TCP.connect`, `TCP.listen`, `TLS.connect`, `DNS.lookup`) guarda el host bajo `"host"`: una conexión rechazada, un host que no se encuentra, un handshake TLS fallido y un rechazo de `--deny-net`. Las llamadas sobre un handle abierto (`File.write`, `TCP.send`, ...) no tienen detalles.
 
 ```agentica
 def main() -> Void

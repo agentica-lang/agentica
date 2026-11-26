@@ -54,14 +54,14 @@
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
   FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_CHMOD,
-  FS_SYMLINK, FS_READLINK, FS_NO_MEMORY
+  FS_SYMLINK, FS_READLINK, FS_COPY, FS_NO_MEMORY
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
   OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER, OP_CHMOD,
-  OP_SYMLINK, OP_READLINK
+  OP_SYMLINK, OP_READLINK, OP_COPY
 } op_kind;
 
 typedef struct {
@@ -84,6 +84,7 @@ typedef struct {
   fs_status status;
   int err, fd;
   bool owns_st, polled, locked, regular;
+  atomic_bool deadline_passed;
   const char *file_type;
   agc_vm *vm;
   agc_poller *poller;
@@ -372,6 +373,7 @@ static op *new_op(agc_vm *vm, op_kind kind) {
   o->kind = kind;
   o->fd = -1;
   o->rt = vm->rt;
+  atomic_init(&o->deadline_passed, false);
   return o;
 }
 
@@ -788,27 +790,36 @@ static void work_write_text(op *o) {
   agc_fs_close(fd);
 }
 
+/* The descriptor of the path of O, opened to read, which its own fstat says is a regular file (so a pipe or a device
+   swapped in after the path stat is never read) and which is made blocking; INFO is that fstat. -1, with the op
+   failed, otherwise. */
+static int open_regular_source(op *o, agc_fs_info *info) {
+  int fd = open_for(o, true, false);
+  if (fd < 0) return -1;
+  if (agc_fs_fstat(fd, info) != 0) {
+    int err = errno;
+    agc_fs_close(fd);
+    fail_op(o, FS_READ, err);
+    return -1;
+  }
+  if (!AGC_FS_ISREG(info->mode)) {
+    agc_fs_close(fd);
+    fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info->mode) ? EISDIR : 0);
+    return -1;
+  }
+  agc_fs_blocking(fd);
+  return fd;
+}
+
 /* The hash of a whole regular file, streamed in fixed chunks with O(chunk) memory: one private descriptor, read from
    the start and closed on every return path. The fstat of the descriptor itself decides what is regular, so a rename
    or a replacement between the path stat and the open cannot turn this into a read of a pipe or a device; the open
    is non-blocking, a non-regular descriptor is refused before any blocking read, and the job never waits on the loop.
    Only malloc'd memory is touched here, no GC pointer, and nothing raises. */
 static void work_sha256(op *o) {
-  int fd = open_for(o, true, false);
-  if (fd < 0) return;
   agc_fs_info info;
-  if (agc_fs_fstat(fd, &info) != 0) {
-    int err = errno;
-    agc_fs_close(fd);
-    fail_op(o, FS_READ, err);
-    return;
-  }
-  if (!AGC_FS_ISREG(info.mode)) {
-    agc_fs_close(fd);
-    fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info.mode) ? EISDIR : 0);
-    return;
-  }
-  agc_fs_blocking(fd);
+  int fd = open_regular_source(o, &info);
+  if (fd < 0) return;
   /* The digest of the bytes in read order; a concurrent writer changes what is hashed, as with File.read_text. */
   unsigned char digest[AGC_SHA256_BYTES];
   agc_sha256_stream *hash = agc_sha256_begin();
@@ -1153,14 +1164,12 @@ static void work_replace(op *o) {
     fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info.mode) ? EISDIR : 0);
     return;
   }
-#ifdef _WIN32
-  /* MoveFileExW never replaces a read-only file: refuse one before anything is written. */
-  if (!(info.mode & 0200)) {
+  /* Windows: MoveFileExW never replaces a read-only file, so it is refused before anything is written. */
+  if (!agc_fs_replaceable(&info)) {
     free(target);
     fail_op(o, FS_OPEN, EACCES);
     return;
   }
-#endif
   char *fresh = NULL;
   int fd = agc_fs_open_beside(target, &fresh);
   if (fd < 0) {
@@ -1205,6 +1214,132 @@ static void work_replace(op *o) {
     free(fresh);
     free(target);
   }
+}
+
+/* Where File.copy puts the file: to, with a link at it resolved as File.replace does, so a link stays a link and the
+   file it names is replaced; to itself when nothing is there yet. NULL, with the op failed, for a dangling link, a
+   folder (also behind a link), a path that is not a regular file (a FIFO, a device, a socket) and, on Windows, a
+   read-only file. */
+static char *copy_target(op *o) {
+  agc_fs_info over;
+  if (agc_fs_stat(o->to, &over, false) != 0) {
+    int err = errno;
+    char *absent = err == ENOENT ? strdup(o->to) : NULL;
+    if (!absent && err == ENOENT) no_memory(o);
+    else if (!absent) fail_op(o, FS_COPY, err);
+    return absent;
+  }
+  bool linked = AGC_FS_ISLNK(over.mode);
+  char *target = linked ? agc_fs_realpath(o->to) : strdup(o->to);
+  if (!target) {
+    if (linked) fail_op(o, FS_COPY, errno);
+    else no_memory(o);
+    return NULL;
+  }
+  int err = linked && agc_fs_stat(target, &over, false) != 0 ? errno : 0;
+  if (!err) err = AGC_FS_ISDIR(over.mode) ? EISDIR : !AGC_FS_ISREG(over.mode) ? EEXIST : 0;
+  if (!err && !agc_fs_replaceable(&over)) err = EACCES;
+  if (err) {
+    free(target);
+    fail_op(o, FS_COPY, err);
+    return NULL;
+  }
+  return target;
+}
+
+/* True when the copy must end: its deadline passed (deadline_passed, set on the I/O thread by pause_wait and again by
+   expired) or the run is over (rt->over, as run_compute reads it). */
+static bool copy_stopped(const op *o) {
+  return atomic_load_explicit(&o->deadline_passed, memory_order_acquire) ||
+         atomic_load_explicit(&o->rt->over, memory_order_acquire);
+}
+
+/* File.copy: the bytes of the regular file from (a link is followed) go to a new file beside the target (copy_target),
+   which only the owner can read while it is written (POSIX); it then takes the permission bits of from (setuid, setgid
+   and sticky are not copied), is flushed to the disk and is renamed over the target in one step, so a reader sees the
+   old file or the whole copy, never a part. A failure of the source is that of a read of it; every other failure is
+   FS_COPY, removes the new file and leaves the target as it was. A file of any size is copied in blocks. The copy
+   ends as cancelled (ECANCELED, nothing renamed) when copy_stopped is true at its start, before each block, before
+   the flush and before the rename; the flush itself (fsync) cannot be interrupted. A cancelled task only detaches
+   the job, which has no hook, so the copy then runs to its end. */
+static void work_copy(op *o) {
+  if (copy_stopped(o)) {
+    fail_op(o, FS_COPY, ECANCELED);
+    return;
+  }
+  agc_fs_info info;
+  int source = open_regular_source(o, &info);
+  if (source < 0) return;
+  char *target = copy_target(o);
+  if (!target) {
+    agc_fs_close(source);
+    return;
+  }
+  char *fresh = NULL;
+  int copy = agc_fs_open_beside(target, &fresh);
+  uint8_t *buf = copy < 0 ? NULL : malloc(CHUNK);
+  if (!buf) {
+    int err = errno;
+    agc_fs_close(source);
+    if (copy >= 0) {
+      agc_fs_close(copy);
+      agc_fs_unlink(fresh);
+      no_memory(o);
+    } else {
+      fail_op(o, FS_COPY, err);
+    }
+    free(fresh);
+    free(target);
+    return;
+  }
+  int err = 0;
+  fs_status status = FS_OK;
+  for (;;) {
+    if (copy_stopped(o)) {
+      err = ECANCELED;
+      status = FS_COPY;
+      break;
+    }
+    int64_t n = agc_fs_read(source, buf, CHUNK);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) {
+      err = errno;
+      status = FS_READ;
+      break;
+    }
+    if (n == 0) break;
+    if (!write_all(copy, buf, (size_t)n, &err)) {
+      status = FS_COPY;
+      break;
+    }
+  }
+  free(buf);
+  agc_fs_close(source);
+  if (status == FS_OK && copy_stopped(o)) {
+    err = ECANCELED;
+    status = FS_COPY;
+  }
+  if (status == FS_OK && (agc_fs_fchmod_if_able(copy, (int)(info.mode & 0777)) != 0 || agc_fs_fsync(copy) != 0)) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (agc_fs_close(copy) != 0 && status == FS_OK) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (status == FS_OK && copy_stopped(o)) {
+    err = ECANCELED;
+    status = FS_COPY;
+  }
+  if (status == FS_OK && agc_fs_replace(fresh, target) != 0) {
+    err = errno;
+    status = FS_COPY;
+  }
+  if (status == FS_OK) agc_fs_sync_folder(target);
+  else agc_fs_unlink(fresh);
+  free(fresh);
+  free(target);
+  if (status != FS_OK) fail_op(o, status, err);
 }
 
 /* A `regular` open (File.chunks) is refused unless the descriptor itself is a regular file, decided by its fstat as in
@@ -1381,6 +1516,7 @@ static void work(void *data) {
     case OP_CHMOD: work_chmod(o); break;
     case OP_SYMLINK: work_symlink(o); break;
     case OP_READLINK: work_readlink(o); break;
+    case OP_COPY: work_copy(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1510,9 +1646,11 @@ static bool begin_wait(void *data, agc_io_job *job) {
   return true;
 }
 
-/* The kind's `pause`: the deadline of a polled wait passed, and the wait stops on the I/O thread before `expired`
-   moves the buffer that its callback writes. */
+/* The kind's `pause`, on the I/O thread when the job's timer fires, before `expired`: a copy on a pool thread learns
+   that its deadline passed (work_copy), and a polled wait stops before `expired` moves the buffer that its callback
+   writes. */
 static void pause_wait(void *data) {
+  atomic_store_explicit(&((op *)data)->deadline_passed, true, memory_order_release);
   agc_poller *p = poller_of(data);
   if (p) agc_poller_pause(p);
 }
@@ -1551,7 +1689,7 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_TOO_BIG: return error_of(vm, AGC_KIND_IO_TOO_LARGE, "filesystem: file exceeds 1048576 bytes");
     case FS_OPEN:
       if (o->kind == OP_LIST) return os_error(vm, "filesystem: cannot open directory", o->path, path_len, o->err);
-      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
+      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256 || o->kind == OP_COPY)
         return os_error(vm, "filesystem: cannot open file for reading", o->path, path_len, o->err);
       return os_error(vm, "filesystem: cannot open file for writing", o->path, path_len, o->err);
     case FS_IS_DIR: {
@@ -1585,9 +1723,11 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       put_system_error(vm, &t, o->err);
       return error_text(vm, agc_errno_kind(AGC_FAMILY_IO, o->err), &t, o->err);
     }
-    case FS_RENAME: {
+    case FS_RENAME:
+    case FS_COPY: {
       text t = {0};
-      puts_text(&t, "filesystem: cannot rename path\n  from: ");
+      puts_text(&t, o->status == FS_COPY ? "filesystem: cannot copy file\n  from: "
+                                         : "filesystem: cannot rename path\n  from: ");
       put(&t, o->path, path_len);
       puts_text(&t, "\n  to: ");
       put(&t, o->to, strlen(o->to));
@@ -1755,6 +1895,7 @@ static void keep_unsent(op *o) {
 
 static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   op *o = data;
+  atomic_store_explicit(&o->deadline_passed, true, memory_order_release);
   agc_poller *p = poller_of(o);
   if (p) agc_poller_pause(p);
   keep_unsent(o);
@@ -1782,11 +1923,13 @@ static bool fs_denied(agc_vm *vm, uint32_t span) {
 }
 
 /* A write or close of a handle carries bytes that earlier calls already accepted: its pool work runs to its end after
-   a timeout, so the end of the run waits for it as a flush, or those bytes would be lost at the exit. */
+   a timeout, so the end of the run waits for it as a flush, or those bytes would be lost at the exit. A copy is the
+   same for another reason: it stops at its next block when the run is over, and the end waits for that short abort,
+   which removes the new file, instead of leaving it behind. */
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   o->vm = vm;
   if (!o->st || !o->st->poller) {
-    unsigned flags = o->kind == OP_WRITE || o->kind == OP_CLOSE ? AGC_JOB_FLUSH : 0;
+    unsigned flags = o->kind == OP_WRITE || o->kind == OP_CLOSE || o->kind == OP_COPY ? AGC_JOB_FLUSH : 0;
     agc_io_start_flags(vm, &file_io, o, context, timeout, more, flags);
     return agc_void();
   }
@@ -1919,7 +2062,7 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
   return path_op(vm, OP_REMOVE, args[0], agc_as_int(vm, args[1]));
 }
 
-/* Path.rename and Path.replace: the two paths checked, then the pool job of kind. */
+/* Path.rename, Path.replace and File.copy: the two paths checked, then the pool job of kind. */
 static agc_value rename_call(agc_vm *vm, agc_value *args, uint32_t span, op_kind kind) {
   if (fs_denied(vm, span)) {
     const agc_string *target = agc_as_string(vm, args[1]);
@@ -1945,6 +2088,11 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
 /* Path.replace(from, to, timeout_ms): see work_rename_over. */
 static agc_value builtin_rename_over(agc_vm *vm, agc_value *args, uint32_t span) {
   return rename_call(vm, args, span, OP_RENAME_OVER);
+}
+
+/* File.copy(from, to, timeout_ms): see work_copy. */
+static agc_value builtin_copy(agc_vm *vm, agc_value *args, uint32_t span) {
+  return rename_call(vm, args, span, OP_COPY);
 }
 
 /* File.replace(path, data, timeout_ms): see work_replace. */
@@ -2702,6 +2850,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.chmod", 3, builtin_chmod, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.symlink", 3, builtin_symlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"File.readlink", 2, builtin_readlink, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"File.copy", 3, builtin_copy, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
