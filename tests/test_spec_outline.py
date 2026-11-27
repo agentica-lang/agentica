@@ -160,8 +160,8 @@ def test_a_builtin_type_that_std_re_exports_is_an_item_written_as_a_program_writ
     assert start(request["name_span"])[0] == std.index("export HttpWire.Request") + 1
     fields = {field["name"]: field["type"] for field in request["fields"]}
     assert fields["headers"] == "List[HTTP.Header]"
-    signature = items["client"]["signature"]
-    assert signature == "client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]"
+    signature = items["get_response"]["signature"]
+    assert signature == "get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]"
     # A default that is a string keeps its text, even when it looks like a builtin name.
     (tmp_path / "label.agc").write_text('def label(name: String = "HttpWire.Client") -> String = name\n',
                                         encoding="utf-8")

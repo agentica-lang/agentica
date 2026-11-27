@@ -216,7 +216,7 @@ def main() -> Void
   _ = &Toml.parse
   _ = &Logger.info
   _ = &BDD.step
-  _ = &HTTP.client
+  _ = &HTTP.get_response
   q = Queue.push(Queue.new(), "embedded")
   puts(Result.unwrap!(Queue.peek(q)))
 end
@@ -336,12 +336,10 @@ end
 
 def main() -> Void
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
-  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  response = HTTP.get(client, base + "/").unwrap!
+  response = HTTP.get_response(base + "/").unwrap!
   puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
-  puts(HTTP.get(client, base + "/missing").unwrap!.status)
-  HTTP.close_client(client)
+  puts(HTTP.get_response(base + "/missing").unwrap!.status)
   HTTP.close_server(server)
 end
 """

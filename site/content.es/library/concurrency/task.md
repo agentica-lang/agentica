@@ -524,7 +524,7 @@ Task.pending_count() -> Int
 Da cuántas tareas aún no han terminado, sin contar `main`.
 
 - Las tareas en espera, en pausa o esperando otra tarea cuentan, y también quien pregunta, salvo que sea `main`. Las tareas que devolvieron un valor o fallaron no cuentan, estén esperadas o no.
-- Las tareas que `std/http` inicia para un `HTTP.Client` nunca cuentan, y `Test.test` no las ve como sobrantes.
+- La tarea que ejecuta el bloque `message` de un `Task.monitor` nunca cuenta, y `Test.test` no la ve como sobrante.
 
 ```agentica
 def wait_for(task: Task[Int]) -> Int = Task.await(task)

@@ -13,12 +13,7 @@ HTTP is an Agentica library: `import HTTP from "std/http"`. Without it, `HTTP.`
 calls are `CHECK-UNKNOWN-NAME` and the help shows the import.
 
 ```text
-HTTP.client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]
-HTTP.close_client(client: HTTP.Client) -> Void
 HTTP.proxy_from_env(url: String) -> String
-HTTP.get(client: HTTP.Client, url: String) -> Result[HTTP.Response]
-HTTP.post(client: HTTP.Client, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
-HTTP.request(client: HTTP.Client, method: String, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
 HTTP.get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 HTTP.text(body: Bytes, headers: List[HTTP.Header] = []) -> Result[String]
@@ -40,17 +35,17 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
   most `max_body_bytes`, with any content. `HTTP.ClientOptions()`, the default,
-  gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
-  body limit and system CA trust (`tls: some(context)` takes a client context
+  gives a 30 s timeout, a 1 MiB body limit and system CA trust (`tls: some(context)` takes a client context
   instead). Options must be positive (`max_body_bytes` at most 64 MiB;
-  `read_timeout_ms` may be 0). `timeout_ms` covers the whole call, the head
+  `read_timeout_ms` may be 0). `idle_timeout_ms` and `max_connections` are not
+  used by the client. `timeout_ms` covers the whole call, the head
   included (for `open`, `start` and `upload`, the time to the head);
   `connect_timeout_ms` bounds the connect inside it; `read_timeout_ms` is the
   longest wait for body bytes (a stream: `0` is no limit, stop it with
   `Task.cancel(stream.done)`).
   `connect_to: "203.0.113.7"` (an IP in its strict form, not a name, not with
-  `proxy`) connects there for every URL that the options or client reach (one
-  client per host; after a redirect resolve and check again) and keeps each
+  `proxy`) connects there for every URL that the options reach (options per
+  host; after a redirect resolve and check again) and keeps each
   URL's host for `Host`, TLS and the certificate. An SSRF-safe
   call: `DNS.lookup(host)`, refuse private, loopback, link-local and reserved
   addresses, then `connect_to:` a checked one (no second lookup to rebind). The
@@ -71,13 +66,13 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   by piece and an empty `Bytes` at its end, `HTTP.finish(conn)` closes. After a
   body read to its end the same connection takes the next request, unless the
   server closed it. Use it for a body read as it arrives (no size limit);
-  whole responses use `get` or the client. One call at a time, in the task that opened
+  whole responses use `get_response`. One call at a time, in the task that opened
   it.
 - One request: `HTTP.get_response(url)` and `HTTP.post_response(url, body)`
-  make a client of their own, send it and close it before they return (Ruby's
-  `Net::HTTP.get_response`). Many requests: one `HTTP.client()` with `get`,
-  `post` and `request`. Over HTTPS each `get_response` builds a new TLS context,
-  so many calls belong on one client.
+  open a connection of their own, send and close it before they return (Ruby's
+  `Net::HTTP.get_response`). There is no pool: a connection is never reused (the
+  `http-client` package has one). Over HTTPS each call builds a new TLS context
+  unless `options.tls` has one: build it once and pass it.
 - A body on a channel, on a connection of its own: `HTTP.open(method, url,
   body)` returns at the head as `HTTP.Stream(status, headers, body, done)`. Read
   `stream.body` (a `Channel[Bytes]`, pieces up to 64 KiB) until the closed

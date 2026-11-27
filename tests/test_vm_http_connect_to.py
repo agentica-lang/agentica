@@ -94,6 +94,14 @@ def show(label: String, r: Result[HTTP.Response]) -> Void
   end
 end
 
+# Whether the options pass check: the unsupported URL is refused only after them.
+def accepted?(options: HTTP.ClientOptions) -> Bool
+  case HTTP.get_response("ftp://x/", options)
+    ok(_) -> return true
+    error(e) -> return not e.message.include?("connect_to")
+  end
+end
+
 def main() -> Void
   plain = System.args()[0]
   secure = System.args()[1]
@@ -104,14 +112,11 @@ def main() -> Void
   safe = HTTP.ClientOptions(connect_to: "127.0.0.1", tls: trust)
 
   show("get_response", HTTP.get_response("http://name.test:#{plain}/", pinned))
-  client = HTTP.client(pinned).unwrap!
-  show("pooled", HTTP.get(client, "http://name.test:#{plain}/"))
-  show("other host", HTTP.get(client, "http://other-host.test:#{plain}/"))
+  show("other host", HTTP.get_response("http://other-host.test:#{plain}/", pinned))
   case HTTP.download("http://name.test:#{plain}/", dir + "/saved.txt", HTTP.DownloadOptions(), pinned)
     ok(_) -> puts("download #{File.read_text(dir + "/saved.txt").unwrap!}")
     error(e) -> puts("download #{e.kind}")
   end
-  HTTP.close_client(client)
 
   stream = HTTP.open("GET", "http://name.test:#{plain}/", "".bytes, [], pinned).unwrap!
   puts("open #{String.from_bytes(stream.body.recv(5000).unwrap!).unwrap!}")
@@ -124,16 +129,13 @@ def main() -> Void
   pieces.close
   show("upload", HTTP.upload("POST", "http://name.test:#{plain}/", pieces, 3, [], pinned))
 
-  # The certificate is for wrong.example: that name passes, another one fails, in the pool and in start.
+  # The certificate is for wrong.example: that name passes, another one fails, in get_response and in start.
   show("tls ok", HTTP.get_response("https://wrong.example:#{secure}/", safe))
-  tls_client = HTTP.client(safe).unwrap!
-  show("tls pooled", HTTP.get(tls_client, "https://wrong.example:#{secure}/"))
-  show("tls other", HTTP.get(tls_client, "https://other.example:#{secure}/"))
+  show("tls other", HTTP.get_response("https://other.example:#{secure}/", safe))
   case HTTP.download("https://wrong.example:#{secure}/", dir + "/secure.txt", HTTP.DownloadOptions(), safe)
     ok(_) -> puts("tls download #{File.read_text(dir + "/secure.txt").unwrap!}")
     error(e) -> puts("tls download #{e.kind}")
   end
-  HTTP.close_client(tls_client)
   secure_pieces: Channel[Bytes] = Channel.new(2)
   _ = secure_pieces.send("xyz".bytes, 1000)
   secure_pieces.close
@@ -154,13 +156,13 @@ def main() -> Void
   for address in ["localhost", "127.0.0.010", "012.0.0.1", "127.0.0.1:80", "1.2.3", "256.0.0.1", "abc:def", ":", ":::",
                   "1::2::3", "::ffff:127.0.0.1", "::ffff:7f00:1", "[::1]", "1:2:3:4:5:6:7:8:9", "::1%lo", "0.0.0.0",
                   "::", "0:0:0:0:0:0:0:0", "0::0"]
-    puts("refused #{address} #{HTTP.client(HTTP.ClientOptions(connect_to: address)).ok?}")
+    puts("refused #{address} #{accepted?(HTTP.ClientOptions(connect_to: address))}")
   end
   show("name call", HTTP.get_response("http://name.test:#{plain}/", HTTP.ClientOptions(connect_to: "localhost")))
   for address in ["127.0.0.1", "::1", "2001:db8::1", "1:2:3:4:5:6:7:8"]
-    puts("accepted #{address} #{HTTP.client(HTTP.ClientOptions(connect_to: address)).ok?}")
+    puts("accepted #{address} #{accepted?(HTTP.ClientOptions(connect_to: address))}")
   end
-  puts("proxy #{HTTP.client(HTTP.ClientOptions(connect_to: "127.0.0.1", proxy: "http://127.0.0.1:9")).ok?}")
+  puts("proxy #{accepted?(HTTP.ClientOptions(connect_to: "127.0.0.1", proxy: "http://127.0.0.1:9"))}")
 end
 """
 
@@ -178,26 +180,24 @@ def test_connect_to_reaches_the_address_with_the_host_and_name_of_the_url(tmp_pa
     result = run_vm(bytecode, env=vm_environment(), args=[str(a) for a in args])
     assert result.code == 0, result.stderr
     lines = output_lines(result.stdout)
-    assert lines[:9] == [
+    assert lines[:7] == [
         "get_response 200 host=name.test:%d " % plain,
-        "pooled 200 host=name.test:%d " % plain,
         "other host 200 host=other-host.test:%d " % plain,
         "download host=name.test:%d " % plain,
         "open host=name.test:%d " % plain,
         "start host=name.test:%d " % plain,
         "upload 200 host=name.test:%d abc" % plain,
         "tls ok 200 host=wrong.example:%d " % secure,
-        "tls pooled 200 host=wrong.example:%d " % secure,
     ]
-    assert lines[9].startswith("tls other net.tls ") and "hostname mismatch" in lines[9], lines[9]
-    assert lines[10:14] == [
+    assert lines[7].startswith("tls other net.tls ") and "hostname mismatch" in lines[7], lines[7]
+    assert lines[8:12] == [
         "tls download host=wrong.example:%d " % secure,
         "tls upload 200 host=wrong.example:%d xyz" % secure,
         "tls start ok",
         "tls start other net.tls",
     ]
-    assert lines[14:14 + len(REFUSED)] == ["refused %s false" % address for address in REFUSED]
-    rest = lines[14 + len(REFUSED):]
+    assert lines[12:12 + len(REFUSED)] == ["refused %s false" % address for address in REFUSED]
+    rest = lines[12 + len(REFUSED):]
     assert rest[0].startswith("name call argument "), rest[0]
     assert rest[1:] == ["accepted %s true" % a for a in ["127.0.0.1", "::1", "2001:db8::1", "1:2:3:4:5:6:7:8"]] \
         + ["proxy false"]

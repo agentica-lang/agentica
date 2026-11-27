@@ -37,12 +37,12 @@ def main() -> Void
   port = HTTP.local_port(server)
   puts(port)
   IO.flush()
-  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 65536, tls: none)).unwrap!
+  client = HTTP.ClientOptions(timeout_ms: 10000, max_body_bytes: 65536, tls: none)
   # Each line is a case number and the hex of one value. The answer repeats the number, then the status and the hex of
   # the X-Out the client read (or "-"), or "error" and why the request failed.
   while !IO.eof?
     words = gets!.split(" ")
-    case HTTP.post(client, "http://127.0.0.1:#{port}/", OpenSSL.Digest.hexdecode(words[1]).unwrap!)
+    case HTTP.post_response("http://127.0.0.1:#{port}/", OpenSSL.Digest.hexdecode(words[1]).unwrap!, [], client)
       ok(reply) ->
         out = reply.headers.detect do |h| h.name == "x-out" end
         shown = "-"
@@ -187,6 +187,27 @@ end
 CLIENT_PROGRAM = """\
 import HTTP from "std/http"
 
+def request(options: HTTP.ClientOptions, method: String, origin: String, target: String) -> Result[HTTP.Response]
+  conn = try HTTP.start(origin, options)
+  case HTTP.send_request(conn, method, target, "".bytes)
+    ok(head) ->
+      pieces: List[Bytes] = []
+      piece = HTTP.read_body(conn, 65536)
+      while piece.ok? && piece.unwrap!.size > 0
+        pieces = pieces.push(piece.unwrap!)
+        piece = HTTP.read_body(conn, 65536)
+      end
+      HTTP.finish(conn)
+      case piece
+        ok(_) -> ok(HTTP.Response(status: head.status, headers: head.headers, body: Bytes.concat(pieces)))
+        error(e) -> error(e)
+      end
+    error(e) ->
+      HTTP.finish(conn)
+      error(e)
+  end
+end
+
 def hex(data: Bytes) -> String = OpenSSL.Digest.hexencode(data)
 
 def shown(result: Result[HTTP.Response]) -> String
@@ -203,17 +224,15 @@ def shown(result: Result[HTTP.Response]) -> String
   end
 end
 
-# Each line is a case number, a method and a URL. The answer repeats the number, then "ok", the status, a name:value
+# Each line is a case number, a method, an origin and a target. The answer repeats the number, then "ok", the status, a name:value
 # per header and the body, each in hex, or "error" and the hex of why.
 def main() -> Void
-  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, max_body_bytes: 65536, max_connections: 1)).unwrap!
+  client = HTTP.ClientOptions(timeout_ms: 5000, max_body_bytes: 65536)
   while !IO.eof?
     words = gets!.split(" ")
-    puts("#{words[0]} #{shown(HTTP.request(client, words[1], words[2], "".bytes))}")
+    puts("#{words[0]} #{shown(request(client, words[1], words[2], words[3]))}")
     IO.flush()
   end
-
-  HTTP.close_client(client)
 end
 """
 
@@ -434,7 +453,7 @@ class ClientVm:
         assert self.vm.process.poll() is None, "the VM ended (exit %r)" % self.vm.process.poll()
         self.peer.plans.put((parts, close))
         self.cases += 1
-        self.vm.process.stdin.write(b"%d %s http://127.0.0.1:%d/x\n" % (self.cases, method.encode(), self.peer.port))
+        self.vm.process.stdin.write(b"%d %s http://127.0.0.1:%d /x\n" % (self.cases, method.encode(), self.peer.port))
         self.vm.process.stdin.flush()
         number, status, *rest = self.vm.next_line(timeout=scaled(30)).split(" ")
         assert number == str(self.cases)

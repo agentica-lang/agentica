@@ -34,15 +34,30 @@ CERTS = FIXTURES / "tls"
 PRELUDE = """\
 import HTTP from "std/http"
 
-struct Fetch
-  pool: HTTP.Client
-  url: String
-end
-
 struct Producer
   pieces: List[Bytes]
   into: Channel[Bytes]
   close: Bool
+end
+
+# The whole response of any method on a connection of its own, as the removed pooled `HTTP.request` gave it.
+def request(
+  options: HTTP.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HTTP.Header] = [],
+) -> Result[HTTP.Response]
+  stream = try HTTP.open(method, url, body, headers, options)
+  pieces: List[Bytes] = []
+  open = true
+  while open
+    case stream.body.recv(5000)
+      ok(piece) -> pieces = pieces.push(piece)
+      error(_) -> open = false
+    end
+  end
+  ok(HTTP.Response(status: stream.status, headers: stream.headers, body: Bytes.concat(pieces)))
 end
 
 def options(timeout: Int, connections: Int, body: Int, ca: String) -> HTTP.ClientOptions
@@ -69,77 +84,34 @@ def show(r: Result[HTTP.Response]) -> Void
   end
 end
 
-def fetch(f: Fetch) -> Result[String]
-  response = try HTTP.get(f.pool, f.url)
-  return HTTP.text(response.body, response.headers)
-end
-
-def same(a: Task[Result[String]], b: Task[Result[String]], c: Task[Result[String]]) -> Bool
-  x = Result.unwrap!(Task.await(a))
-  y = Result.unwrap!(Task.await(b))
-  z = Result.unwrap!(Task.await(c))
-  return x == y and y == z
-end
-
-def apart(a: Task[Result[String]], b: Task[Result[String]], c: Task[Result[String]]) -> Bool
-  x = Result.unwrap!(Task.await(a))
-  y = Result.unwrap!(Task.await(b))
-  z = Result.unwrap!(Task.await(c))
-  return x != y and y != z and x != z
-end
-
 
 """
 
 PLAIN_PROGRAM = """\
 def main() -> Void
   plain = "http://127.0.0.1:#{System.args()[1]}"
-  pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  hello = Result.unwrap!(HTTP.get(pool, plain + "/hello"))
+  client = options(5000, 1, 1000, "")
+  hello = Result.unwrap!(HTTP.get_response(plain + "/hello", client))
   puts("#{hello.status} #{decoded(hello.body)} #{HTTP.header_values(hello.headers, "X-MULTI")}")
-  show(HTTP.get(pool, plain + "/chunked"))
-  binary = Result.unwrap!(HTTP.get(pool, plain + "/binary"))
+  show(HTTP.get_response(plain + "/chunked", client))
+  binary = Result.unwrap!(HTTP.get_response(plain + "/binary", client))
   puts("#{binary.status} #{binary.body.size} #{binary.body[0]} #{binary.body[2]} #{HTTP.text(binary.body, binary.headers).ok?}")
-  chunked = Result.unwrap!(HTTP.get(pool, plain + "/binary-chunked"))
+  chunked = Result.unwrap!(HTTP.get_response(plain + "/binary-chunked", client))
   puts("#{chunked.body.size} #{chunked.body.to_a}")
-  show(HTTP.post(pool, plain + "/echo", Bytes.from_list([255, 0, 128, 13, 10]).unwrap!))
-  latin = Result.unwrap!(HTTP.get(pool, plain + "/latin1"))
+  show(HTTP.post_response(plain + "/echo", Bytes.from_list([255, 0, 128, 13, 10]).unwrap!, [], client))
+  latin = Result.unwrap!(HTTP.get_response(plain + "/latin1", client))
   puts("#{latin.body.size} #{latin.body[3]} #{HTTP.text(latin.body, latin.headers).ok?}")
-  first = Result.unwrap!(HTTP.get(pool, plain + "/port")).body
-  show(HTTP.post(pool, plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")]))
-  puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body == first)
-  show(HTTP.get(pool, plain + "/close"))
-  puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body != first)
-  show(HTTP.get(pool, plain + "/nothing"))
-  show(HTTP.post(pool, plain + "/post", "".bytes))
-  show(HTTP.request(pool, "DELETE", plain + "/item", "".bytes))
-  HTTP.close_client(pool)
+  show(HTTP.post_response(plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")], client))
+  show(HTTP.get_response(plain + "/close", client))
+  show(HTTP.get_response(plain + "/nothing", client))
+  show(HTTP.post_response(plain + "/post", "".bytes, [], client))
+  show(request(client, "DELETE", plain + "/item", "".bytes))
   show(HTTP.get_response(plain + "/chunked"))
   show(HTTP.post_response(plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")]))
   show(HTTP.get_response(plain + "/slow", HTTP.ClientOptions(timeout_ms: 200)))
   show(HTTP.get_response("ftp://127.0.0.1/"))
   show(HTTP.get_response(plain + "/nothing", HTTP.ClientOptions(max_body_bytes: 0)))
   puts(Task.pending_count())
-  slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
-  show(HTTP.get(slow, plain + "/slow"))
-  one = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  a = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
-  b = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
-  c = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
-  puts(same(a, b, c))
-  three = Result.unwrap!(HTTP.client(options(5000, 3, 1000, "")))
-  a = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
-  b = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
-  c = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
-  puts(apart(a, b, c))
-  closing = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  pending = Task.spawn(&fetch, Fetch(pool: closing, url: plain + "/hold"))
-  watcher = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  while Result.unwrap!(HTTP.get(watcher, plain + "/held")).body == "0".bytes
-    Task.sleep(1)
-  end
-  HTTP.close_client(closing)
-  IO.inspect(Task.await(pending))
 end
 """
 
@@ -149,14 +121,14 @@ def main() -> Void
   port = System.args()[2]
   # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
   limit = System.args()[4].to_i!
-  secure = Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/ca.pem")))
-  show(HTTP.get(secure, "https://localhost:#{port}/hello"))
-  show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
-  show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", "over tls".bytes))
-  show(HTTP.get(secure, "https://localhost:#{port}/notify"))
-  show(HTTP.get(secure, "https://localhost:#{port}/close"))
-  show(HTTP.get(secure, "http://localhost:#{port}/hello"))
-  show(HTTP.get(Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
+  secure = options(limit, 1, 1000, certs + "/ca.pem")
+  show(HTTP.get_response("https://localhost:#{port}/hello", secure))
+  show(HTTP.get_response("https://LOCALHOST:#{port}/hello", secure))
+  show(HTTP.post_response("https://127.0.0.1:#{port}/post", "over tls".bytes, [], secure))
+  show(HTTP.get_response("https://localhost:#{port}/notify", secure))
+  show(HTTP.get_response("https://localhost:#{port}/close", secure))
+  show(HTTP.get_response("http://localhost:#{port}/hello", secure))
+  show(HTTP.get_response("https://localhost:#{port}/hello", options(limit, 1, 1000, certs + "/self-signed.pem")))
   # A context reads its CA file when it is built, so a missing one fails there, before any client.
   puts(TLS.client_context(TLS.ClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
 end
@@ -270,17 +242,17 @@ end
 
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
-  pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  line("/http10-big", HTTP.get(pool, raw + "/http10-big"))
-  line("/http10-204", HTTP.get(pool, raw + "/http10-204"))
-  line("/http10-304", HTTP.get(pool, raw + "/http10-304"))
-  line("/http10-head", HTTP.request(pool, "HEAD", raw + "/http10-head", "".bytes))
-  line("/http10-head-get", HTTP.get(pool, raw + "/http10-head"))
-  line("/http10 HEAD", HTTP.request(pool, "HEAD", raw + "/http10", "".bytes))
+  client = options(5000, 1, 1000, "")
+  line("/http10-big", HTTP.get_response(raw + "/http10-big", client))
+  line("/http10-204", HTTP.get_response(raw + "/http10-204", client))
+  line("/http10-304", HTTP.get_response(raw + "/http10-304", client))
+  line("/http10-head", request(client, "HEAD", raw + "/http10-head", "".bytes))
+  line("/http10-head-get", HTTP.get_response(raw + "/http10-head", client))
+  line("/http10 HEAD", request(client, "HEAD", raw + "/http10", "".bytes))
   puts("open #{streamed(HTTP.open("GET", raw + "/http10-close", "".bytes, [], options(5000, 1, 1000, "")))}")
   for path in ["/http10", "/http10-open", "/http10-keep", "/http10-close", "/http10-keep-nolength", "/http10-chunked"]
-    line(path, HTTP.get(pool, raw + path))
-    line(path, HTTP.get(pool, raw + path))
+    line(path, HTTP.get_response(raw + path, client))
+    line(path, HTTP.get_response(raw + path, client))
   end
   conn = Result.unwrap!(HTTP.start(raw, options(5000, 1, 1000, "")))
   case HTTP.send_request(conn, "GET", "/http10-keep", "".bytes)
@@ -508,18 +480,18 @@ def main() -> Void
   while String.length(upload) < 4194304
     upload = upload + upload
   end
-  large = Result.unwrap!(HTTP.client(options(limit, 1, 8388608, "")))
-  show(HTTP.post(large, raw + "/early", upload.bytes))
-  hostile = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
-  stale = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
-  show(HTTP.get(stale, raw + "/stale"))
-  show(HTTP.post(stale, raw + "/after", "x".bytes))
-  show(HTTP.get(stale, raw + "/stale"))
-  show(HTTP.get(stale, raw + "/after"))
-  show(HTTP.request(stale, "HEAD", raw + "/headlength", "".bytes))
-  show(HTTP.get(stale, raw + "/after"))
+  large = options(limit, 1, 8388608, "")
+  show(HTTP.post_response(raw + "/early", upload.bytes, [], large))
+  hostile = options(limit, 1, 1000, "")
+  stale = options(limit, 1, 1000, "")
+  show(HTTP.get_response(raw + "/stale", stale))
+  show(HTTP.post_response(raw + "/after", "x".bytes, [], stale))
+  show(HTTP.get_response(raw + "/stale", stale))
+  show(HTTP.get_response(raw + "/after", stale))
+  show(request(stale, "HEAD", raw + "/headlength", "".bytes))
+  show(HTTP.get_response(raw + "/after", stale))
   for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless", "/nocontent", "/after"]
-    show(HTTP.get(hostile, raw + path))
+    show(HTTP.get_response(raw + path, hostile))
   end
 end
 """
@@ -1006,7 +978,7 @@ def run_program(tmp_path, name, text, ports):
     return result.stdout
 
 
-def test_client_against_threading_http_server_keep_alive_chunked_close_delimited_timeout_pool_limits(tmp_path, adopt):
+def test_client_against_threading_http_server_chunked_close_delimited_timeout_limits(tmp_path, adopt):
     _, ports = start_peer(adopt)
     check_lines(run_program(tmp_path, "plain", PLAIN_PROGRAM, ports), [
         '200 hello 127.0.0.1 ["a", "b"]',
@@ -1016,9 +988,7 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "200 5 ff00800d0a 12",
         "4 233 true",
         "200 form 8 a=1&b=ñ 14",
-        "true",
         "200 until the end 13",
-        "true",
         "404 missing 7",
         "200 None 0  7",
         "200 deleted /item None 18",
@@ -1027,11 +997,7 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "network: operation timed out",
         "http: the URL must be http:// or https:// with a host, and without user info",
         "http: every option must be positive",
-        "0",
-        "network: operation timed out",
-        "true",
-        "true",
-        'error("http: client is closed", kind: "http.closed")'], "plain")
+        "0"], "plain")
 
 
 def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, adopt):
@@ -1108,7 +1074,7 @@ def test_client_accepts_http10_responses_and_keeps_a_connection_only_with_keep_a
         "/http10-open 200 ok 2",
         "/http10-open 200 ok 2",
         "/http10-keep 200 ok 2",
-        "/http10-keep 200 reused 6",
+        "/http10-keep 200 ok 2",
         "/http10-close 200 until the end 13",
         "/http10-close 200 until the end 13",
         "/http10-keep-nolength 200 hello 5",
@@ -1199,11 +1165,11 @@ def check_raw_lines(text):
     check_lines(text, [
         "413 big! 4",
         "200 stale 5",
-        "http: connection closed before the response was complete",
+        "200 ok 2",
         "200 stale 5",
         "200 ok 2",
         "200  0",
-        "200 reused 6",
+        "200 ok 2",
         "200 ok 2",
         "http: invalid HTTP head",
         "http: invalid response status",
@@ -1221,7 +1187,7 @@ def check_raw_lines(text):
         "http: unsupported transfer encoding",
         "http: invalid trailer",
         "http: truncated HTTP body",
-        "http: connection closed before the response was complete",
+        "network: end of input",
         "204  0",
         "200 ok 2"], "raw")
 
@@ -1592,10 +1558,30 @@ def test_server_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path, 
 LATIN1_CLIENT_PROGRAM = """\
 import HTTP from "std/http"
 
+# The whole response of any method on a connection of its own, as the removed pooled `HTTP.request` gave it.
+def request(
+  options: HTTP.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HTTP.Header] = [],
+) -> Result[HTTP.Response]
+  stream = try HTTP.open(method, url, body, headers, options)
+  pieces: List[Bytes] = []
+  open = true
+  while open
+    case stream.body.recv(5000)
+      ok(piece) -> pieces = pieces.push(piece)
+      error(_) -> open = false
+    end
+  end
+  ok(HTTP.Response(status: stream.status, headers: stream.headers, body: Bytes.concat(pieces)))
+end
+
 def main() -> Void
   options = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1024, tls: none)
-  client = Result.unwrap!(HTTP.client(options))
-  reply = Result.unwrap!(HTTP.request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [HTTP.Header(name: "X-Name", value: "caf\u00e9")]))
+  client = options
+  reply = Result.unwrap!(request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [HTTP.Header(name: "X-Name", value: "caf\u00e9")]))
   back = reply.headers.detect { |h| h.name == "x-back" }.unwrap!.value
   puts("#{back} #{back.length}")
 end
@@ -1646,6 +1632,26 @@ import HTTP from "std/http"
 struct Late
   into: Channel[Bytes]
   gate: Channel[Bool]
+end
+
+# The whole response of any method on a connection of its own, as the removed pooled `HTTP.request` gave it.
+def request(
+  options: HTTP.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HTTP.Header] = [],
+) -> Result[HTTP.Response]
+  stream = try HTTP.open(method, url, body, headers, options)
+  pieces: List[Bytes] = []
+  open = true
+  while open
+    case stream.body.recv(5000)
+      ok(piece) -> pieces = pieces.push(piece)
+      error(_) -> open = false
+    end
+  end
+  ok(HTTP.Response(status: stream.status, headers: stream.headers, body: Bytes.concat(pieces)))
 end
 
 def filled(bytes: Int) -> List[HTTP.Header]
@@ -1747,13 +1753,13 @@ def main() -> Void
   server = HTTP.serve("127.0.0.1", 0, ->(request, body) { handle(gate, request, body) }, options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   limits = HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 1024, tls: none)
-  client = HTTP.client(limits).unwrap!
+  client = limits
   host = "Host: 127.0.0.1:#{HTTP.local_port(server)}".length + 2
   for size in [65536, 65537]
     room = size - host - 2
-    show("get #{size}", HTTP.request(client, "GET", base + "/seen", "".bytes, headers: filled(room)))
-    show("post #{size}", HTTP.request(client, "POST", base + "/seen", "hello world".bytes, headers: filled(room - 20)))
-    show("post-empty #{size}", HTTP.request(client, "POST", base + "/seen", "".bytes, headers: filled(room - 19)))
+    show("get #{size}", request(client, "GET", base + "/seen", "".bytes, headers: filled(room)))
+    show("post #{size}", request(client, "POST", base + "/seen", "hello world".bytes, headers: filled(room - 20)))
+    show("post-empty #{size}", request(client, "POST", base + "/seen", "".bytes, headers: filled(room - 19)))
     show("upload-chunked #{size}", HTTP.upload("PUT", base + "/seen", ready(), -1, filled(room - 28), limits))
     show("upload-sized #{size}", HTTP.upload("PUT", base + "/seen", ready(), 11, filled(room - 20), limits))
     for answer in System.args()
@@ -1768,7 +1774,7 @@ def main() -> Void
         show_stream("#{answer} #{size}", HTTP.open("GET", url, "".bytes, [], limits), gate)
       else
         # A refused head is a whole 500, which comes while the producer of a stream still waits.
-        show("#{answer} #{size}", HTTP.request(client, method, url, "".bytes))
+        show("#{answer} #{size}", request(client, method, url, "".bytes))
         if streamed
           _ = gate.send(true, 5000)
         end
@@ -1777,8 +1783,8 @@ def main() -> Void
   end
 
   for count in [100, 101]
-    show("request-count #{count}", HTTP.request(client, "GET", base + "/number", "".bytes, headers: counted(count - 1)))
-    show("response-count #{count}", HTTP.get(client, base + "/count/#{count}"))
+    show("request-count #{count}", request(client, "GET", base + "/number", "".bytes, headers: counted(count - 1)))
+    show("response-count #{count}", HTTP.get_response(base + "/count/#{count}", client))
   end
 
   HTTP.close_server(server)
@@ -2497,14 +2503,11 @@ struct Call
   how: String
   url: String
   options: HTTP.ClientOptions
-  pool: HTTP.Client
 end
 
 def answer(c: Call) -> Result[HTTP.Response]
   return HTTP.get_response(c.url, c.options) if c.how == "get_response"
-  return HTTP.post_response(c.url, "hello".bytes, [], c.options) if c.how == "post_response"
-
-  HTTP.get(c.pool, c.url)
+  HTTP.post_response(c.url, "hello".bytes, [], c.options)
 end
 
 def status(c: Call) -> Result[Int]
@@ -2516,16 +2519,12 @@ def main() -> Void
   args = System.args()
   context = TLS.client_context(TLS.ClientOptions(ca_file: args[2])).unwrap!
   options = HTTP.ClientOptions(timeout_ms: 60000, max_connections: 1, tls: some(context))
-  c = Call(how: args[0], url: args[1], options: options, pool: HTTP.client(options).unwrap!)
+  c = Call(how: args[0], url: args[1], options: options)
   task = Task.spawn(&status, c)
   _ = IO.gets()
   Task.cancel(task)
   puts("cancelled")
   IO.flush()
-  _ = IO.gets()
-  if c.how == "request"
-    puts(status(c))
-  end
 end
 """
 
@@ -2550,10 +2549,9 @@ def closed(conn):
 
 
 @pytest.mark.parametrize("scheme", ["http", "https"])
-@pytest.mark.parametrize("how", ["get_response", "post_response", "request"])
+@pytest.mark.parametrize("how", ["get_response", "post_response"])
 def test_a_cancel_closes_the_connection_of_a_request_waiting_for_its_answer(tmp_path, adopt, scheme, how):
-    """The server never answers; the task of the request is cancelled and its connection closes at once (#1860). A
-    pooled connection does not go back to the pool, and its slot is free: the next call opens a new connection."""
+    """The server never answers; the task of the request is cancelled and its connection closes at once (#1860)."""
     context = None
     if scheme == "https":
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -2569,12 +2567,5 @@ def test_a_cancel_closes_the_connection_of_a_request_waiting_for_its_answer(tmp_
             vm.process.stdin.flush()
             assert vm.next_line() == "cancelled"
             assert closed(conn), "the cancel closed the connection before any answer"
-        vm.process.stdin.write(b"next\n")
-        vm.process.stdin.flush()
-        if how == "request":
-            conn, data = served_request(listener, context)
-            with conn:
-                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
-                assert vm.next_line() == "ok(200)"
         vm.close_stdin()
         assert vm.wait() == 0, vm.stderr_text()

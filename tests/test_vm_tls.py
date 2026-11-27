@@ -5,17 +5,13 @@ server; fixtures/tls-peer.py (Python ssl) is a TLS 1.2 server, an HTTPS server,
 a server that requires a client certificate and a client. The certificates are
 the ones in fixtures/tls. Everything is on 127.0.0.1 or localhost with port 0.
 """
-import errno
 import json
 import os
-import queue
 import re
-import threading
-import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, TEST_SCHEDULERS, UNDER_WINE, WAIT_SECONDS, Child, check_lines,
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, TEST_SCHEDULERS, Child, check_lines,
                                  cli, compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
@@ -156,21 +152,19 @@ HTTPS_GOODBYE_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HTTP.Client
+  options: HTTP.ClientOptions
   url: String
 end
 
 def hang(call: Call) -> Result[HTTP.Response]
-  return HTTP.get(call.pool, call.url)
+  return HTTP.get_response(call.url, call.options)
 end
 
 def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
   options = HTTP.ClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!))
-  pool = Result.unwrap!(HTTP.client(options))
-  puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body).unwrap!)
-  Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
-  puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/ping")).body).unwrap!)
+  Task.spawn(&hang, Call(options: options, url: "#{base}/hang"))
+  puts(String.from_bytes(Result.unwrap!(HTTP.get_response("#{base}/ping", options)).body).unwrap!)
 end
 """
 
@@ -178,12 +172,12 @@ SHARED_CONTEXT_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HTTP.Client
+  options: HTTP.ClientOptions
   url: String
 end
 
 def get(call: Call) -> Result[HTTP.Response]
-  return HTTP.get(call.pool, call.url)
+  return HTTP.get_response(call.url, call.options)
 end
 
 def show(r: Result[HTTP.Response]) -> String
@@ -198,98 +192,22 @@ def main() -> Void
   ca = System.args()[1]
   tls = Result.unwrap!(TLS.client_context(TLS.ClientOptions(ca_file: ca)))
   options = HTTP.ClientOptions(tls: some(tls), timeout_ms: 20000)
-  pool = Result.unwrap!(HTTP.client(options))
-  puts(show(HTTP.get(pool, base + "/first")))
+  puts(show(HTTP.get_response(base + "/first", options)))
   # The context read its CA file when it was built: spoiling the file changes nothing for it, three connections at
-  # once here and a second client that shares it. A new context reads the file again and fails.
+  # once here and a later call. A new context reads the file again and fails.
   Result.unwrap!(File.write_text(ca, "not a certificate", 5000))
   calls: List[Task[Result[HTTP.Response]]] = []
   for _ in 0...3
-    calls = calls.push(Task.spawn(&get, Call(pool: pool, url: base + "/again")))
+    calls = calls.push(Task.spawn(&get, Call(options: options, url: base + "/again")))
   end
   for call in calls
     puts(show(Task.await(call)))
   end
-  puts(show(HTTP.get(pool, base + "/last")))
-  other = Result.unwrap!(HTTP.client(options))
-  puts(show(HTTP.get(other, base + "/other")))
+  puts(show(HTTP.get_response(base + "/last", options)))
+  puts(show(HTTP.get_response(base + "/other", HTTP.ClientOptions(tls: some(tls), timeout_ms: 20000))))
   puts(TLS.client_context(TLS.ClientOptions(ca_file: ca)).message.start_with?("network: cannot load ca_file"))
-  # A client with no context builds one with the system trust (SSL_CERT_FILE here) for its first https connection
-  # and shares it with the next.
-  plain = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: 20000)))
-  puts(show(HTTP.get(plain, base + "/system")))
-  puts(show(HTTP.get(plain, base + "/system")))
-  HTTP.close_client(pool)
-  HTTP.close_client(other)
-  HTTP.close_client(plain)
-end
-"""
-
-WAITERS_PROGRAM = """\
-import HTTP from "std/http"
-
-struct Call
-  pool: HTTP.Client
-  url: String
-end
-
-def get(call: Call) -> Result[HTTP.Response]
-  return HTTP.get(call.pool, call.url)
-end
-
-def show(r: Result[HTTP.Response]) -> String
-  case r
-    ok(response) -> return String.from_bytes(response.body).unwrap!
-    error(e) -> return e.message
-  end
-end
-
-def main() -> Void
-  base = "https://localhost:#{System.args()[0]}"
-  # The client names no context, so its first https connection builds one with the system trust, and
-  # SSL_CERT_FILE is a FIFO: the build blocks until the test writes it. The first call starts the build and waits;
-  # the two after it wait behind it. The first one's deadline comes while the build still blocks: it leaves the
-  # waiters, and the build goes on for the other two. The client has one timeout, so the two others start three
-  # quarters of it after the first: before the first one's deadline they only have to join the waiters, after it the
-  # test writes the FIFO and the build, the connects, the handshakes and the requests run, so that side gets the most.
-  timeout = System.args()[1].to_i!
-  pool = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: timeout)))
-  first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
-  Task.sleep(timeout / 4 * 3)
-  calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
-  puts(show(Task.await(first)))
-  for call in calls
-    puts(show(Task.await(call)))
-  end
-  HTTP.close_client(pool)
-end
-"""
-
-CLOSE_IN_HANDSHAKE_PROGRAM = """\
-import HTTP from "std/http"
-
-struct Call
-  pool: HTTP.Client
-  url: String
-end
-
-def get(call: Call) -> Result[HTTP.Response]
-  return HTTP.get(call.pool, call.url)
-end
-
-def main() -> Void
-  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  options = HTTP.ClientOptions(tls: some(TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!), timeout_ms: 5000)
-  pool = Result.unwrap!(HTTP.client(options))
-  call = Task.spawn(&get, Call(pool: pool, url: "https://127.0.0.1:#{TCP.local_port(listener)}/"))
-  # The server never answers the ClientHello: the client's connection is in its handshake when the client closes.
-  socket = Result.unwrap!(TCP.accept(listener, 5000))
-  HTTP.close_client(pool)
-  IO.inspect(Task.await(call))
-  # The handshake still holds the client's context; it fails when the server goes, and the context goes with it.
-  TCP.close(socket)
-  Task.sleep(200)
-  puts("done")
+  # A call with no context builds one with the system trust (SSL_CERT_FILE here).
+  puts(show(HTTP.get_response(base + "/system", HTTP.ClientOptions(timeout_ms: 20000))))
 end
 """
 
@@ -659,15 +577,15 @@ def test_alpn_against_python_on_both_sides_the_servers_choice_none_and_a_refusal
     assert vm.wait() == 0, vm.stderr_text()
 
 
-def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
+def test_main_returns_with_two_active_https_calls_and_both_get_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
-    assert (result.code, result.stdout) == (0, "ok\nok\n"), result.stderr
+    assert (result.code, result.stdout) == (0, "ok\n"), result.stderr
     assert [server.next_line(), server.next_line()] == ["close_notify /hang", "close_notify /ping"]
     assert server.wait() == 0
 
 
-def test_a_tls_context_reads_its_ca_file_once_and_a_client_without_one_shares_a_system_context(tmp_path, adopt):
+def test_a_tls_context_reads_its_ca_file_once_and_a_call_without_one_uses_the_system_trust(tmp_path, adopt):
     server, port = python_server(adopt, "close")
     ca = tmp_path / "ca.pem"
     ca.write_bytes((CERTS / "ca.pem").read_bytes())
@@ -675,19 +593,12 @@ def test_a_tls_context_reads_its_ca_file_once_and_a_client_without_one_shares_a_
     env["SSL_CERT_FILE"] = str(CERTS / "ca.pem")
     result = run_vm(compile_text(SHARED_CONTEXT_PROGRAM, "shared-context", tmp_path), env=vm_environment(env),
                     args=[CERTS, ca], stdin=port + "\n")
-    assert (result.code, result.stdout) == (0, "ok\nok\nok\nok\nok\nok\ntrue\nok\nok\n"), result.stderr
+    assert (result.code, result.stdout) == (0, "ok\nok\nok\nok\nok\nok\ntrue\nok\n"), result.stderr
     text = trace.read_text()
-    # One context built from the file (the second build failed), eight handshakes: six on it, two on the system
-    # context that the third client built once.
+    # One context built from the file (the second build failed), seven handshakes: six on it, one on the system
+    # context.
     assert len(re.findall(r"tls_context role=client ca=file", text)) == 1, text
-    assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 1, text
-    assert len(re.findall(r"tls_handshake_done socket=", text)) == 8, text
-
-
-def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
-    result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
-    assert (result.code, result.stdout) == (0, 'error("http: client is closed", kind: "http.closed")\ndone\n'), \
-        result.stderr
+    assert len(re.findall(r"tls_handshake_done socket=", text)) == 7, text
 
 
 def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_path):
@@ -741,99 +652,6 @@ def test_a_crashed_owner_cancels_its_tasks_in_a_tls_handshake_and_a_tls_read(tmp
     result = run_text(tmp_path, "cancel", CANCEL_PROGRAM, env)
     assert (result.code, result.stdout) == (0, "false\nfalse\n0\n"), result.stderr
     assert re.search(r" io end code=0 signal=0$", trace.read_text(), re.M)
-
-
-class BlockingFile:
-    """A path whose reader blocks until write() is called: a FIFO, or on Windows (which has none) a named pipe.
-
-    The Windows pipe is served by a thread: the VM's open connects to it, and its reads block until write() sends
-    the data and closes the pipe, which the reader sees as the end of the file. The thread is a daemon, so a VM that
-    never opens the pipe does not keep the test alive."""
-
-    def __init__(self, fifo):
-        self._data = queue.Queue()
-        if os.name != "nt":
-            os.mkfifo(fifo)
-            self.path = fifo
-            return
-        import ctypes
-        import _winapi
-        self.path = r"\\.\pipe\agentica-test-%d-%d" % (os.getpid(), id(self))
-        # PIPE_ACCESS_OUTBOUND (2), and PIPE_TYPE_BYTE | PIPE_WAIT (0): _winapi does not name all of them.
-        handle = _winapi.CreateNamedPipe(self.path, 2, 0, 1, 65536, 65536, 0, _winapi.NULL)
-
-        def serve():
-            try:
-                try:
-                    _winapi.ConnectNamedPipe(handle, False)
-                except OSError as error:
-                    # ERROR_PIPE_CONNECTED: the reader opened the pipe before this call.
-                    if error.winerror != 535:
-                        raise
-                _winapi.WriteFile(handle, self._data.get())
-                # Wait until the reader has taken every byte, so closing the pipe cannot drop unread data.
-                flush = ctypes.WinDLL("kernel32", use_last_error=True).FlushFileBuffers
-                flush.argtypes = [ctypes.c_void_p]
-                if not flush(handle):
-                    raise ctypes.WinError(ctypes.get_last_error())
-            finally:
-                _winapi.CloseHandle(handle)
-
-        threading.Thread(target=serve, daemon=True).start()
-
-    def write(self, data, reader):
-        """Hands `data` to `reader` (a Child); False when it ends, or WAIT_SECONDS pass, before it opens the path.
-
-        A blocking open of a FIFO for writing waits for a reader. The reader is the VM's build, and a VM that ends
-        first (the end of a run does not wait for the build) takes it along, so the open polls (ENXIO: no reader)."""
-        if os.name == "nt":
-            self._data.put(data)
-            return True
-        deadline = time.monotonic() + WAIT_SECONDS
-        while True:
-            try:
-                fd = os.open(self.path, os.O_WRONLY | os.O_NONBLOCK)
-                break
-            except OSError as error:
-                if error.errno != errno.ENXIO:
-                    raise
-            if reader.process.poll() is not None or time.monotonic() > deadline:
-                return False
-            time.sleep(0.01)
-        os.set_blocking(fd, True)
-        with open(fd, "wb") as pipe:
-            pipe.write(data)
-        return True
-
-
-# Under Wine the peer is a Linux Python, which can make only a Linux FIFO, and Wine reads that without blocking (an
-# empty CA file). The native Windows job runs this case on a named pipe.
-@pytest.mark.skipif(UNDER_WINE, reason="Wine does not block on a Linux FIFO; the native Windows job covers it")
-def test_https_waiters_on_a_clients_system_context_build_and_one_leaves(tmp_path, adopt):
-    server, port = python_server(adopt, "close")
-    ca_pipe = BlockingFile(tmp_path / "ca-fifo.pem")
-    trace, env = trace_env(tmp_path)
-    env["SSL_CERT_FILE"] = str(ca_pipe.path)
-    # The first call times out after `timeout`; the two others then have three quarters of theirs left.
-    timeout = str(scaled(2000))
-    bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
-    vm = adopt(start_vm(bytecode, port, timeout, env=env))
-    try:
-        assert vm.next_line() == "network: operation timed out"
-    finally:
-        # The build holds the pipe open for reading; writing it lets the build, and the VM, finish. The VM does not
-        # wait for the build at its end: when the two others time out first, it ends and the write gives up.
-        written = ca_pipe.write((CERTS / "ca.pem").read_bytes(), vm)
-    try:
-        lines = [vm.next_line() for _ in range(2)]
-    except AssertionError as error:
-        raise AssertionError("%s\n%s\n%s" % (error, trace.read_text(), vm.stderr_text())) from None
-    assert (lines, written) == (["ok", "ok"], True), trace.read_text()
-    assert vm.wait() == 0, vm.stderr_text()
-    text = trace.read_text()
-    # One build for the waiters.
-    assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 1, text
-    assert len(re.findall(r"tls_handshake_done socket=", text)) == 2, text
 
 
 DROPPED_CONTEXT_PROGRAM = """\
@@ -893,8 +711,8 @@ def test_a_dropped_context_stays_valid_for_its_listener_and_sockets(tmp_path):
 @pytest.mark.parametrize("name, call, file, covers", [
     ("a server context to TLS.connect", 'TLS.connect("localhost", 1, server, 1000)', "main.agc", "server"),
     ("a client context to TLS.listen", 'TLS.listen("127.0.0.1", 0, client)', "main.agc", "client"),
-    ("a server context in HTTP.ClientOptions.tls", "HTTP.client(HTTP.ClientOptions(tls: some(server)))", "std/http.agc",
-     None),
+    ("a server context in HTTP.ClientOptions.tls",
+     'HTTP.get_response("https://127.0.0.1:1/", HTTP.ClientOptions(tls: some(server)))', "std/http.agc", None),
     ("a server context with a host to TLS.upgrade",
      'TLS.upgrade(TCP.connect("127.0.0.1", TCP.local_port(TCP.listen("127.0.0.1", 0).unwrap!), 1000).unwrap!, '
      'server, "h", 1000)', "main.agc", '"h"'),
@@ -922,10 +740,12 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
 # std/http speaks only HTTP/1.1, so a context whose alpn could agree on another protocol halts each of its paths at
 # the argument that carries the context, in std/http; ["http/1.1"] is taken.
 @pytest.mark.parametrize("name, call, covers", [
-    ("HTTP.client", 'HTTP.client(HTTP.ClientOptions(tls: some(client(["h2", "http/1.1"]))))', "options"),
+    ("HTTP.get_response",
+     'HTTP.get_response("https://127.0.0.1:1/", HTTP.ClientOptions(tls: some(client(["h2", "http/1.1"]))))', "context"),
     ("HTTP.start", 'HTTP.start("https://localhost:1", HTTP.ClientOptions(tls: some(client(["h2"]))))', "context"),
     ("HTTP.serve_tls", 'HTTP.serve_tls("127.0.0.1", 0, server(["h2"]), HTTP.app(&answer))', "listener"),
-    ("HTTP.client on http/1.1", 'HTTP.client(HTTP.ClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
+    ("HTTP.get_response on http/1.1",
+     'HTTP.get_response("https://127.0.0.1:1/", HTTP.ClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
 ])
 def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp_path, name, call, covers):
     program = tmp_path / "main.agc"
@@ -942,7 +762,7 @@ def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp
         f"def main() -> Void\n  IO.inspect({call})\nend\n", encoding="utf-8")
     result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
     if covers is None:
-        assert (result.code, result.stdout) == (0, "true\n"), result.stderr
+        assert (result.code, result.stdout) == (0, "false\n"), result.stderr
         return
     assert result.code == 1, name
     problem = json.loads(result.stderr)

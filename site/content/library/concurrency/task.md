@@ -523,7 +523,7 @@ Task.pending_count() -> Int
 Gives how many tasks have not ended yet, not counting `main`.
 
 - Waiting, sleeping and awaiting tasks count, and so does the asker unless it is `main`. Returned or crashed tasks do not, awaited or not.
-- The tasks `std/http` starts for an `HTTP.Client` never count, and `Test.test` does not see them as leftovers.
+- The task that runs the `message` block of a `Task.monitor` never counts, and `Test.test` does not see it as a leftover.
 
 ```agentica
 def wait_for(task: Task[Int]) -> Int = Task.await(task)

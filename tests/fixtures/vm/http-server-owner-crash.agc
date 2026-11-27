@@ -7,17 +7,17 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
   TCP.send(socket, "handling\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
 end
 
 def fetch(url: String) -> Result[HTTP.Response]
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
-  return HTTP.get(pool, url)
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  HTTP.get_response(url, pool)
 end
 
 def explode(server: HTTP.Server) -> Result[Int]
   zero = HTTP.local_port(server) * 0
-  return ok(10 / zero)
+  ok(10 / zero)
 end
 
 def main() -> Void

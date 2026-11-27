@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 5539,
+  "steps": 4347,
   "stdout": [
     "200 returned",
     "left",
@@ -9,7 +9,7 @@
     "error(\"network: end of input\", kind: \"net.eof\")",
     "error(\"network: end of input\", kind: \"net.eof\")",
     "error(\"network: end of input\", kind: \"net.eof\")",
-    "error: http: connection closed before the response was complete",
+    "error: network: end of input",
     "ok()",
     "after close: refused",
     ""
