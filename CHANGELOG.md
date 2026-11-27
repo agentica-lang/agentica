@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `std/utc` is removed; use the builtin `Time` (#2027).
+
 ### Fixed
 
 - `HTTP.download` writes its hidden `.agc-part` file as a `"temp"` file, so a cancelled task or a `Task.map` timeout no longer leaves it behind (#1875).

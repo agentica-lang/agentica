@@ -16,7 +16,6 @@ source_hash: "c01abdbab5d3"
 - Usa [Plantillas EAG](/library/text-and-data/eag/) (`<<~EAG` y `std/eag`) para crear texto a partir de una plantilla con etiquetas ERB.
 - Usa [Cookie](/library/text-and-data/cookie/) (`std/cookie`) para leer una cabecera `Cookie` y para escribir una cabecera `Set-Cookie`.
 - Usa [MIME](/library/text-and-data/mime/) (`std/mime`) para hallar el tipo de medio de un archivo a partir de su nombre, y para saber qué tipos son texto.
-- [UTC](/library/text-and-data/utc/) (`std/utc`) está obsoleto: usa las [fechas y horas](/library/io-and-system/time/) integradas de `Time`.
 - Usa [URI](/library/text-and-data/uri/) (`std/uri`) para codificar y decodificar por porcentaje los componentes de una URL, y para leer y escribir cadenas de consulta.
 - Usa las [funciones integradas de OpenSSL](/library/text-and-data/crypto/) para calcular el hash de una lista de bytes con MD5, SHA-1, SHA-256 o SHA-512, firmarla con HMAC-SHA256 o HMAC-SHA512, comparar MAC en tiempo constante, cifrar con AES-256-GCM, calcular hashes de contraseñas con PBKDF2 y scrypt, cifrar y calcular MAC de datos de pago con Triple DES y CMAC, cifrar con una clave pública RSA, y generar bytes, hexadecimal y UUID aleatorios seguros.
 - Usa [Zlib](/library/text-and-data/zlib/) para comprimir bytes, archivos y flujos con DEFLATE, zlib y gzip.
