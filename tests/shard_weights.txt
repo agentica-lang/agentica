@@ -97,7 +97,6 @@ tests/test_std_option_parser.py 2 0 0 0
 tests/test_std_regex.py 1 4 0 0
 tests/test_std_toml.py 4 0 0 0
 tests/test_std_uri.py 2 0 0 0
-tests/test_std_utc.py 1 0 0 0
 tests/test_stdlib_prelude.py 4 0 0 0
 tests/test_style_core_purity.py 6 0 0 0
 tests/test_temp_roots.py 7 0 0 0
