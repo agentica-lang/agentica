@@ -222,6 +222,44 @@ def main() -> Void
 end
 """
 
+MAP_PROGRAM = """\
+import HTTP from "std/http"
+
+def growing?(folder: String) -> Bool
+  empty: List[String] = []
+  names = Dir.list(folder).unwrap_or(empty)
+  names.any? do |name: String| name.end_with?(".agc-part") end
+end
+
+def fetch(pool: HTTP.Client, url: String, path: String) -> Result[Int]
+  if HTTP.download(pool, url, path).ok?
+    return ok(1)
+  end
+  error("download failed")
+end
+
+# Done once the hidden file is there, so the timeout of Task.map comes while the body is being saved.
+def watch(folder: String) -> Result[Int]
+  waited = 0
+  while waited < 30000 and not growing?(folder)
+    Task.sleep(50)
+    waited = waited + 50
+  end
+  return error("the file never appeared") if waited >= 30000
+  ok(2)
+end
+
+def main() -> Void
+  args = System.args()
+  pool = Result.unwrap!(HTTP.client())
+  results = Task.map([0, 1], 2, 3000) do |n: Int|
+    return fetch(pool, args[0], args[1]) if n == 0
+    watch(args[2])
+  end
+  puts(results.map do |item: Result[Int]| item.ok? end)
+end
+"""
+
 HUGE_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -401,16 +439,25 @@ def test_a_directory_made_during_the_download_is_left_alone(tmp_path, ports):
     assert target.is_dir() and list(target.iterdir()) == []
 
 
-def test_a_cancelled_download_leaves_only_its_hidden_part_file(tmp_path, ports):
+def test_a_cancelled_download_leaves_no_hidden_part_file(tmp_path, ports):
     directory = tmp_path / "cancel"
     directory.mkdir()
     (directory / "kept.bin").write_bytes(b"keep")
     url = "http://127.0.0.1:%d/stall/1000" % ports["plain"]
     lines = output_lines(run_program(tmp_path, "cancel", CANCEL_PROGRAM, [url, str(directory / "kept.bin"), str(directory)]))
     assert lines == ["cancelled"], lines
-    names = sorted(path.name for path in directory.iterdir())
-    assert len(names) == 2 and names[1] == "kept.bin", names
-    assert re.fullmatch(r"\.kept\.bin\.[0-9a-f]{8}\.agc-part", names[0]), names
+    assert [path.name for path in directory.iterdir()] == ["kept.bin"]
+    assert (directory / "kept.bin").read_bytes() == b"keep"
+
+
+def test_a_download_stopped_by_a_task_map_timeout_leaves_no_hidden_part_file(tmp_path, ports):
+    directory = tmp_path / "map"
+    directory.mkdir()
+    (directory / "kept.bin").write_bytes(b"keep")
+    url = "http://127.0.0.1:%d/stall/1000" % ports["plain"]
+    lines = output_lines(run_program(tmp_path, "map", MAP_PROGRAM, [url, str(directory / "kept.bin"), str(directory)]))
+    assert lines == ["[false, true]"], lines
+    assert [path.name for path in directory.iterdir()] == ["kept.bin"]
     assert (directory / "kept.bin").read_bytes() == b"keep"
 
 

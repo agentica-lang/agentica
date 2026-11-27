@@ -322,8 +322,8 @@ end
 ## `path`, named `.<name>.<8 hex digits>.agc-part`, which `Path.replace` puts at `path` in one step only when the body
 ## ended cleanly, its size is within `options.max_total_bytes` and its digest is `options.sha256` (else
 ## `http.digest`): an existing file or link at `path` is then replaced, and a directory is an error. A failure removes
-## the new file and leaves `path` as it was; a cancelled task, a killed program or a timeout while the new file is
-## made can leave it behind.
+## the new file and leaves `path` as it was, and so does a cancelled task or a timeout of the task (the file is a
+## `"temp"` file of `File.open`); a program that ends by SIGKILL or a crash can leave it behind.
 ## Status codes such as 404 or 500 are normal responses, as with `get`: the body is still written and the status
 ## returned, so check `status` before using the file. There is no redirect follow, and the connection is not pooled:
 ## it closes when the download ends. The pool gives the TLS context and its certificates for `https`, whose
@@ -4356,8 +4356,9 @@ def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Res
   at_connect(reaching(TCP.connect(address_of(options, where.host), where.port, wait), options, where))
 end
 
-# Opens a new file next to `path` exclusively, then streams the response into it. Every error below closes both
-# handles and removes the new file; `path` is only touched by the rename after a clean end.
+# Opens a new temp file next to `path`, then streams the response into it. The file goes away when its handle closes
+# unless it was moved to `path` first, so every error below, a cancel and a timeout of the task included, leaves no
+# file; `path` is only touched by the rename after a clean end.
 def finish_download(
   socket: TCP.Socket,
   path: String,
@@ -4369,14 +4370,10 @@ def finish_download(
   temp = part_path(path)
   case time_left(socket, deadline)
     ok(left) ->
-      case File.open(temp, "create_private", left)
+      case File.open(temp, "temp", left)
         ok(out) -> stream_download(socket, Saving(out: out, temp: temp, path: path), options, deadline, denied, step)
         error(message) ->
           TCP.close(socket)
-          # An open that timed out may still make the file in the pool; any other error leaves the name to its owner.
-          if message.kind == "io.timeout"
-            remove_part(temp)
-          end
           error(message)
       end
     error(message) ->
@@ -4401,15 +4398,11 @@ def stream_download(
 
       case save_body(socket, saving.out, head, budget, deadline, step)
         ok(written) ->
-          case File.close(saving.out, larger(deadline - Time.monotonic_ms(), 1))
+          case settle(saving, options.sha256, deadline)
             ok(_) ->
               TCP.close(socket)
-              case settle(saving, options.sha256, deadline)
-                ok(_) -> ok(Download(status: head.status, headers: head.headers, bytes_written: written))
-                error(message) ->
-                  remove_part(saving.temp)
-                  error(message)
-              end
+              _ = File.close(saving.out, CLEANUP_MS)
+              ok(Download(status: head.status, headers: head.headers, bytes_written: written))
             error(message) -> fail_download(socket, saving, error(message))
           end
         error(message) -> fail_download(socket, saving, error(message))
@@ -4418,24 +4411,19 @@ def stream_download(
   end
 end
 
-# Closes both handles after a failure, removes the new file and reports the failure.
+# Closes both handles after a failure and reports it. The close removes the new file, with a time of its own since the
+# call's deadline may be what failed; a Path.replace that timed out may still finish in the pool, and then the new name
+# is gone and the close removes nothing.
 def fail_download(socket: TCP.Socket, saving: Saving, failed: Result[Download]) -> Result[Download]
   _ = File.close(saving.out, CLEANUP_MS)
   TCP.close(socket)
-  remove_part(saving.temp)
   failed
 end
 
-# Removes the new file of a failed download, with a time of its own: the call's deadline may be what failed. Only the
-# new file: a Path.replace that timed out may still finish in the pool, so `path` may already be the new file, and
-# then the new name is gone and its removal does nothing.
-def remove_part(temp: String) -> Void
-  _ = Path.remove(temp, CLEANUP_MS)
-end
-
-# The finished file checked against the digest, then renamed over `path` in one step, so `path` always names the old
-# file or the new one.
+# The finished file written out and checked against the digest, then renamed over `path` in one step while its handle
+# is still open, so `path` always names the old file or the new one.
 def settle(saving: Saving, sha256: Optional[String], deadline: Int) -> Result[Void]
+  try File.flush(saving.out, try file_left(deadline))
   try check_digest(saving.temp, sha256, deadline)
   Path.replace(saving.temp, saving.path, try file_left(deadline))
 end

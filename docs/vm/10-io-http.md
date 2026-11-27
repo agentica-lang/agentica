@@ -96,9 +96,10 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   limit; `std/http` caps a server's `max_body_bytes` at 256 MiB, while the
   streamed client bodies (`HTTP.download`, `read_body`, `open`, in pieces of
   at most 1 MiB) have no limit unless a download sets `max_total_bytes`. A
-  download writes to a hidden `.agc-part` file next to its path and
-  `Path.replace`s it there only after a clean end; a failure removes it, while
-  a cancelled or killed one can leave it.
+  download writes to a hidden `.agc-part` file (a `"temp"` file of
+  `File.open`) next to its path and `Path.replace`s it there only after a clean
+  end; a failure, a cancel or a timeout of the task removes it, while a
+  SIGKILL or a crash can leave it.
 - **Bodies are bytes.** The client keeps a response body as it came, a handler
   gets the request body as it came and returns `Bytes`; `HTTP.text` decodes
   it in the `charset` of `Content-Type` when `Bytes.decode` knows it (UTF-8

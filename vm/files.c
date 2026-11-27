@@ -1412,6 +1412,8 @@ static void work_open(op *o) {
   }
   int err = probe(fd, &o->st->polled);
   if (err) {
+    /* Unlinked while the descriptor is open, so the inode stays the new file's. */
+    if (o->kind == OP_OPEN_TEMP) (void)remove_temp(o->st, true, NULL);
     agc_fs_close(fd);
     fail_op(o, FS_OPEN, err);
     return;
