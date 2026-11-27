@@ -223,7 +223,7 @@ def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result
 
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
-  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own, false) end)
+  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
 
 ## The proxy that the environment names for `url`, to pass as `HTTP.ClientOptions(proxy: ...)`, or `""` when there is
@@ -273,16 +273,16 @@ def post(
   request(pool, "POST", url, body, headers)
 end
 
-## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
-## `Net::HTTP.get_response(uri)`. It is the call for one request: it makes a client with `options` (default
-## `HTTP.ClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
+## Sends a `GET` request to `url` on a connection of its own and returns the response, like Ruby's
+## `Net::HTTP.get_response(uri)`. It is the call for one request: it opens one connection with `options` (default
+## `HTTP.ClientOptions()`), makes the call in the calling task and closes the connection before it returns. Many
 ## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
 def get_response(url: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Response]
   request_once("GET", url, NO_BYTES, [], options)
 end
 
-## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
-## (default none) and `options` (default `HTTP.ClientOptions()`), then the client is closed. Like Ruby's
+## Sends a `POST` request on a connection of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
+## (default none) and `options` (default `HTTP.ClientOptions()`), then the connection is closed. Like Ruby's
 ## `Net::HTTP.post(uri, data, header)`, and the pooled `post` for many requests.
 def post_response(
   url: String,
@@ -418,6 +418,11 @@ def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
   if max_bytes < 1 or max_bytes > BODY_READ_BYTES
     return error("http: max_bytes must be 1 to 1048576", kind: "argument")
   end
+  read_piece(conn, max_bytes, after(read_ms(conn.options)))
+end
+
+# The next piece of the body of the last response, which must have come by `deadline`.
+def read_piece(conn: Connection, max_bytes: Int, deadline: Int) -> Result[Bytes]
   exchange = try take_exchange(conn)
   if exchange.phase == OVER
     put_exchange(conn, exchange)
@@ -427,7 +432,6 @@ def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
     put_exchange(conn, exchange)
     return ok(NO_BYTES)
   end
-  deadline = Time.monotonic_ms() + read_ms(conn.options)
   case next_piece(conn.socket, exchange, max_bytes, deadline)
     ok(step) ->
       put_exchange(conn, finished_exchange(conn, step.exchange))
@@ -974,8 +978,6 @@ struct Pool
   inboxes: Map[Int, Channel[HttpWire.Job]]
   busy: Map[Int, Channel[Result[HttpWire.Response]]]
   next_id: Int
-  # The client of one request (get_response, post_response): it closes once no job is in flight.
-  once: Bool
 end
 
 # A request's job and the target of its URL.
@@ -1103,8 +1105,8 @@ def answer_of(options: HttpWire.ClientOptions, call: Call) -> Result[HttpWire.Re
   unless_denied(options, call.where.scheme, wait_reply(call.job.reply, call.job.deadline))
 end
 
-# One request on a client that lives for it alone. The job is queued before the client starts, and the client closes
-# once the job is answered, so no connection or task of it outlives the call, even when the caller is cancelled.
+# One request on a connection that lives for it alone, in the task of the caller: it ends with the call, and with the
+# task when that is cancelled. `timeout_ms` is the whole call, the connect, the head and the body.
 def request_once(
   method: String,
   url: String,
@@ -1115,12 +1117,30 @@ def request_once(
   try check_client(options)
 
   try check_proxy(options)
-  call = try call_of(options, method, url, body, headers)
-  jobs: Channel[HttpWire.Job] = Channel.new(1)
-  # A new channel with room for one: this send cannot fail.
-  _ = jobs.send(call.job, 0)
-  _ = HttpWire.service(jobs, options) do |own| supervise_pool(own, true) end
-  answer_of(options, call)
+  where = try parse_url(url)
+  by = after(options.timeout_ms)
+  conn = try open_connection(where, options)
+  answer = whole_response(conn, where.target, method, body, headers, by)
+  end_connection(conn)
+  answer
+end
+
+# The response of `request_once`, whole, or the error of a `407` from the proxy.
+def whole_response(
+  conn: Connection,
+  target: String,
+  method: String,
+  body: Bytes,
+  headers: List[HttpWire.Header],
+  by: Int,
+) -> Result[HttpWire.Response]
+  head = try sent_by(conn, method, target, body, headers, by)
+  if proxy_asked?(conn.options, conn.scheme, head.status)
+    return denied_error(proxy_denied(conn.options, offered?(conn)))
+  end
+
+  whole = try read_whole(conn, conn.options.max_body_bytes, by)
+  ok(HttpWire.Response(status: head.status, headers: head.headers, body: whole))
 end
 
 def settled(phase: Int, closes: Bool) -> Exchange
@@ -1583,7 +1603,7 @@ def pinned_tls(
   closing_on_error(upgraded, socket, options, host, port)
 end
 
-# An `https` connection of a client's pool or of a download: TLS to the host, or, with a proxy in the options, a
+# An `https` connection of a client's pool: TLS to the host, or, with a proxy in the options, a
 # CONNECT tunnel through the proxy with TLS inside it, on the same context as without a proxy (the client's shared
 # system trust, or the one of `options.tls`).
 def connect_https(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
@@ -2011,7 +2031,7 @@ def upload_answer(conn: Connection, response: HttpWire.ResponseHead) -> Result[H
 
   try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
-  whole = try read_whole(conn, conn.options.max_body_bytes)
+  whole = try read_whole(conn, conn.options.max_body_bytes, after(WATCH_MS))
   ok(HttpWire.Response(status: response.status, headers: response.headers, body: whole))
 end
 
@@ -2050,12 +2070,13 @@ end
 # A failed write of an upload, with its kind and code.
 def write_failed(e: Error) -> Result[Void] = error(e.with(message: "http: #{e.message}"))
 
-# The rest of the body of the last response, as one value of at most `most` bytes.
-def read_whole(conn: Connection, most: Int) -> Result[Bytes]
+# The rest of the body of the last response, as one value of at most `most` bytes, which must have come by `by`
+# (each piece also within `read_timeout_ms`).
+def read_whole(conn: Connection, most: Int, by: Int) -> Result[Bytes]
   pieces: List[Bytes] = []
   total = 0
   while true
-    piece = try read_body(conn, BODY_READ_BYTES)
+    piece = try read_piece(conn, BODY_READ_BYTES, smaller(after(read_ms(conn.options)), by))
     return ok(Bytes.concat(pieces)) if piece.empty?
     total = total + piece.size
     return error(TOO_LARGE, kind: "http.too_large", code: 413) if total > most
@@ -3867,10 +3888,10 @@ end
 # The client's service task (HttpWire.service runs it, and it owns jobs). It awaits the owner as a Result task, so a
 # crash of the owner is observed here, not reported as unobserved. After a crash the client is closed: later calls
 # get "http: client is closed", the workers are cancelled with the owner, and calls in flight time out.
-def supervise_pool(client: HttpWire.Client, once: Bool) -> Void
+def supervise_pool(client: HttpWire.Client) -> Void
   jobs = HttpWire.jobs(client)
   options = HttpWire.options(client)
-  pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1, once: once)
+  pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
   _ = Task.await(Task.spawn(&run_pool, pool))
   jobs.close
   # Connections still open or in their handshake keep the context until they end.
@@ -3890,9 +3911,6 @@ def run_pool(pool: Pool) -> Result[Void]
           pool = freed(pool, job)
         else
           pool = gone(pool, job)
-        end
-        if pool.once and Map.size(pool.busy) == 0
-          jobs.close
         end
       error(message) ->
         if "#{message}" == CHANNEL_CLOSED

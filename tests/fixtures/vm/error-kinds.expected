@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 16067,
+  "steps": 16009,
   "stdout": [
     "missing file: io.not_found code=2 io=true",
     "directory as file: io.is_directory code=21 io=true",
