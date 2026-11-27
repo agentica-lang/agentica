@@ -421,27 +421,6 @@ def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
   read_piece(conn, max_bytes, after(read_ms(conn.options)))
 end
 
-# The next piece of the body of the last response, which must have come by `deadline`.
-def read_piece(conn: Connection, max_bytes: Int, deadline: Int) -> Result[Bytes]
-  exchange = try take_exchange(conn)
-  if exchange.phase == OVER
-    put_exchange(conn, exchange)
-    return error(CONNECTION_OVER, kind: "http.closed")
-  end
-  if exchange.phase == IDLE or exchange.phase == SPENT
-    put_exchange(conn, exchange)
-    return ok(NO_BYTES)
-  end
-  case next_piece(conn.socket, exchange, max_bytes, deadline)
-    ok(step) ->
-      put_exchange(conn, finished_exchange(conn, step.exchange))
-      ok(step.piece)
-    error(message) ->
-      end_connection(conn)
-      error(message)
-  end
-end
-
 ## Ends the connection and frees its socket, as Ruby's `Net::HTTP#finish` does. A response body not read to its end is
 ## dropped. It is safe to call twice.
 def finish(conn: Connection) -> Void
@@ -2069,6 +2048,27 @@ end
 
 # A failed write of an upload, with its kind and code.
 def write_failed(e: Error) -> Result[Void] = error(e.with(message: "http: #{e.message}"))
+
+# The next piece of the body of the last response, which must have come by `deadline`.
+def read_piece(conn: Connection, max_bytes: Int, deadline: Int) -> Result[Bytes]
+  exchange = try take_exchange(conn)
+  if exchange.phase == OVER
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER, kind: "http.closed")
+  end
+  if exchange.phase == IDLE or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return ok(NO_BYTES)
+  end
+  case next_piece(conn.socket, exchange, max_bytes, deadline)
+    ok(step) ->
+      put_exchange(conn, finished_exchange(conn, step.exchange))
+      ok(step.piece)
+    error(message) ->
+      end_connection(conn)
+      error(message)
+  end
+end
 
 # The rest of the body of the last response, as one value of at most `most` bytes, which must have come by `by`
 # (each piece also within `read_timeout_ms`).
