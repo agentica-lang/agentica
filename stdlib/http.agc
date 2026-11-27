@@ -1895,9 +1895,22 @@ def read_piece(conn: Connection, max_bytes: Int, deadline: Int) -> Result[Bytes]
   end
 end
 
+# True when the head announced a `Content-Length` over `most`: the body is refused before it is read, as one that grows
+# past the limit is.
+def announced_over?(conn: Connection, most: Int) -> Bool
+  case take_exchange(conn)
+    ok(exchange) ->
+      put_exchange(conn, exchange)
+      exchange.phase == READING and exchange.framing == BY_LENGTH and exchange.left > most
+    error(_) -> false
+  end
+end
+
 # The rest of the body of the last response, as one value of at most `most` bytes, which must have come by `by`
 # (each piece also within `read_timeout_ms`).
 def read_whole(conn: Connection, most: Int, by: Int) -> Result[Bytes]
+  return error(TOO_LARGE, kind: "http.too_large", code: 413) if announced_over?(conn, most)
+
   pieces: List[Bytes] = []
   total = 0
   while true

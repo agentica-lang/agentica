@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2880,
+  "steps": 2920,
   "stdout": [
     "before: 200 served",
     "supervisor: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-cancel.agc:24:8: division by zero",
