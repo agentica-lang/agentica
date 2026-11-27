@@ -92,8 +92,9 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
 - Response header names are lowercase; `header_values` matches
   case-insensitively and keeps duplicates in order. 4xx and 5xx are normal
   responses. Errors are Results: protocol and limit errors start with `http: `,
-  a timeout is `network: operation timed out`. `HTTP.get` has no
-  streaming (see `HTTP.start`), redirect following or gzip decoding.
+  a timeout is `network: operation timed out`. `HTTP.get_response` and
+  `HTTP.post_response` have no streaming (see `HTTP.start`), redirect following
+  or gzip decoding.
 - `download` takes `ClientOptions` (`proxy`, `tls`, timeouts), not a client, and
   streams a `GET` body to a hidden file
   `.<name>.<hex>.agc-part` beside `path` and `Path.replace`s it over `path`

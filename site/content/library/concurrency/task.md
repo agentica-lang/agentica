@@ -311,7 +311,7 @@ Cancellation (a timed-out item):
 
 - It runs no more code, nor do the tasks it started (even a grandchild whose parent already ended, since a task that ends hands its running children to its parent). Its handles close. An item counts as ended only after the regular files it opened are written and closed, so a file an item wrote is on disk, and its lock released, when the call returns. A timed-out item is the exception: its slot settles at the deadline, and the call does not wait for its files, which close a little later.
 - A `Task.map` that the item called stops: no pending item starts and the items in flight are cancelled.
-- I/O in progress finishes or times out on its own and its result is dropped. It never closes a handle other items share. A `TCP.accept` or socket read that has taken nothing yet is dropped at once, so the next connection or the later bytes go to the next call. A timed-out `HTTP.get` connection closes and does not go back to the pool.
+- I/O in progress finishes or times out on its own and its result is dropped. It never closes a handle other items share. A `TCP.accept` or socket read that has taken nothing yet is dropped at once, so the next connection or the later bytes go to the next call. A timed-out `HTTP.get_response` connection closes.
 - Awaiting a task cancelled with the item stops with `RUNTIME-TASK-CANCELLED`, or gives `error("task: cancelled")` for a `Result` task.
 
 Tips:

@@ -312,7 +312,7 @@ Cancelación (de un elemento que agotó su tiempo):
 
 - No ejecuta más código, ni tampoco las tareas que inició (ni siquiera un nieto cuyo padre ya terminó, ya que una tarea que termina entrega sus hijos en marcha a su padre). Sus handles se cierran. Un elemento cuenta como terminado solo después de que se escriban y cierren los archivos regulares que abrió, así que un archivo que escribió un elemento está en disco, y su bloqueo liberado, cuando la llamada devuelve el control. Un elemento que agotó su tiempo es la excepción: su hueco se fija en el plazo, y la llamada no espera a sus archivos, que se cierran un poco después.
 - Un `Task.map` al que llamó el elemento se detiene: no empieza ningún elemento pendiente y los elementos en curso se cancelan.
-- La E/S en curso termina o agota su tiempo por sí sola, y su resultado se descarta. Nunca cierra un handle que compartan otros elementos. Un `TCP.accept` o una lectura de socket que todavía no ha tomado nada se descarta de inmediato, así que la siguiente conexión o los bytes posteriores van a la siguiente llamada. Una conexión de `HTTP.get` que agotó su tiempo se cierra y no vuelve al pool.
+- La E/S en curso termina o agota su tiempo por sí sola, y su resultado se descarta. Nunca cierra un handle que compartan otros elementos. Un `TCP.accept` o una lectura de socket que todavía no ha tomado nada se descarta de inmediato, así que la siguiente conexión o los bytes posteriores van a la siguiente llamada. Una conexión de `HTTP.get_response` que agotó su tiempo se cierra.
 - Esperar una tarea cancelada junto con el elemento se detiene con `RUNTIME-TASK-CANCELLED`, o da `error("task: cancelled")` en una tarea de `Result`.
 
 Consejos:

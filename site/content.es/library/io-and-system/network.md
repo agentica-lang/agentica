@@ -915,7 +915,7 @@ data: tick 3
 404
 ```
 
-`HTTP.get` espera el cuerpo entero, así que el cliente de arriba ve los eventos juntos; el `EventSource` de un navegador o `curl -N` ve cada uno según se envía.
+`HTTP.get_response` espera el cuerpo entero, así que el cliente de arriba ve los eventos juntos; el `EventSource` de un navegador o `curl -N` ve cada uno según se envía.
 
 ### WebSockets {#websockets}
 
