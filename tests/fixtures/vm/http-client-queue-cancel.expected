@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2623,
+  "steps": 2609,
   "stdout": [
     "first: ok(200)",
     "ok(\"server: no new connection\")",

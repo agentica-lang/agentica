@@ -299,6 +299,17 @@ def main() -> Void
 end
 """.replace("SHOW", SHOW).replace("HUGE", str(HUGE))
 
+UNTRUSTED_PROGRAM = """\
+import HTTP from "std/http"
+
+def main() -> Void
+  case HTTP.download(System.args()[0] + "/bin/100", System.args()[1] + "/x.bin")
+    ok(_) -> puts("ok")
+    error(e) -> puts("ERR #{e.kind}")
+  end
+end
+"""
+
 TLS_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -461,6 +472,15 @@ def test_tls_download_keeps_certificate_verification(tmp_path, ports):
     lines = output_lines(run_program(tmp_path, "tls", TLS_PROGRAM, [str(CERTS), secure, str(directory)]))
     assert lines == ["200 100"], lines
     assert (directory / "tls.bin").read_bytes() == expected_bytes(100)
+
+
+def test_tls_download_without_a_context_uses_the_system_trust(tmp_path, ports):
+    directory = tmp_path / "untrusted"
+    directory.mkdir()
+    secure = "https://localhost:%d" % ports["tls"]
+    lines = output_lines(run_program(tmp_path, "untrusted", UNTRUSTED_PROGRAM, [secure, str(directory)]))
+    assert lines == ["ERR net.tls"], lines
+    assert list(directory.iterdir()) == []
 
 
 def test_deny_fs_fails_before_creating_anything(tmp_path, ports):

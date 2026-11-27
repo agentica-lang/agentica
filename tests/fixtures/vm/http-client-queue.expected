@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4004,
+  "steps": 3982,
   "stdout": [
     "[error(\"task: timed out\", kind: \"task.timeout\")]",
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
