@@ -90,7 +90,7 @@ def main() -> Void
   show(HTTP.get(pool, "#{a}/hello?one"))
   HTTP.close_client(pool_two)
   puts(answered(HTTP.get(pool, "http://[::1]/hello")))
-  puts(HTTP.download(pool, "#{a}/big", "#{args[3]}/big.bin").unwrap!.status)
+  puts(HTTP.download("#{a}/big", "#{args[3]}/big.bin", HTTP.DownloadOptions(), options).unwrap!.status)
   puts(File.stat("#{args[3]}/big.bin").unwrap!.size_bytes)
   HTTP.close_client(pool)
   show(HTTP.get_response("#{b}/hello", options))
@@ -118,7 +118,7 @@ def main() -> Void
     error(e) -> puts(names_proxy(e.message, down))
   end
 
-  case HTTP.download(HTTP.client(gone).unwrap!, "#{a}/big", "#{args[3]}/gone.bin")
+  case HTTP.download("#{a}/big", "#{args[3]}/gone.bin", HTTP.DownloadOptions(), gone)
     ok(_) -> puts("downloaded")
     error(e) -> puts(names_proxy(e.message, down))
   end
@@ -218,7 +218,7 @@ def calls(proxy: String, a: String, dir: String, tag: String) -> Void
   show(HTTP.get(pool, "#{a}/hello?#{tag}"))
   HTTP.close_client(pool)
   show(HTTP.post_response("#{a}/echo", "abc".bytes, [], options))
-  case HTTP.download(HTTP.client(options).unwrap!, "#{a}/hello", "#{dir}/#{tag}.bin")
+  case HTTP.download("#{a}/hello", "#{dir}/#{tag}.bin", HTTP.DownloadOptions(), options)
     ok(done) -> puts("download #{done.status}")
     error(message) -> puts(message)
   end
@@ -587,7 +587,7 @@ def calls(options: HTTP.ClientOptions, c: String, d: String, dir: String, tag: S
   show(HTTP.get(pool, "#{d}/hello?#{tag}"))
   HTTP.close_client(pool)
   show(HTTP.post_response("#{c}/echo", "abc".bytes, [], options))
-  case HTTP.download(HTTP.client(options).unwrap!, "#{c}/big", "#{dir}/#{tag}.bin")
+  case HTTP.download("#{c}/big", "#{dir}/#{tag}.bin", HTTP.DownloadOptions(), options)
     ok(done) -> puts("download #{done.status} #{File.stat("#{dir}/#{tag}.bin").unwrap!.size_bytes}")
     error(message) -> puts(message)
   end

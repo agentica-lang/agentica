@@ -69,16 +69,14 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
   options = HTTP.DownloadOptions()
-  show(HTTP.download(pool, base + "/bin/5", dir + "/five.bin", options))
-  show(HTTP.download(pool, base + "/chunked/70000", dir + "/chunk.bin", options))
-  show(HTTP.download(pool, base + "/close/70000", dir + "/close.bin", options))
-  show(HTTP.download(pool, base + "/status/404", dir + "/missing.bin", options))
-  show(HTTP.download(pool, base + "/status/301", dir + "/moved.bin", options))
-  HTTP.close_client(pool)
+  show(HTTP.download(base + "/bin/5", dir + "/five.bin", options))
+  show(HTTP.download(base + "/chunked/70000", dir + "/chunk.bin", options))
+  show(HTTP.download(base + "/close/70000", dir + "/close.bin", options))
+  show(HTTP.download(base + "/status/404", dir + "/missing.bin", options))
+  show(HTTP.download(base + "/status/301", dir + "/moved.bin", options))
 end
 """.replace("SHOW", SHOW)
 
@@ -88,27 +86,25 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
   options = HTTP.DownloadOptions()
   ten = HTTP.DownloadOptions(max_total_bytes: some(10))
-  show(HTTP.download(pool, "ftp://example.com/x", dir + "/u.bin", options))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/zero.bin", HTTP.DownloadOptions(timeout_ms: some(0))))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/neg.bin", HTTP.DownloadOptions(max_total_bytes: some(-1))))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/hex.bin", HTTP.DownloadOptions(sha256: some("zz"))))
-  show(HTTP.download(pool, base + "/over-ceiling", dir + "/ceiling.bin", options))
-  show(HTTP.download(pool, base + "/bin/100", dir + "/over.bin", ten))
-  show(HTTP.download(pool, base + "/chunked/1000", dir + "/overc.bin", ten))
-  show(HTTP.download(pool, base + "/close/1000", dir + "/overu.bin", ten))
-  show(HTTP.download(pool, base + "/truncate/100/40", dir + "/trunc.bin", options))
-  show(HTTP.download(pool, base + "/cut-chunk", dir + "/cut.bin", options))
-  show(HTTP.download(pool, base + "/bad-chunk", dir + "/bad.bin", options))
-  show(HTTP.download(pool, base + "/slow-head", dir + "/slow.bin", HTTP.DownloadOptions(timeout_ms: some(500))))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/absent/x.bin", options))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/folder", options))
-  show(HTTP.download(pool, base + "/bin/7", dir + "/with space/seven.bin", options))
-  HTTP.close_client(pool)
+  show(HTTP.download("ftp://example.com/x", dir + "/u.bin", options))
+  show(HTTP.download(base + "/bin/10", dir + "/zero.bin", HTTP.DownloadOptions(timeout_ms: some(0))))
+  show(HTTP.download(base + "/bin/10", dir + "/neg.bin", HTTP.DownloadOptions(max_total_bytes: some(-1))))
+  show(HTTP.download(base + "/bin/10", dir + "/hex.bin", HTTP.DownloadOptions(sha256: some("zz"))))
+  show(HTTP.download(base + "/over-ceiling", dir + "/ceiling.bin", options))
+  show(HTTP.download(base + "/bin/100", dir + "/over.bin", ten))
+  show(HTTP.download(base + "/chunked/1000", dir + "/overc.bin", ten))
+  show(HTTP.download(base + "/close/1000", dir + "/overu.bin", ten))
+  show(HTTP.download(base + "/truncate/100/40", dir + "/trunc.bin", options))
+  show(HTTP.download(base + "/cut-chunk", dir + "/cut.bin", options))
+  show(HTTP.download(base + "/bad-chunk", dir + "/bad.bin", options))
+  show(HTTP.download(base + "/slow-head", dir + "/slow.bin", HTTP.DownloadOptions(timeout_ms: some(500))))
+  show(HTTP.download(base + "/bin/10", dir + "/absent/x.bin", options))
+  show(HTTP.download(base + "/bin/10", dir + "/folder", options))
+  show(HTTP.download(base + "/bin/7", dir + "/with space/seven.bin", options))
 end
 """.replace("SHOW", SHOW)
 
@@ -125,23 +121,21 @@ def kind(result: Result[HTTP.Download]) -> Void
 end
 
 # A download that follows one redirect by hand: download has no redirect follow of its own.
-def follow(pool: HTTP.Client, base: String, url: String, path: String, options: HTTP.DownloadOptions) -> Result[HTTP.Download]
-  first = try HTTP.download(pool, url, path, HTTP.DownloadOptions())
+def follow(base: String, url: String, path: String, options: HTTP.DownloadOptions) -> Result[HTTP.Download]
+  first = try HTTP.download(url, path, HTTP.DownloadOptions())
   return ok(first) if first.status != 302
-  HTTP.download(pool, base + HTTP.header_values(first.headers, "location")[0], path, options)
+  HTTP.download(base + HTTP.header_values(first.headers, "location")[0], path, options)
 end
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
   right = HTTP.DownloadOptions(max_total_bytes: some(1000), sha256: some(System.args()[2]))
-  show(follow(pool, base, base + "/redirect/chunked/1000", dir + "/moved.bin", right))
-  kind(HTTP.download(pool, base + "/bin/1000", dir + "/wrong.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
-  show(HTTP.download(pool, base + "/bin/1000", dir + "/kept.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
-  show(HTTP.download(pool, base + "/truncate/100/40", dir + "/kept.bin", HTTP.DownloadOptions()))
-  show(HTTP.download(pool, base + "/bin/1000", dir + "/replaced.bin", right))
-  HTTP.close_client(pool)
+  show(follow(base, base + "/redirect/chunked/1000", dir + "/moved.bin", right))
+  kind(HTTP.download(base + "/bin/1000", dir + "/wrong.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
+  show(HTTP.download(base + "/bin/1000", dir + "/kept.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
+  show(HTTP.download(base + "/truncate/100/40", dir + "/kept.bin", HTTP.DownloadOptions()))
+  show(HTTP.download(base + "/bin/1000", dir + "/replaced.bin", right))
 end
 """.replace("SHOW", SHOW)
 
@@ -151,9 +145,7 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
-  show(HTTP.download(pool, System.args()[0] + "/bin/10", System.args()[1] + "/denied.bin"))
-  HTTP.close_client(pool)
+  show(HTTP.download(System.args()[0] + "/bin/10", System.args()[1] + "/denied.bin"))
 end
 """.replace("SHOW", SHOW)
 
@@ -163,13 +155,11 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
   options = HTTP.DownloadOptions(timeout_ms: some(60000))
-  show(HTTP.download(pool, base + "/bin/BIG", dir + "/big.bin", options))
-  show(HTTP.download(pool, base + "/chunked/CHUNKED", dir + "/big-chunked.bin", options))
-  HTTP.close_client(pool)
+  show(HTTP.download(base + "/bin/BIG", dir + "/big.bin", options))
+  show(HTTP.download(base + "/chunked/CHUNKED", dir + "/big-chunked.bin", options))
 end
 """.replace("SHOW", SHOW).replace("BIG", str(BIG)).replace("CHUNKED", str(BIG_CHUNKED))
 
@@ -179,12 +169,10 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
-  case HTTP.download(pool, System.args()[0], System.args()[1])
+  case HTTP.download(System.args()[0], System.args()[1])
     ok(saved) -> puts("200 #{saved.bytes_written}")
     error(e) -> puts("#{e.kind} #{e.message.split("\\n")[0]}")
   end
-  HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW)
 
@@ -192,13 +180,12 @@ CANCEL_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Job
-  pool: HTTP.Client
   url: String
   path: String
 end
 
 def fetch(job: Job) -> Result[HTTP.Download]
-  HTTP.download(job.pool, job.url, job.path)
+  HTTP.download(job.url, job.path)
 end
 
 def growing?(folder: String) -> Bool
@@ -208,7 +195,7 @@ def growing?(folder: String) -> Bool
 end
 
 def main() -> Void
-  job = Job(pool: Result.unwrap!(HTTP.client()), url: System.args()[0], path: System.args()[1])
+  job = Job(url: System.args()[0], path: System.args()[1])
   task = Task.spawn(&fetch, job)
   # The peer stalls after the first bytes: cancel once the hidden file is there, waiting at most 30 s.
   folder = System.args()[2]
@@ -231,8 +218,8 @@ def growing?(folder: String) -> Bool
   names.any? do |name: String| name.end_with?(".agc-part") end
 end
 
-def fetch(pool: HTTP.Client, url: String, path: String) -> Result[Int]
-  if HTTP.download(pool, url, path).ok?
+def fetch(url: String, path: String) -> Result[Int]
+  if HTTP.download(url, path).ok?
     return ok(1)
   end
   error("download failed")
@@ -251,9 +238,8 @@ end
 
 def main() -> Void
   args = System.args()
-  pool = Result.unwrap!(HTTP.client())
   results = Task.map([0, 1], 2, 3000) do |n: Int|
-    return fetch(pool, args[0], args[1]) if n == 0
+    return fetch(args[0], args[1]) if n == 0
     watch(args[2])
   end
   puts(results.map do |item: Result[Int]| item.ok? end)
@@ -294,13 +280,11 @@ def streamed(stream: HTTP.Stream) -> String
 end
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
-  moved = HTTP.download(pool, base + "/redirect/bin/HUGE", dir + "/huge.bin").unwrap!
+  moved = HTTP.download(base + "/redirect/bin/HUGE", dir + "/huge.bin").unwrap!
   checked = HTTP.DownloadOptions(sha256: some(System.args()[2]))
-  show(HTTP.download(pool, base + location(moved.headers), dir + "/huge.bin", checked))
-  HTTP.close_client(pool)
+  show(HTTP.download(base + location(moved.headers), dir + "/huge.bin", checked))
 
   conn = HTTP.start(base).unwrap!
   head = HTTP.send_request(conn, "GET", "/redirect/chunked/HUGE", "".bytes).unwrap!
@@ -321,9 +305,8 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  secure = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1048576, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: System.args()[0] + "/ca.pem")).unwrap!))))
-  show(HTTP.download(secure, System.args()[1] + "/bin/100", System.args()[2] + "/tls.bin"))
-  HTTP.close_client(secure)
+  secure = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1048576, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: System.args()[0] + "/ca.pem")).unwrap!))
+  show(HTTP.download(System.args()[1] + "/bin/100", System.args()[2] + "/tls.bin", HTTP.DownloadOptions(), secure))
 end
 """.replace("SHOW", SHOW)
 

@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `HTTP.download(url, path, options, client)` takes the `HTTP.ClientOptions` in the place of an `HTTP.Client`, and makes its own connection, so a download no longer needs `HTTP.client` (#1772).
+
 ### Removed
 
 - **Breaking:** `std/utc` is removed; use the builtin `Time` (#2027).

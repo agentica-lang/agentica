@@ -465,10 +465,10 @@ end
 ### HTTP.download {#httpdownload}
 
 ```signature
-HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
+HTTP.download(url: String, path: String, options: DownloadOptions = DownloadOptions(), client: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[Download]
 ```
 
-- `DownloadOptions` tiene `timeout_ms`, para la llamada completa, `max_total_bytes`, para el cuerpo, y `sha256`, el resumen criptográfico en hexadecimal que debe tener el cuerpo. Cada uno es un `Optional` cuyo valor predeterminado es `none`: sin límite de tamaño, sin comprobación de resumen y sin límite de tiempo (en la práctica, un plazo de un año). Un valor que se fija debe ser positivo, sin máximo, y un resumen tiene 64 dígitos hexadecimales. `connect_timeout_ms` del cliente sigue acotando la conexión, y su `read_timeout_ms` limita cada espera del bloque de cabeceras y de los bytes del cuerpo, así que un servidor silencioso termina la llamada. `Download` tiene `status`, `headers` y `bytes_written`; el cuerpo en sí está en el archivo, nunca en el registro.
+- `DownloadOptions` tiene `timeout_ms`, para la llamada completa, `max_total_bytes`, para el cuerpo, y `sha256`, el resumen criptográfico en hexadecimal que debe tener el cuerpo. Cada uno es un `Optional` cuyo valor predeterminado es `none`: sin límite de tamaño, sin comprobación de resumen y sin límite de tiempo (en la práctica, un plazo de un año). Un valor que se fija debe ser positivo, sin máximo, y un resumen tiene 64 dígitos hexadecimales. `client` (las `HTTP.ClientOptions` de la conexión: `connect_timeout_ms`, `read_timeout_ms`, `proxy`, `tls`, `connect_to`) se comprueba como lo hace `start`: su `connect_timeout_ms` sigue acotando la conexión, y su `read_timeout_ms` limita cada espera del bloque de cabeceras y de los bytes del cuerpo, así que un servidor silencioso termina la llamada. `Download` tiene `status`, `headers` y `bytes_written`; el cuerpo en sí está en el archivo, nunca en el registro.
 - Un `Download` impreso toma el alias con el que el programa importa `std/http`, mientras que un registro integrado conserva su nombre fijo: con `import H from "std/http"`, se imprime como `H.Download(status: 200, headers: [HTTP.Header(...)], ...)`.
 - La descarga envía un `GET` y va guardando el cuerpo, con como máximo 1 MiB en memoria a la vez, en un archivo nuevo y oculto de la carpeta de `path`, con el nombre `.<name>.<8 hex digits>.agc-part` (como máximo 32 caracteres del nombre). El archivo nunca crece más allá de `max_total_bytes`.
 - Solo un cuerpo que termina bien y tiene el resumen `sha256` llega a `path`, mediante [`Path.replace`](/library/io-and-system/files/#pathreplace): en un solo paso, así que `path` siempre nombra el archivo viejo o el nuevo. Un archivo existente en `path` se reemplaza, y también un enlace simbólico, que no se sigue (a diferencia de `File.replace`). El archivo nuevo es privado del usuario (`0600`) y no conserva el modo del archivo viejo. Un directorio en `path` es un error y se queda como estaba.
@@ -480,14 +480,11 @@ HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadO
 import HTTP from "std/http"
 
 def main() -> Void
-  client = HTTP.client().unwrap!
   digest = "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"
-  case HTTP.download(client, "http://localhost:8080/asset", "asset.bin", HTTP.DownloadOptions(sha256: some(digest)))
+  case HTTP.download("http://localhost:8080/asset", "asset.bin", HTTP.DownloadOptions(sha256: some(digest)))
     ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
     error(e) -> IO.warn(e.message)
   end
-
-  HTTP.close_client(client)
 end
 ```
 

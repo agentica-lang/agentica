@@ -464,10 +464,10 @@ end
 ### HTTP.download
 
 ```signature
-HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
+HTTP.download(url: String, path: String, options: DownloadOptions = DownloadOptions(), client: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[Download]
 ```
 
-- `DownloadOptions` has `timeout_ms`, for the whole call, `max_total_bytes`, for the body, and `sha256`, the hex digest the body must have. Each is an `Optional`, `none` by default: no size limit, no digest check and no time limit (in practice a one-year deadline). A value that is set must be positive, with no upper bound, and a digest is 64 hex digits. The client's `connect_timeout_ms` still bounds the connect and its `read_timeout_ms` each wait for the head and for body bytes, so a silent server ends the call. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- `DownloadOptions` has `timeout_ms`, for the whole call, `max_total_bytes`, for the body, and `sha256`, the hex digest the body must have. Each is an `Optional`, `none` by default: no size limit, no digest check and no time limit (in practice a one-year deadline). A value that is set must be positive, with no upper bound, and a digest is 64 hex digits. `client` (the `HTTP.ClientOptions` of the connection: `connect_timeout_ms`, `read_timeout_ms`, `proxy`, `tls`, `connect_to`) is checked as `start` checks it: its `connect_timeout_ms` still bounds the connect and its `read_timeout_ms` each wait for the head and for body bytes, so a silent server ends the call. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
 - A printed `Download` takes the alias the program imports `std/http` with, while a builtin record keeps its fixed name: with `import H from "std/http"`, it prints as `H.Download(status: 200, headers: [HTTP.Header(...)], ...)`.
 - The download sends a `GET` and streams the body, at most 1 MiB in memory at a time, to a new hidden file in the folder of `path`, named `.<name>.<8 hex digits>.agc-part` (at most 32 characters of the name). The file never grows past `max_total_bytes`.
 - Only a body that ended cleanly and has the `sha256` digest takes `path`, through [`Path.replace`](/library/io-and-system/files/#pathreplace): in one step, so `path` always names the old file or the new one. An existing file at `path` is replaced, and so is a symbolic link, which is not followed (unlike `File.replace`). The new file is private to the user (`0600`) and does not keep the old file's mode. A directory at `path` is an error and stays as it was.
@@ -479,14 +479,11 @@ HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadO
 import HTTP from "std/http"
 
 def main() -> Void
-  client = HTTP.client().unwrap!
   digest = "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"
-  case HTTP.download(client, "http://localhost:8080/asset", "asset.bin", HTTP.DownloadOptions(sha256: some(digest)))
+  case HTTP.download("http://localhost:8080/asset", "asset.bin", HTTP.DownloadOptions(sha256: some(digest)))
     ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
     error(e) -> IO.warn(e.message)
   end
-
-  HTTP.close_client(client)
 end
 ```
 
