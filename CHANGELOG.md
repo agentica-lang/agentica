@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `HTTP.download` writes its hidden `.agc-part` file as a `"temp"` file, so a cancelled task or a `Task.map` timeout no longer leaves it behind (#1875).
+
 ## [0.40.0-beta.2] - 2026-11-26
 
 ### Added
