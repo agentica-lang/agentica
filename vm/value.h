@@ -40,7 +40,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_GLOBAL_FAILED 1
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF, AGC_T_UINT64, AGC_T_FLOAT32
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER, AGC_T_REF, AGC_T_UINT64, AGC_T_FLOAT32
 } agc_tag;
 
 typedef struct {
@@ -279,27 +279,6 @@ typedef struct {
   agc_resource *state;
   int64_t port;
 } agc_listener;
-
-/* An HttpWire.Client: the jobs channel of its owner task and its HttpWire.ClientOptions (vm/http_service.c), and the
-   system-trust TLS context that its https connections share when the options name no TLS.Context (vm/tcp.c's, opaque
-   here: made by the first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under
-   rt->sync). The service task drops it once the client is closed and its pool has ended; a client never closed keeps
-   it until the run ends. */
-typedef struct {
-  agc_value jobs, options;
-  void *tls;
-  bool tls_dropped;
-} agc_http_client;
-
-/* HttpWire.ClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms,
-   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TLS.Context]), connect_timeout_ms,
-   read_timeout_ms, connect_to (String). HttpWire.service checks the shape, since the std-only rule lives in the front end and bytecode can
-   call the builtin with any struct. */
-#define AGC_HTTP_OPTIONS_FIELDS 9
-#define AGC_HTTP_OPTION_PROXY 4
-#define AGC_HTTP_OPTION_TLS 5
-#define AGC_HTTP_OPTION_CONNECT 6
-#define AGC_HTTP_OPTION_CONNECT_TO 8
 
 /* The builtin record Error (#671) as the catalog lays it out: kind, message, code (Optional[Int]), details
    (Map[String, String]), cause (Optional[Error]) and location ("path:line:col"). Equality compares the fields before
@@ -712,7 +691,6 @@ agc_value agc_task_value(agc_task *t);
 agc_value agc_process_value(agc_process *p);
 agc_value agc_socket_value(agc_socket *s);
 agc_value agc_listener_value(agc_listener *l);
-agc_value agc_http_client_value(agc_http_client *c);
 agc_value agc_tls_context_value(void *config, void (*release)(void *config), bool server);
 agc_value agc_test_case_value(agc_test_case *c);
 agc_value agc_http_server_value(agc_http_server *s);
@@ -735,7 +713,6 @@ agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
 agc_socket *agc_as_socket(agc_vm *vm, agc_value v);
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
-agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 agc_tls_context *agc_as_tls_context(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);

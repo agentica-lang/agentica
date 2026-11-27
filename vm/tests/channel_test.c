@@ -1,7 +1,7 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth, turn cost, wrap-around,
  * capacity and waiter order, an unbounded channel, a close with a reason, a monitor's notice past the capacity,
- * abandoned channels, HttpWire.awaited? and watch, wait clocks, and addresses (one per channel, a send that waits,
+ * wait clocks, and addresses (one per channel, a send that waits,
  * closed, another run, a freed channel). All of it again in a shared VM, where the channel and timer locks are real.
  */
 #include "../core.h"
@@ -16,7 +16,7 @@
 #if defined(__linux__) || defined(__APPLE__)
 
 enum {
-  NEW, NEW_UNBOUNDED, SEND, RECV, CLOSE, CLOSE_REASON, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, WATCH, COUNT
+  NEW, NEW_UNBOUNDED, SEND, RECV, CLOSE, CLOSE_REASON, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, COUNT
 };
 
 static agc_vm vm;
@@ -619,141 +619,6 @@ static void test_cancel_pending_wait(void) {
   assert(!a->timer.heap && !ready_head());
 }
 
-/* Lets the 20 ms wait of t, parked on a channel, time out: t is ready to take its retry. */
-static void time_out(agc_task *t) {
-  agc_timers_settle(&vm);
-  struct timespec delay = {0, 80000000L};
-  while (nanosleep(&delay, &delay) != 0) {}
-  assert(agc_timers_run(&vm));
-  assert(next_ready() == t);
-  settle();
-}
-
-/* Abandoned (HttpWire.awaited? is its negation): only a receiver that parked and left without a value sets it. A
-   sender before any receiver parks, a poll, and a receiver that gets its value do not. */
-static void test_abandoned(void) {
-  agc_value ch = make_channel(1);
-  const agc_channel *c = agc_as_channel(&vm, ch);
-  assert(sent(send(main_task, ch, 1, 0)));
-  assert(!agc_channel_abandoned(&vm, c));
-  assert(got(recv(main_task, ch, 0), 1));
-  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
-  assert(!agc_channel_abandoned(&vm, c));
-  agc_task *a = agc_test_task();
-  wait_recv(a, ch, 5000);
-  send(main_task, ch, 2, 0);
-  assert(next_ready() == a);
-  settle();
-  agc_value args[2] = {ch, agc_int(5000)};
-  assert(got(now(a, RECV, args), 2));
-  assert(!agc_channel_abandoned(&vm, c));
-  agc_task *b = agc_test_task();
-  wait_recv(b, ch, 5000);
-  agc_task_cancel(&vm, b);
-  assert(agc_channel_abandoned(&vm, c));
-  agc_value timed = make_channel(1);
-  agc_task *d = agc_test_task();
-  wait_recv(d, timed, 20);
-  time_out(d);
-  assert(!agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
-  agc_value args_d[2] = {timed, agc_int(20)};
-  assert(failed(now(d, RECV, args_d), "channel: timed out"));
-  assert(agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
-}
-
-static bool awaited(agc_task *t, agc_value ch) {
-  agc_value args[1] = {ch};
-  return agc_as_bool(&vm, now(t, AWAITED, args));
-}
-
-static bool watch(agc_task *t, agc_value ch) {
-  agc_value args[1] = {ch};
-  return agc_as_bool(&vm, now(t, WATCH, args));
-}
-
-/* A worker calls HttpWire.watch (or only asks awaited? when WATCHES is false) on reply, then parks, as an HTTP worker
-   waits for the answer on its socket: here on a channel of its own. */
-static agc_task *asking_worker(agc_value reply, bool *answer, bool watches) {
-  agc_task *w = agc_test_task();
-  *answer = watches ? watch(w, reply) : awaited(w, reply);
-  wait_recv(w, make_channel(1), 5000);
-  return w;
-}
-
-static agc_task *parked_worker(agc_value reply, bool *answer) { return asking_worker(reply, answer, true); }
-
-/* HttpWire.awaited? is a pure check, as the pool owner asks it: it binds nothing, so a cancel of the receiver leaves
-   the asking task alone, and the check then turns false. */
-static void test_awaited_binds_nothing(void) {
-  bool answer;
-  agc_value reply = make_channel(1);
-  agc_task *owner = asking_worker(reply, &answer, false), *caller = agc_test_task();
-  assert(answer);
-  wait_recv(caller, reply, 5000);
-  agc_task_cancel(&vm, caller);
-  settle();
-  assert(owner->state == AGC_TASK_PARKED && !owner->cancelled);
-  assert(!awaited(main_task, reply) && !watch(main_task, reply));
-  agc_task_cancel(&vm, owner);
-}
-
-/* HttpWire.watch binds its caller (a worker) to the reply: a cancel of the receiver parked on it cancels the worker.
-   The first value sent ends the bond, even when the receiver is then cancelled with the value reserved, and an ask
-   after it binds nothing. A receiver whose wait times out cancels nothing, a receiver that gave up already is not
-   bound to, and a watcher that ended is left alone. */
-static void test_watch_binds_the_worker(void) {
-  bool answer;
-  agc_value reply = make_channel(1);
-  agc_task *worker = parked_worker(reply, &answer), *caller = agc_test_task();
-  assert(answer);
-  wait_recv(caller, reply, 5000);
-  agc_task_cancel(&vm, caller);
-  assert(worker->state == AGC_TASK_DONE && worker->cancelled);
-
-  agc_value answered = make_channel(1);
-  agc_task *kept = parked_worker(answered, &answer), *taker = agc_test_task();
-  assert(answer);
-  wait_recv(taker, answered, 5000);
-  send(main_task, answered, 1, 0);
-  assert(ready_head() == taker);
-  agc_task *late = parked_worker(answered, &answer);
-  assert(answer);
-  agc_task_cancel(&vm, taker);
-  settle();
-  assert(kept->state == AGC_TASK_PARKED && !kept->cancelled);
-  assert(late->state == AGC_TASK_PARKED && !late->cancelled);
-  assert(!watch(main_task, answered));
-  agc_task_cancel(&vm, kept);
-  agc_task_cancel(&vm, late);
-
-  agc_value slow = make_channel(1);
-  agc_task *waiting = parked_worker(slow, &answer), *timed = agc_test_task();
-  assert(answer);
-  wait_recv(timed, slow, 20);
-  time_out(timed);
-  agc_value args[2] = {slow, agc_int(20)};
-  assert(failed(now(timed, RECV, args), "channel: timed out"));
-  assert(waiting->state == AGC_TASK_PARKED && !waiting->cancelled);
-  assert(!watch(main_task, slow));
-  agc_task_cancel(&vm, waiting);
-
-  agc_task *idle = parked_worker(reply, &answer);
-  assert(!answer);
-  agc_task *other = agc_test_task();
-  wait_recv(other, reply, 5000);
-  agc_task_cancel(&vm, other);
-  assert(idle->state == AGC_TASK_PARKED && !idle->cancelled);
-  agc_task_cancel(&vm, idle);
-
-  agc_value orphan = make_channel(1);
-  agc_task *ended = parked_worker(orphan, &answer), *left = agc_test_task();
-  assert(answer);
-  agc_task_cancel(&vm, ended);
-  wait_recv(left, orphan, 5000);
-  agc_task_cancel(&vm, left);
-  assert(ended->state == AGC_TASK_DONE && left->state == AGC_TASK_DONE && !ready_head());
-}
-
 static agc_value address_of(agc_value ch) {
   agc_value args[1] = {ch};
   return now(main_task, ADDRESS, args);
@@ -864,9 +729,6 @@ static void all(void) {
   test_close_with_reason();
   test_timeout_before_reservation();
   test_reservation_beats_deadline();
-  test_abandoned();
-  test_watch_binds_the_worker();
-  test_awaited_binds_nothing();
   test_clock_starts_late();
   test_cancel_pending_wait();
   test_address();
@@ -883,8 +745,8 @@ int main(void) {
   main_task = vm.task;
   static const char *names[COUNT] = {"Channel.new",     "Channel.new",       "Channel.send",   "Channel.recv",
                                      "Channel.close",   "Channel.close",     "Channel.closed?", "Channel.empty?",
-                                     "Channel.address", "Address.send",      "HttpWire.awaited?", "HttpWire.watch"};
-  static const uint32_t arities[COUNT] = {1, 0, 3, 2, 1, 2, 1, 1, 1, 3, 1, 1};
+                                     "Channel.address", "Address.send"};
+  static const uint32_t arities[COUNT] = {1, 0, 3, 2, 1, 2, 1, 1, 1, 3};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);

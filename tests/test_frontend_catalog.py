@@ -87,7 +87,7 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
                               .split("};", 1)[0]))
     handles = {name: shown for name, shown in written.items() if '"<%s>"' % shown in text_c}
     assert printed == {name: shown for name, shown in written.items() if name not in handles}
-    assert sorted(handles) == ["HttpWire.Client", "HttpWire.Server"]
+    assert sorted(handles) == ["HttpWire.Server"]
 
 
 def test_every_builtin_implementation_is_one_the_vm_has():

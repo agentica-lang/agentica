@@ -311,7 +311,7 @@ def test_imported_generic_enums_resolve_constructors_and_exhaustive_patterns(wor
 
 
 def test_help_does_not_know_the_internal_http_wire_builtins(scratch):
-    for arguments in [["help", "HttpWire.service"], ["help", "HttpWire.jobs", "--json"], ["help", "HttpWire.servic"]]:
+    for arguments in [["help", "HttpWire.accept"], ["help", "HttpWire.chunk", "--json"], ["help", "HttpWire.servic"]]:
         result = agentica(scratch, *arguments)
         assert result.code == 2, str(arguments)
         assert result.stderr == "agentica: unknown builtin %s\n" % arguments[1]

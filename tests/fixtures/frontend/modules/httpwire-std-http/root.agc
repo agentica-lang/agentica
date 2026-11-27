@@ -1,5 +1,5 @@
 import HTTP from "std/http"
 def main() -> Void
-  HTTP.close_client(Result.unwrap!(HTTP.client()))
+  _ = HTTP.get_response("http://127.0.0.1:1/")
 end
 

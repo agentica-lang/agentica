@@ -113,7 +113,7 @@ def record_family?(name: String) -> Bool
   STD_ONLY.has_key?(name) and RECORDS.keys.any? do |record| record.start_with?("#{name}.") end
 end
 
-## Whether a builtin record, enum or opaque type has this name (HttpWire.Request, LogRegistry.Level, HttpWire.Client).
+## Whether a builtin record, enum or opaque type has this name (HttpWire.Request, LogRegistry.Level, HttpWire.Server).
 def type_named?(name: String) -> Bool = RECORDS.has_key?(name) or ENUMS.has_key?(name) or OPAQUE_TYPES.include?(name)
 
 ## Whether a builtin enum has no type parameters and no payload on any variant (System.Signal), so that `Type.values`
@@ -233,7 +233,7 @@ def ref(name: String, arity: Int) -> Result[Model.Builtin]
   form_for(entry, arity)
 end
 
-## True for a name inside a std-only module, such as HttpWire.service.
+## True for a name inside a std-only module, such as HttpWire.accept.
 def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(name))
 
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.

@@ -404,9 +404,9 @@ class TestModuleRules:
         assert start(self.assert_rejected(engine, "CHECK-UNKNOWN-NAME", file="lib.agc")) == (2, 7)
 
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
-        call = "def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n"
+        call = "def go() -> Void\n  HttpWire.accept(1)\nend\n\n"
         roots = [("root.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n'
-                              '  HttpWire.jobs(HttpWire.service(1, 1, 1))\nend\n\n'),
+                              '  HttpWire.accept(1)\nend\n\n'),
                  ("lib.agc", 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'),
                  ("libs/wire.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n  Wire.go()\nend\n\n')]
         bodies = [("  x = HttpWir.client(1)\n", "CHECK-UNKNOWN-NAME"),
@@ -462,12 +462,12 @@ class TestModuleRules:
         assert results[3][1] is None
 
     def test_a_type_mismatch_writes_a_re_exported_builtin_type_as_a_program_does(self):
-        """The expected and actual types of a mismatch write HttpWire.Client as HTTP.Client and LogRegistry.Level as
-        Logger.Level, so a user struct HttpWire stays apart from the builtin HTTP.Header. HttpWire.Client written as a
-        type is an unknown type whose help names HTTP.Client."""
+        """The expected and actual types of a mismatch write HttpWire.Server as HTTP.Server and LogRegistry.Level as
+        Logger.Level, so a user struct HttpWire stays apart from the builtin HTTP.Header. HttpWire.Server written as a
+        type is an unknown type whose help names HTTP.Server."""
         http = 'import HTTP from "std/http"\n\n'
         mismatches = [
-            (http + "def f(c: HTTP.Client) -> Void\n  x: Int = c\nend\n\n", "Int", "HTTP.Client"),
+            (http + "def f(c: HTTP.Server) -> Void\n  x: Int = c\nend\n\n", "Int", "HTTP.Server"),
             ('import Logger from "std/logger"\n\ndef main() -> Void\n  x: Int = Logger.level()\nend\n\n', "Int",
              "Logger.Level"),
             (http + "struct HttpWire\n  name: String\nend\n\ndef main() -> Void\n"
@@ -478,7 +478,7 @@ class TestModuleRules:
             problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
             assert (problem["expected"], problem["actual"]) == (expected, actual), text
         self.assert_cases([
-            ({"root.agc": "def f(x: HttpWire.Client) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-NAME",
+            ({"root.agc": "def f(x: HttpWire.Server) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-NAME",
              ((1, 10), (1, 25)), None, True),
         ])
 
@@ -532,13 +532,13 @@ class TestModuleRules:
 
     def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown(self):
         """std/http re-exports the builtin HttpWire records and handles as HTTP.Request, HTTP.Response, HTTP.Header,
-        HTTP.ClientOptions, HTTP.ServerOptions, HTTP.Client and HTTP.Server (import HTTP, or import {Request, ...}).
+        HTTP.ClientOptions, HTTP.ServerOptions and HTTP.Server (import HTTP, or import {Request, ...}).
         The old names (HttpRequest, Header, HttpClient, ...) are unknown."""
-        uses = ('import HTTP from "std/http"\nimport {Request, Response, Header, Client} from "std/http"\n\n'
+        uses = ('import HTTP from "std/http"\nimport {Request, Response, Header, Server} from "std/http"\n\n'
                 "def handle(request: Request) -> Result[HTTP.Response]\n"
                 '  return ok(Response(status: 200, headers: [Header(name: "a", value: request.path)], body: "".bytes))\n'
                 "end\n\n"
-                "def pool(c: Client, s: HTTP.Server) -> HTTP.ClientOptions\n  return HTTP.ClientOptions()\nend\n\n"
+                "def pool(c: Server, s: HTTP.Server) -> HTTP.ClientOptions\n  return HTTP.ClientOptions()\nend\n\n"
                 "def main() -> Void\n  _o = HTTP.ServerOptions(max_connections: 1)\n  _h: HTTP.Header = Header(name: \"a\", "
                 "value: \"\").with(value: \"b\")\nend\n\n")
         http = 'import HTTP from "std/http"\n\n'

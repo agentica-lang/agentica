@@ -31,10 +31,7 @@ reads no `openssl.cnf`, so both builds behave the same.
   argument.
 - **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
   does, and `TLS.listen` as `TCP.listen` does; neither reads a file. The
-  connect timeout covers the lookup, connect and handshake. An
-  `HttpWire.Client` without a context (`HttpWire.connect_tls`) builds one
-  system-trust context lazily, in a pool job, the first time it connects, and
-  its connections share it.
+  connect timeout covers the lookup, connect and handshake.
 - **Upgrade.** `TLS.upgrade` (STARTTLS) makes a new TLS socket, whose role is
   the context's; a server context with a host is `RUNTIME-TLS-CONTEXT-ROLE` at
   the host. After the argument checks, the plain socket's resource lets its
@@ -111,16 +108,13 @@ reads no `openssl.cnf`, so both builds behave the same.
   name in the socket's `net` (an atomic pointer, set once), which `TLS.alpn`
   reads: `""` for none, a plain socket or a closed one. The config also records
   whether its list is none or exactly `http/1.1`: std/http speaks only
-  HTTP/1.1, so `HttpWire.service`, `HttpWire.connect_context`,
-  `HttpWire.upgrade_context` and `HttpWire.server` halt with
+  HTTP/1.1, so `HttpWire.connect_context`, `HttpWire.upgrade_context` and
+  `HttpWire.server` halt with
   `RUNTIME-TLS-CONTEXT-ALPN` on any other list.
 - **CONNECT tunnels (std-only).** std/http reaches an `https://` target through
   a proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it
   with `TLS.upgrade`'s machinery: `HttpWire.upgrade_context(socket, context,
-  host, timeout_ms)` for a client `TLS.Context` (plus the ALPN check above), and
-  `HttpWire.upgrade_tls(client, socket, host, timeout_ms)` for the client's
-  shared system-trust context of `HttpWire.connect_tls` (the upgraded net takes
-  a count on it, an error when the client gave it back).
+  host, timeout_ms)` for a client `TLS.Context` (plus the ALPN check above).
 - **Data path.** A TLS socket is the TCP socket of 10.3.1 with a session.
   Decrypted bytes go into the socket's input buffer, so `read_line`,
   `recv_bytes`, the 1 MiB limits, the locks and the timeouts are the TCP ones.
@@ -139,7 +133,7 @@ reads no `openssl.cnf`, so both builds behave the same.
 - **Close.** `TCP.close` and a timeout send `close_notify` with one
   `uv_try_write` when the handshake finished and no write is pending, then close
   as TCP does. At the end of the run the same single write goes to each finished
-  TLS socket (§10.2.2), and `HttpWire.Client` connections get it too (10.7.1).
+  TLS socket (§10.2.2), and so does the connection of an HTTP call (10.7.1).
 - **Messages.** Only the `Result` error kind is fixed. A verify failure's detail
   reads `certificate verify failed: <X.509 text>` (the tests match it); other
   details are OpenSSL's text.

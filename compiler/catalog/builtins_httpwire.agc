@@ -13,41 +13,6 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HttpWire.awaited?",
-    parameters: [
-      Model.Named(
-        name: "reply",
-        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
-      ),
-    ],
-    result: Types.Type.Bool,
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.awaited?",
-    effects: [],
-    description: (
-      "Internal to std/http: false once a receiver that parked on reply left without a value; binds nothing."
-    ),
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "HttpWire.watch",
-    parameters: [
-      Model.Named(
-        name: "reply",
-        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
-      ),
-    ],
-    result: Types.Type.Bool,
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.watch",
-    effects: ["concurrency"],
-    description: (
-      "Internal to std/http: awaited?, and until the first value is sent to reply, a cancel of its parked receiver " +
-      "cancels the calling task."
-    ),
-    alternatives: [],
-  ),
-  Model.Builtin(
     name: "HttpWire.chunk",
     parameters: [
       Model.Named(name: "state", type: Types.Type.Struct("HttpWire.Chunk", [])),
@@ -118,21 +83,6 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HttpWire.connect_tls",
-    parameters: [
-      Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client")),
-      Model.Named(name: "host", type: Types.Type.String),
-      Model.Named(name: "port", type: Types.Type.Int),
-      Model.Named(name: "timeout_ms", type: Types.Type.Int),
-    ],
-    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.connect_tls",
-    effects: ["network"],
-    description: "Internal to std/http: a TLS connection with the system trust, on the client's shared context.",
-    alternatives: [],
-  ),
-  Model.Builtin(
     name: "HttpWire.connect_context",
     parameters: [
       Model.Named(name: "host", type: Types.Type.String),
@@ -145,31 +95,6 @@ ROWS: List[Model.Builtin] = [
     implementation: "HttpWire.connect_context",
     effects: ["network"],
     description: "Internal to std/http: TLS.connect, on a client TLS.Context.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "HttpWire.drop_tls",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
-    result: Types.Type.Void,
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.drop_tls",
-    effects: ["network"],
-    description: "Internal to std/http: give back the client's TLS context; open connections keep theirs.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "HttpWire.upgrade_tls",
-    parameters: [
-      Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client")),
-      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
-      Model.Named(name: "host", type: Types.Type.String),
-      Model.Named(name: "timeout_ms", type: Types.Type.Int),
-    ],
-    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.upgrade_tls",
-    effects: ["network"],
-    description: "Internal to std/http: TLS.upgrade on the client's shared system-trust context.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -253,16 +178,6 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HttpWire.jobs",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
-    result: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", [])),
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.jobs",
-    effects: [],
-    description: "Internal to std/http: the jobs channel of a client's owner task.",
-    alternatives: [],
-  ),
-  Model.Builtin(
     name: "HttpWire.local_port",
     parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
     result: Types.Type.Int,
@@ -270,16 +185,6 @@ ROWS: List[Model.Builtin] = [
     implementation: "HttpWire.local_port",
     effects: ["network"],
     description: "Internal to std/http: the server's listening port.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "HttpWire.options",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
-    result: Types.Type.Struct("HttpWire.ClientOptions", []),
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.options",
-    effects: [],
-    description: "Internal to std/http: the options a client was made with.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -331,23 +236,6 @@ ROWS: List[Model.Builtin] = [
     effects: ["network"],
     description: (
       "Internal to std/http: make a server's task group on a listener and run block, its accept loop, in it."
-    ),
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "HttpWire.service",
-    parameters: [
-      Model.Named(name: "jobs", type: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", []))),
-      Model.Named(name: "options", type: Types.Type.Struct("HttpWire.ClientOptions", [])),
-      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Client")], Types.Type.Void)),
-    ],
-    result: Types.Type.Opaque("HttpWire.Client"),
-    rule: Model.Rule.Plain,
-    implementation: "HttpWire.service",
-    effects: ["concurrency"],
-    description: (
-      "Internal to std/http: run block(client), a client's owner task, outside every caller's task tree, as the " +
-      "owner of jobs; the client keeps jobs and options."
     ),
     alternatives: [],
   ),

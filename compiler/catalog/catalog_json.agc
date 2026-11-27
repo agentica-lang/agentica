@@ -26,7 +26,7 @@ struct TypeRow
   variants: List[Model.Variant]
 end
 
-## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`), a prelude-only
+## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.accept`), a prelude-only
 ## helper or a builtin written as an operator (List.concat is `+`) is not a public name, and neither is one that the
 ## catalog lacks.
 def public(name: String) -> Result[Model.Builtin]

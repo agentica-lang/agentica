@@ -794,13 +794,6 @@ agc_value agc_listener_value(agc_listener *l) {
   return v;
 }
 
-agc_value agc_http_client_value(agc_http_client *c) {
-  agc_value v;
-  v.tag = AGC_T_HTTP_CLIENT;
-  v.as.p = c;
-  return v;
-}
-
 #ifndef AGC_NO_GC
 static void finalize_tls_context(void *object, void *data) {
   (void)data;
@@ -1094,11 +1087,6 @@ agc_socket *agc_as_socket(agc_vm *vm, agc_value v) {
 
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LISTENER) agc_wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_HTTP_CLIENT) agc_wrong_tag(vm);
   return v.as.p;
 }
 

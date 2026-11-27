@@ -75,8 +75,7 @@ static uint64_t remaining(uint64_t deadline) {
   return deadline > now ? deadline - now : 0;
 }
 
-/* Checks that T may wait on a timer and counts it as armed. A timer is counted as armed before it is counted as weak
-   (agc_timers_strong reads them in the other order). */
+/* Checks that T may wait on a timer and counts it as armed. */
 static void claim(agc_vm *vm, agc_task *t) {
   if (t->timer.heap) agc_fail(vm, "RUNTIME-INTERNAL", "a task armed two timers", 0);
   /* A job carries its own deadline, and `resume` takes a job's result before it looks at the timer. */
@@ -84,11 +83,9 @@ static void claim(agc_vm *vm, agc_task *t) {
   t->timer.timed = true;
   t->timer.home = &vm->timers;
   atomic_fetch_add_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
-  if (t->weak_timers) atomic_fetch_add_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
 }
 
-static void unclaim(agc_vm *vm, const agc_task *t) {
-  if (t->weak_timers) atomic_fetch_sub_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
+static void unclaim(agc_vm *vm) {
   atomic_fetch_sub_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
 }
 
@@ -129,7 +126,7 @@ static void start_pending(agc_vm *vm, uint64_t *now) {
   t->timer.pending = false;
   if (atomic_load_explicit(&t->state, memory_order_acquire) != AGC_TASK_PARKED) {
     t->timer.heap = NULL;
-    unclaim(vm, t);
+    unclaim(vm);
     return;
   }
   insert(vm, h, t, agc_deadline_ms(wait_start(t->timer.deadline, now), t->timer.deadline));
@@ -150,7 +147,7 @@ static void remove_entry(agc_vm *vm, agc_task *t) {
   if (t->timer.pending) {
     t->timer.pending = false;
     atomic_store_explicit(&h->pending, NULL, memory_order_relaxed);
-    unclaim(vm, t);
+    unclaim(vm);
     return;
   }
   size_t index = t->timer.index;
@@ -162,7 +159,7 @@ static void remove_entry(agc_vm *vm, agc_task *t) {
     sift_down(h, last->timer.index);
   }
   publish(h);
-  unclaim(vm, t);
+  unclaim(vm);
 }
 
 /* By the thread that runs or ends T. A task that armed no timer is left alone. */
@@ -175,16 +172,10 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
   t->timer.home = NULL;
 }
 
-/* True when some armed timer is not a weak one (`weak_timers`, the tasks of an HTTP client's tree): the stall checks
-   wait for those only. A timer is counted as armed before it is counted as weak and stops being weak before it stops
-   being armed, and the weak count is read first, so a change in between can only make this true, which delays a stall
-   to the next check. The relaxed loads are enough only because of the two callers: stalled() runs once every run queue
-   is quiet, and timers are armed only by running tasks, so it sees no change; idle_wait uses the answer only to pick
-   alive_required for one wait, where a stale answer costs one more turn of the loop. */
-bool agc_timers_strong(const agc_vm *vm) {
-  uint64_t weak = atomic_load_explicit(&vm->rt->timers_weak, memory_order_relaxed);
-  return atomic_load_explicit(&vm->rt->timers_armed, memory_order_relaxed) > weak;
-}
+/* True when some task timer is armed. The relaxed load is enough only because of the two callers: stalled() runs once
+   every run queue is quiet, and timers are armed only by running tasks, so it sees no change; idle_wait does not call
+   it. */
+bool agc_timers_armed(const agc_vm *vm) { return atomic_load_explicit(&vm->rt->timers_armed, memory_order_relaxed) > 0; }
 
 /* The task has marked itself PARKING and registered its other waits: the deadline is the one more thing that can wake
    it. `retry` is that of agc_task_park. */

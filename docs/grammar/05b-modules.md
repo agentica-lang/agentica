@@ -174,8 +174,8 @@ re-export is public: it goes above `private`, and one after it is
 - A `std/` module may also re-export a builtin record, enum or handle type of a
   std-only module (`HttpWire`, `LogRegistry`, `RegexEngine`), which needs no
   import: `export LogRegistry.Event` in `std/logger` makes `Logger.Event` that
-  builtin record, and `export HttpWire.Client` in `std/http` makes
-  `HTTP.Client` that handle. Outside `std/` such a re-export is
+  builtin record, and `export HttpWire.Server` in `std/http` makes
+  `HTTP.Server` that handle. Outside `std/` such a re-export is
   `CHECK-UNKNOWN-NAME` at the module name; a name of the module that is no
   record, enum or handle type is
   `CHECK-IMPORT-NAME` at the name.

@@ -1,6 +1,5 @@
 /*
- * Runs with several scheduler threads (§16.9): a channel storm, a stall the I/O thread finds (also beside a service
- * timer), main failing beside spinners, TCP calls resumed on several schedulers, a ping-pong that runnext keeps on one
+ * Runs with several scheduler threads (§16.9): a channel storm, a stall the I/O thread finds, main failing beside spinners, TCP calls resumed on several schedulers, a ping-pong that runnext keeps on one
  * scheduler, a lone yielding task that stays on one and moves when its slot's task blocks. `make vm-tsan` runs it too.
  */
 #include "../core.h"
@@ -42,15 +41,13 @@ enum {
   B_DIE,
   B_WHERE,
   B_NET_WHERE,
-  B_SERVICE,
-  B_NO_PENDING,
   B_HOP,
   B_TICK,
   B_MAIN_HERE,
   B_BLOCK,
   B_COUNT
 };
-enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_NAP, F_PING, F_BLOCK, F_COUNT };
+enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_PING, F_BLOCK, F_COUNT };
 
 typedef struct {
   agc_function fns[F_COUNT];
@@ -132,22 +129,6 @@ static agc_value test_net_where(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_bool(bits(atomic_fetch_or(&net_seen, bit) | bit) >= 2);
 }
 
-/* Test.service(f): runs f(channel) under a service root, as HttpWire.service runs a client's owner task. */
-static agc_value test_service(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_value capacity = agc_int(1);
-  agc_value channel = agc_find_builtin((const uint8_t *)"Channel.new", 11, 1)->fn(vm, &capacity, span);
-  (void)agc_task_service(vm, args[0], channel, channel, span);
-  return agc_void();
-}
-
-/* Test.no_pending(_): Task.pending_count does not count service tasks. */
-static agc_value test_no_pending(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  const agc_builtin *count = agc_find_builtin((const uint8_t *)"Task.pending_count", 18, 0);
-  assert(agc_as_int(vm, count->fn(vm, NULL, span)) == 0);
-  return agc_void();
-}
-
 /* The scheduler of the last Test.hop (UINT32_MAX before the first) and the hops that ran on another one than the hop
    before. */
 static _Atomic uint32_t last_hop;
@@ -208,8 +189,6 @@ static const agc_builtin test_builtins[] = {
   {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Test.net_where", 1, test_net_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
-  {"Test.service", 1, test_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
-  {"Test.no_pending", 1, test_no_pending, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Test.hop", 1, test_hop, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Test.tick", 1, test_tick, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Test.main_here", 1, test_main_here, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
@@ -290,10 +269,6 @@ static void new_prog(prog *p) {
   /* seen(_): records its scheduler and yields until two schedulers have run such calls. */
   seen_loop(p, F_SEEN);
   emit(p, F_SEEN, AGC_OP_RETURN, 0, 0);
-
-  /* nap(_): sleeps far longer than the test's deadline. */
-  call_int(p, F_NAP, B_SLEEP, 100000000);
-  emit(p, F_NAP, AGC_OP_RETURN, 0, 0);
 
   /* spin(_): yields for ever, until the end of the run cancels it. */
   call_int(p, F_SPIN, B_SLEEP, 0);
@@ -650,22 +625,6 @@ static void test_stall(int64_t schedulers) {
   assert(failed_with(&out, "RUNTIME-INTERNAL"));
 }
 
-/* A service task's timer does not keep a stalled run waiting: main starts one that sleeps for longer than the test may
-   take, sees that Task.pending_count leaves it out, and waits on a job nothing can end. Both one and four schedulers
-   end the run as a stall at once. */
-static void test_stall_beside_a_service(int64_t schedulers) {
-  prog *p = agc_alloc(sizeof *p);
-  new_prog(p);
-  emit(p, F_MAIN, AGC_OP_CLOSURE, 10, F_NAP);
-  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_SERVICE);
-  call_int(p, F_MAIN, B_SLEEP, 5);
-  call_int(p, F_MAIN, B_NO_PENDING, 0);
-  call_int(p, F_MAIN, B_FOREVER, 0);
-  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
-  agc_outcome out = run(p, schedulers);
-  assert(failed_with(&out, "RUNTIME-INTERNAL"));
-}
-
 /* Main fails on whatever scheduler runs it while three tasks keep yielding: its failure is the outcome, and the run
    ends with every scheduler joined. */
 static void test_main_fails_beside_spinners(int64_t schedulers) {
@@ -691,8 +650,6 @@ int main(void) {
   test_storm(4);
   test_stall(1);
   test_stall(4);
-  test_stall_beside_a_service(1);
-  test_stall_beside_a_service(4);
   test_main_fails_beside_spinners(4);
   test_tasks_spread_over_schedulers();
   test_tcp_over_schedulers();

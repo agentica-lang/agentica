@@ -4,7 +4,7 @@
 ## every body is `Bytes`, as it came over the wire; `text` decodes one as UTF-8. Status codes such as 404 or 500 are
 ## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 ##
-## `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
+## `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions` and
 ## `HTTP.Server` are the builtin types `HttpWire.Request`, `HttpWire.Response`, and so on. The signatures below, the
 ## diagnostic, `help` and a printed value show the `HTTP.` names as written.
 
@@ -16,7 +16,6 @@ export HttpWire.Response
 export HttpWire.Header
 export HttpWire.ClientOptions
 export HttpWire.ServerOptions
-export HttpWire.Client
 export HttpWire.Server
 
 ## How far a download may go. `timeout_ms` bounds the whole call, from the connect to the rename, and

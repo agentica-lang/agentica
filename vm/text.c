@@ -34,7 +34,7 @@ typedef struct {
 /* The builtin records and enums that a std/ module re-exports, by their builtin name, with the name a program writes:
    a printed value shows the written name (HTTP.Response(...), Logger.Level.Info), while the builtin name stays the key
    of the bytecode and the lowering. The records and enums of REEXPORTED_TYPES (compiler/syntax/types.agc); its
-   handles print in agc_scalar_text (<HTTP.Client>). tests/test_frontend_catalog.py checks that they agree. Each name
+   handles print in agc_scalar_text (<HTTP.Server>). tests/test_frontend_catalog.py checks that they agree. Each name
    keeps its length, so a print compares lengths first and calls no strlen. */
 #define WRITTEN(builtin, written) {builtin, sizeof builtin - 1, written, sizeof written - 1}
 static const struct {
@@ -212,7 +212,6 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_PROCESS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Process>");
   if (agc_is(v, AGC_T_SOCKET)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TCP.Socket>");
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TCP.Listener>");
-  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Client>");
   if (agc_is(v, AGC_T_TLS_CONTEXT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TLS.Context>");
   if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Test.Case>");
   if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Server>");

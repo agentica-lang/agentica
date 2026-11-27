@@ -104,7 +104,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is
   `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`),
   imported as `HTTP`, which re-exports its records and handles
-  (`HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.Client`, ...); the
+  (`HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.Server`, ...); the
   server runs each connection as a task in the
   server's task group. See `references/vm-net.md`.
 - tests/test_vm_tcp.py, test_vm_tls.py and test_vm_http.py use independent Node

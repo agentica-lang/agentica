@@ -362,7 +362,7 @@ def safe_expected(expected: T.Type) -> T.Type
   T.Type.Unknown
 end
 
-# A type name before `&.` (`Point&.members`, `HTTP.Client&.get(x)`) is not an Optional: CHECK-SAFE-NAV-RECEIVER.
+# A type name before `&.` (`Point&.members`, `HTTP.Server&.wait(x)`) is not an Optional: CHECK-SAFE-NAV-RECEIVER.
 def not_a_type(cx: State.Cx, st: State.St, target: Ast.Expr, safe: Optional[Source.Span]) -> Result[Void]
   return ok() if safe.none?
 

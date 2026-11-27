@@ -2225,7 +2225,7 @@ static bool stalled(agc_vm *vm) {
   if (agc_inbox_run(loop->inbox) || loop->ready) return false;
   /* A direct compute call keeps no handle alive: the pool counts them, and drops the count only after the nudge. */
   if (loop->direct && agc_compute_direct_busy(loop->direct)) return false;
-  if (agc_timers_strong(vm)) return false;
+  if (agc_timers_armed(vm)) return false;
   agc_inbox_keep(loop->inbox, false);
   bool alive = uv_loop_alive(&loop->uv);
   agc_inbox_keep(loop->inbox, true);

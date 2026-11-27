@@ -668,7 +668,7 @@ def free_reexport(module: Module, public: Map[String, Declarations.Kind], decl: 
 end
 
 # The kind of the builtin type that `export Family.Name` re-exports, where Family is a std-only family: a record is a
-# struct, an enum an enum and an opaque type (HttpWire.Client) a resource. Only std/ may name the family
+# struct, an enum an enum and an opaque type (HttpWire.Server) a resource. Only std/ may name the family
 # (CHECK-UNKNOWN-NAME, as for a call of it), and only a type of it (CHECK-IMPORT-NAME).
 def builtin_reexport(module: Module, decl: Ast.ReexportDecl) -> Result[Declarations.Kind]
   name = "#{decl.alias}.#{decl.name}"

@@ -98,11 +98,11 @@ allows. `port.h` declares it (read it for the functions); it covers:
   `keep_detached` makes `discard` in `loop.c` leave a process alone when its
   detached result is dropped;
 - spawning, cancelling, joining and observing tasks, and groups:
-  `agc_task_group` is a parent node that never runs, and `agc_task_service` runs
-  a task that owns a handle under a root with no parent, so no caller's crash,
-  cancel or end reaches it, and `Task.pending_count` and `Test.test` leave it
-  out. Its tasks get an `end` hook and `hidden`, so no await observes them and
-  their unobserved crashes keep one entry per test (§10.2.1);
+  `agc_task_group` is a parent node that never runs, and the wrap of a monitor
+  runs under a root with no parent, so no caller's crash, cancel or end reaches
+  it, and `Task.pending_count` and `Test.test` leave it out. Its task gets an
+  `end` hook and `hidden`, so no await observes it and its unobserved crash
+  keeps one entry per test (§10.2.1);
 - charging, failing and writing (`agc_charge`, `agc_fail`, `agc_write`).
   `agc_write` returns false when the task must park and retry, and
   `agc_output_waiting` tells a builtin that its text already waits in the

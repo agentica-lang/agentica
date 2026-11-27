@@ -4,7 +4,6 @@
 ## that the module's docs import it as (STD_ONLY_IMPORTS of the catalog), then the member. Messages, `help`, `doc`,
 ## the queries and a printed value (vm/text.c) show the written name.
 REEXPORTED_TYPES: Map[String, String] = {
-  "HttpWire.Client": "HTTP.Client",
   "HttpWire.ClientOptions": "HTTP.ClientOptions",
   "HttpWire.Header": "HTTP.Header",
   "HttpWire.Request": "HTTP.Request",
@@ -459,10 +458,10 @@ end
 
 ## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
 ## of a std/ signature prints as `HTTP.ClientOptions()`. Only a whole name outside a string literal is a type: the
-## default `"HttpWire.Client"` stays as written.
+## default `"HttpWire.Server"` stays as written.
 def written_types_in(text: String) -> String = replaced_names(text, REEXPORTED_TYPES, true)
 
-## The text with each whole name that `names` has (not the start of a longer name, nor the end of `My.HttpWire.Client`)
+## The text with each whole name that `names` has (not the start of a longer name, nor the end of `My.HttpWire.Server`)
 ## written as `names` maps it. A string literal stays as written when `keep_strings` says so.
 def replaced_names(text: String, names: Map[String, String], keep_strings: Bool) -> String
   pieces: List[String] = []
@@ -639,8 +638,8 @@ def reexported_name(name: String, written: Map[String, String]) -> String
   written.get(name, REEXPORTED_TYPES[name])
 end
 
-# The name of `names` written as a whole name at `at` of `text` (not the start of `HttpWire.ClientOptions` for
-# HttpWire.Client, nor the end of `My.HttpWire.Client`), or "".
+# The name of `names` written as a whole name at `at` of `text` (not the start of a longer name, nor the end of
+# `My.HttpWire.Server`), or "".
 def name_at(text: String, at: Int, names: Map[String, String]) -> String
   return "" if at > 0 and (NAME_CHARACTERS.include?(text.at(at - 1)) or text.at(at - 1) == ".")
 

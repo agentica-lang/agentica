@@ -439,9 +439,7 @@ one exit path are as in §16.1 to §16.6. What differs:
   scheduler runs the loop once, bounded by the nearest deadline
   (`agc_io_run_for`); at N > 1 it waits on the run queue until its nearest
   deadline (`agc_runq_wait_until`). An armed timer counts as work for the stall
-  check (`vm->timers.next_due`, `rt->timers_armed`), except a service task's
-  timer (the idle wait of an HTTP client worker, `agc_task_service`), which is
-  also counted in `rt->timers_weak` and cannot be the work that ends a stall.
+  check (`vm->timers.next_due`, `rt->timers_armed`).
   Deadlines of real I/O jobs stay on a libuv timer, started by the START request
   that the job pays anyway.
 - **A post after the loop closed is loud.** After `agc_io_close`, a post from

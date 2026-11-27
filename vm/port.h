@@ -449,14 +449,13 @@ typedef struct {
      malloc'd ids, of which `started` are running. `over` is set by the first agc_run_over, or at one scheduler by
      agc_launch_settle: the run is over and rt->outcome holds its end. `entry_done` opens the run queue to the other
      schedulers once the entry has written the Globals table. `timers_armed` counts the armed task timers of every
-     heap, for the stall check, and `timers_weak` how many of them belong to tasks with `weak_timers`, which the stall
-     check does not wait for (agc_task_service). */
+     heap, for the stall check. */
   int64_t schedulers;
   struct agc_vm **scheds;
   void *threads;
   _Atomic uint32_t started;
   _Atomic bool over, entry_done;
-  _Atomic uint64_t timers_armed, timers_weak;
+  _Atomic uint64_t timers_armed;
   uint64_t over_task;
 #ifdef __linux__
   locale_t messages_locale;
@@ -572,7 +571,7 @@ struct agc_task {
   /* Atomic: a canceller on another scheduler sets it while the task runs, and the scheduler reads it at the end of the
      turn, before it publishes PARKED (agc_vm_run). */
   _Atomic bool cancelled;
-  /* `service`: the task is under a service root (agc_task_service), and so are all its descendants. `uncounted`: the
+  /* `service`: the task is under a service root (a monitor's wrap), and so are all its descendants. `uncounted`: the
      task left Task.pending_count (BddScenario.uncount), so its end is not counted again; its descendants stay in. */
   bool crashed, observed, left_children, group, hidden, spawned, service, uncounted;
   uint32_t spawn_span;
@@ -621,9 +620,6 @@ struct agc_task {
   agc_nested_stack **nested;
   /* The monitors of this task (Task.monitor), newest first, fired and cleared when it settles. */
   agc_monitor *monitors;
-  /* The timers of this task do not keep a stalled run waiting: a task of an HTTP client's tree (agc_task_service) and
-     its descendants. The task of a monitor's wrap is a service task without it, since a program may wait for it. */
-  bool weak_timers;
   /* The Native.Mutex this task waits for (in its FIFO, or woken to take it), and the ones it holds, newest first
      (vm/mutex.c); under rt->sync. */
   struct agc_mutex *mutex_wait, *mutexes;
@@ -895,11 +891,6 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
    takes HANDLE as its context takes the hold over. Both under rt->sync. */
 void agc_handle_hold(agc_vm *vm, agc_resource *handle);
 void agc_handle_let_go(agc_vm *vm, agc_resource *handle);
-bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
-/* HttpWire.watch: false when a receiver gave up on C already (agc_channel_abandoned). Else, while no value has been
-   sent to C, T becomes the watcher of C, cancelled when a receiver parked on C is cancelled before the first value is
-   sent; that value ends the watch. A receiver whose wait times out cancels nothing. */
-bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t);
 /* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */
 #define AGC_CHANNEL_BAD_TIMEOUT "channel timeout must be nonnegative"
 /* One receive from c, as Channel.recv does, for a stepper (Lazy over a channel). VALUE puts the
@@ -985,7 +976,6 @@ bool agc_task_owns(agc_vm *vm, agc_value handle);
 agc_value *agc_handles_in(agc_vm *vm, agc_value v, size_t *count);
 void agc_task_close_done(agc_vm *vm, agc_task *t);
 agc_task *agc_task_group(agc_vm *vm);
-agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
 bool agc_task_join(agc_vm *vm, agc_task *target);

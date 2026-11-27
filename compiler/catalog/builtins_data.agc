@@ -45,9 +45,7 @@ RECORDS: List[Model.Record] = [
     name: "HttpWire.Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
-  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY, AGC_HTTP_OPTION_TLS and
-  # AGC_HTTP_OPTION_CONNECT): keep them in step. The timeouts added later come last, so a positional caller keeps its
-  # meaning.
+  # The timeouts added later come last, so a positional caller keeps its meaning.
   Model.Record(
     name: "HttpWire.ClientOptions",
     fields: [
@@ -125,25 +123,6 @@ RECORDS: List[Model.Record] = [
       Model.Named(name: "buffered", type: Types.Type.Int),
       Model.Named(name: "status", type: Types.Type.Int),
       Model.Named(name: "reason", type: Types.Type.String),
-    ],
-  ),
-  Model.Record(
-    name: "HttpWire.Job",
-    fields: [
-      Model.Named(name: "origin", type: Types.Type.String),
-      Model.Named(name: "scheme", type: Types.Type.String),
-      Model.Named(name: "host", type: Types.Type.String),
-      Model.Named(name: "port", type: Types.Type.Int),
-      Model.Named(name: "method", type: Types.Type.String),
-      Model.Named(name: "head", type: Types.Type.String),
-      Model.Named(name: "body", type: Types.Type.Bytes),
-      Model.Named(name: "deadline", type: Types.Type.Int),
-      Model.Named(
-        name: "reply",
-        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
-      ),
-      Model.Named(name: "worker", type: Types.Type.Int),
-      Model.Named(name: "kept", type: Types.Type.Bool),
     ],
   ),
   Model.Record(
@@ -376,8 +355,8 @@ HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "
 ## The builtin types with no structure: handles, Test.Case, TLS.Context, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current), Native.Mutex (the lock of a native library) and Ref (Ref.new).
 OPAQUE_TYPES: List[String] = [
-  "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "Test.Case",
-  "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex", "Bytes.Builder", "Ref",
+  "TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process", "Test.Case", "TLS.Context", "C.Pointer",
+  "TaskRef", "Native.Mutex", "Bytes.Builder", "Ref",
 ]
 
 TYPE_DESCRIPTIONS: Map[String, String] = {

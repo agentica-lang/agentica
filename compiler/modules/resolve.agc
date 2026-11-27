@@ -314,7 +314,7 @@ def first_function(member: String) -> String
 end
 
 # A builtin record, enum or opaque type of a std-only module, such as HttpWire.Head, LogRegistry.Level or
-# HttpWire.Client: a type that only std/ can name, so it reserves no name in user programs (the std/ module may
+# HttpWire.Server: a type that only std/ can name, so it reserves no name in user programs (the std/ module may
 # re-export it).
 def std_record?(alias: String, member: String, want: Want) -> Bool
   name = "#{alias}.#{member}"
@@ -355,7 +355,7 @@ def function_wanted?(want: Want) -> Bool
 end
 
 # Family.member of a std-only family outside std/: CHECK-UNKNOWN-NAME named for what the position wants, with the std
-# module to import, and the written name when std/ re-exports the member (HttpWire.Client is HTTP.Client).
+# module to import, and the written name when std/ re-exports the member (HttpWire.Server is HTTP.Server).
 def std_only_failure(cx: Context, alias: String, member: String, want: Want, span: Source.Span) -> String
   name = "#{alias}.#{member}"
   help = Modules.std_only_help(alias)

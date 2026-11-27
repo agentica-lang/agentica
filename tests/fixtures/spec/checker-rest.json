@@ -2953,22 +2953,6 @@
         ""
       ],
       "code": "CHECK-NOT-ENCODABLE"
-    },
-    {
-      "program": [
-        "import HTTP from \"std/http\"",
-        "",
-        "def f(c: HTTP.Client) -> Void",
-        "  JSON.encode(c)",
-        "end",
-        "",
-        "def main() -> Void",
-        "",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-NOT-ENCODABLE"
     }
   ],
   "task types reject invalid programs at their boundaries": [
@@ -4154,12 +4138,10 @@
     },
     {
       "program": [
-        "import HTTP from \"std/http\"",
-        "",
-        "def pool(c: HTTP.Client) -> Void",
+        "def pool(c: TLS.Context) -> Void",
         "end",
         "",
-        "def hand(c: HTTP.Client) -> Void",
+        "def hand(c: TLS.Context) -> Void",
         "  Task.spawn_owning(&pool, c)",
         "end",
         "",
@@ -4168,7 +4150,7 @@
         ""
       ],
       "code": "CHECK-NOT-A-HANDLE",
-      "start": [7, 28],
+      "start": [5, 28],
       "covers": "c"
     }
   ],
@@ -5392,7 +5374,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  c = HTTP.client()",
+        "  c = HTTP.get_response(\"x\")",
         "end",
         "",
         ""

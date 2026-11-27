@@ -482,8 +482,8 @@ bool agc_timers_run(agc_vm *vm);
 void agc_timers_settle(agc_vm *vm);
 /* The earliest deadline of this scheduler's heap, or UINT64_MAX. */
 uint64_t agc_timers_next_due(const agc_vm *vm);
-/* True when an armed timer of any heap is not a service task's (agc_task_service). */
-bool agc_timers_strong(const agc_vm *vm);
+/* True when a task timer of any heap is armed. */
+bool agc_timers_armed(const agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_watch(agc_vm *vm);

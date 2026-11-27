@@ -1,10 +1,10 @@
 # HTTP (`std/http`)
 
 The HTTP types are `HTTP.Request`, `HTTP.Response`, `HTTP.Header`,
-`HTTP.ClientOptions`, `HTTP.ServerOptions` and the handles `HTTP.Client` and
-`HTTP.Server`, builtin types that `std/http` re-exports (also
+`HTTP.ClientOptions`, `HTTP.ServerOptions` and the handle `HTTP.Server`,
+builtin types that `std/http` re-exports (also
 `import {Request, Response} from "std/http"`). A value prints with these
-names: `HTTP.Response(...)`, `<HTTP.Client>`. `TLS.Context` and `--deny-net`:
+names: `HTTP.Response(...)`, `<HTTP.Server>`. `TLS.Context` and `--deny-net`:
 `network.md`.
 
 ## Client

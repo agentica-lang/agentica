@@ -80,7 +80,7 @@ OPTIONS = [
     ["--json", "help", "String.to_i"],
     ["--max-steps", "10", "help", "String.to_i", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
     ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
-    ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
+    ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.accept"], ["help", "__fail_arg"], ["help", "Native.string_at"],
     ["help", "List.concat"], ["--json", "help", "List.concat"], ["help", "concat"], ["help", "iso8601"],
     ["help", "format_iso8601"],
     ["help", "File.Info"], ["help", "JSON.Field"], ["help", "File.Handle"], ["help", "HttpWire.Request"],

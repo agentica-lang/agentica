@@ -62,12 +62,10 @@ VM_BUILTINS = Set.new([
   "Process.wait", "Process.close", "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.remote_address",
   "TCP.close_listener", "TCP.send", "TLS.alpn", "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line",
   "TCP.close", "TLS.connect", "TLS.listen", "TLS.client_context", "TLS.server_context", "TLS.upgrade",
-  "HttpWire.service", "HttpWire.awaited?", "HttpWire.watch", "HttpWire.jobs", "HttpWire.options",
-  "HttpWire.clean_eof?", "HttpWire.connect_tls", "HttpWire.connect_context", "HttpWire.drop_tls",
-  "HttpWire.upgrade_tls", "DNS.lookup", "HttpWire.upgrade_context", "HttpWire.chunked", "HttpWire.chunk.bytes",
-  "HttpWire.chunk_read", "HttpWire.idle?", "HttpWire.read_head.bytes", "HttpWire.read_response",
-  "HttpWire.encode_request", "HttpWire.encode_response", "HttpWire.error_answer", "HttpWire.close_write",
-  "HttpWire.server", "HttpWire.accept", "HttpWire.spawn", "HttpWire.stop", "HttpWire.stopping",
+  "HttpWire.clean_eof?", "HttpWire.connect_context", "DNS.lookup", "HttpWire.upgrade_context", "HttpWire.chunked",
+  "HttpWire.chunk.bytes", "HttpWire.chunk_read", "HttpWire.idle?", "HttpWire.read_head.bytes",
+  "HttpWire.read_response", "HttpWire.encode_request", "HttpWire.encode_response", "HttpWire.error_answer",
+  "HttpWire.close_write", "HttpWire.server", "HttpWire.accept", "HttpWire.spawn", "HttpWire.stop", "HttpWire.stopping",
   "HttpWire.close_server", "HttpWire.wait", "HttpWire.local_port", "LogRegistry.level", "LogRegistry.floor",
   "LogRegistry.set_level", "LogRegistry.lowest", "LogRegistry.install_default", "LogRegistry.attach",
   "LogRegistry.detach", "LogRegistry.names", "LogRegistry.handlers", "LogRegistry.task_id", "RegexEngine.search",
@@ -163,9 +161,8 @@ NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_str
 BUILTIN_STRUCTS = [
   "File.Info", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
   "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
-  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
-  "TaskDown", "Process.Options", "Error", "Time.Date", "Time.TimeOfDay", "Time.NaiveDateTime", "Time.DateTime",
-  "Terminal.Size",
+  "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions", "TaskDown",
+  "Process.Options", "Error", "Time.Date", "Time.TimeOfDay", "Time.NaiveDateTime", "Time.DateTime", "Terminal.Size",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
@@ -173,7 +170,6 @@ STRUCT_NEEDS: Map[String, List[String]] = {
   "HttpWire.Response": ["HttpWire.Header"],
   "HttpWire.Request": ["HttpWire.Header"],
   "HttpWire.Head": ["HttpWire.Header"],
-  "HttpWire.Job": ["HttpWire.Response", "HttpWire.Header"],
   "HttpWire.ResponseHead": ["HttpWire.Header"],
   "Codec.Info": ["StructMember"],
 }

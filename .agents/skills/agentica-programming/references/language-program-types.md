@@ -136,7 +136,7 @@ and types. Builtin methods and `to_s`: `builtins.md`.
   `&name`, the last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process`, `Lazy[T]` (`lazy.md`),
   `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `TCP.Socket`,
-  `TCP.Listener`, `HTTP.Client`, `HTTP.Server`, `Codec[T]` (`json.md`).
+  `TCP.Listener`, `HTTP.Server`, `Codec[T]` (`json.md`).
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
 - `Ref`: a token from `Ref.new()`, unique in the run: data with `==` and

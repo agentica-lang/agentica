@@ -51,14 +51,13 @@ each task's values but not the interleaving: do not depend on cross-task order.
 
 `Task.sleep` takes nonnegative milliseconds (0 yields); a negative value is
 `RUNTIME-INVALID-DURATION` at the argument. `pending_count` counts tasks of this
-run that have not ended, not `main` and not the tasks `std/http` starts for an
-`HTTP.Client`.
+run that have not ended, not `main` and not the task of a `Task.monitor` message.
 
 ## Handles and ownership
 
 A handle (file, socket, listener, process, `std/http` server) belongs to the
 task that opened it, and the VM closes it when that task returns, crashes or is
-cancelled (never an `HTTP.Client`; a channel has an owner only through
+cancelled (a channel has an owner only through
 `Task.spawn_owning`, below). Nothing passes to the parent: a handle opened in a
 helper and returned through `Task.await` is closed when the helper ends, so
 open a long-lived handle in the task that keeps it, such as `main`. Ownership

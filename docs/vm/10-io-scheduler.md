@@ -125,7 +125,7 @@ section says how the scheduler and the loop keep them.
   socket is disowned. A process closes with `shut`, which only signals (§10.4
   Close), never with the release that kills every child. A file closes by an
   `OP_CLOSE` job, and a server by `close_server`. The process guard, job
-  resources, stream locks and `HttpWire.Client` have no owner.
+  resources and stream locks have no owner.
   - A file's close is an `OP_CLOSE` job with no task. It waits while another job
     holds the file, also a detached one (`agc_io_finish` and `end_detached` pass
     the lock on first). A file that is closing gives every caller the closed
@@ -258,7 +258,7 @@ section says how the scheduler and the loop keep them.
 - **End of run: one exit path.** However the run ends, `agc_launch_settle` in
   `vm/launch.c` takes the steps of §14.4 and nothing else. What the loop adds:
   - Before the files, each TLS session that finished its handshake (TCP sockets,
-    10.3; `HttpWire.Client` connections, 10.7.1) gets one non-blocking
+    10.3; the connection of an HTTP call, 10.7.1) gets one non-blocking
     `close_notify`. Each TCP socket and listener still open is then closed the
     way a close from a task closes it, so the peer reads the end of input:
     Windows resets a socket left to the exit while a read is pending.

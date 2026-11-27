@@ -40,15 +40,10 @@ struct agc_channel {
   size_t slots, head, count, capacity;
   size_t reserved_values, reserved_slots;
   uint64_t sent;
-  /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
-     it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
-  bool closed, abandoned, read_only;
+  bool closed, read_only;
   /* The Error of Channel.close(channel, error), void for a plain close: what senders and, once the values are taken,
      receivers get in place of the closed error. Set once, with `closed`. */
   agc_value reason;
-  /* The task that HttpWire.watch bound to the channel before its first value (agc_channel_watch): a cancel of a
-     parked receiver cancels it, and the first value sent clears it. */
-  agc_task *watcher;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
   /* The channel's one address, made by its first channel.address; NULL before. */
@@ -188,7 +183,6 @@ static bool deliver(agc_vm *vm, agc_channel *c, agc_value v, bool has_slot) {
     push_back(vm, c, v, seq);
   }
   c->sent++;
-  c->watcher = NULL;
   return true;
 }
 
@@ -369,10 +363,7 @@ static status receive_locked(agc_vm *vm, agc_channel *c, int64_t timeout, agc_va
     stop_waiting(t);
     return CLOSED;
   }
-  status s = wait(vm, c, t, timeout, false);
-  /* Woken by its deadline, the receiver did not park again: it timed out. */
-  if (parked && s == TIMED_OUT) c->abandoned = true;
-  return s;
+  return wait(vm, c, t, timeout, false);
 }
 
 /* The receive of Channel.recv and of a Lazy over a channel (port.h). A close with a reason is AGC_RECV_FAILED, with
@@ -502,24 +493,6 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
   return !c->state->owner || c->state->owner == vm->task ? c->state : NULL;
 }
 
-/* Whether a receiver that had parked on c left without a value (a recv timeout or a cancel). A receiver that has
-   not parked yet does not count, so a sender cannot mistake a caller that is still on its way for one that left. */
-bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
-  lock(vm, c);
-  bool abandoned = c->abandoned;
-  unlock(vm, c);
-  return abandoned;
-}
-
-/* Makes t the watcher of c while no value has been sent to it, or false when a receiver gave up already. */
-bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t) {
-  lock(vm, c);
-  bool open = !c->abandoned;
-  if (open && c->sent == 0) c->watcher = t;
-  unlock(vm, c);
-  return open;
-}
-
 /* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver, else into the
    ring, past the capacity when the channel is full, so an open channel never loses a notice. Senders still wait until
    the count is below the capacity, so the ring holds at most one value more than the capacity per monitor of the
@@ -638,12 +611,6 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
   const agc_channel_wait w = t->channel;
   leave_queue(vm, c, t);
   stop_waiting(t);
-  agc_task *watcher = NULL;
-  if (!w.sending) {
-    c->abandoned = true;
-    watcher = c->watcher;
-    c->watcher = NULL;
-  }
   if (w.reserved && w.sending) {
     if (!c->closed && !reserve_slot(vm, c)) c->reserved_slots--;
   } else if (w.reserved && !reserve_value(vm, c, w.value, w.seq)) {
@@ -651,7 +618,6 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
     c->reserved_values--;
   }
   unlock(vm, c);
-  if (watcher) agc_task_cancel(vm, watcher);
 }
 
 const agc_builtin agc_channel_builtins[] = {

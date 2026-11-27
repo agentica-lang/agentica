@@ -1269,8 +1269,6 @@ PURE_SYSTEM_ROWS = {
     "HttpWire.encode_request": "text from its arguments",
     "HttpWire.encode_response": "text from its arguments",
     "HttpWire.error_answer": "a value from its arguments",
-    "HttpWire.jobs": "a field the client was made with",
-    "HttpWire.options": "a field the client was made with",
     "System.Profile.measure": "runs its block, which is walked; the profile is a trace",
     "System.signal_number": "a constant of the OS",
     "Task.id": "a field of the task value",

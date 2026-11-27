@@ -77,13 +77,13 @@ def test_std_http_lists_its_builtin_records_and_handles(tmp_path):
     # std/http re-exports the HttpWire records and the two handles: help lists them, a handle as a resource, and the
     # signatures write them as HTTP.X, a default value too.
     names = [item["name"] for item in json.loads(help_std(["std/http", "--json"], cwd=tmp_path).stdout)["items"]]
-    assert {"Request", "Response", "Header", "ClientOptions", "ServerOptions", "Client", "Server"} <= set(names)
+    assert {"Request", "Response", "Header", "ClientOptions", "ServerOptions", "Server"} <= set(names)
     response = json.loads(help_std(["std/http.Response"], "--json", cwd=tmp_path).stdout)
     assert response["kind"] == "struct"
     assert [(field["name"], field["type"]) for field in response["fields"]] == [
         ("status", "Int"), ("headers", "List[HTTP.Header]"), ("body", "Bytes")]
-    client = json.loads(help_std(["std/http.Client"], "--json", cwd=tmp_path).stdout)
-    assert client["kind"] == "resource"
+    server = json.loads(help_std(["std/http.Server"], "--json", cwd=tmp_path).stdout)
+    assert server["kind"] == "resource"
     made = json.loads(help_std(["std/http.get_response"], "--json", cwd=tmp_path).stdout)
     assert made["signature"] == (
         "get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]")

@@ -1,7 +1,7 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
  * peer: a close behind a read's START, deadlines before and after the bytes, cancelled accepts and reads, a cancelled
- * TLS connect, HttpWire.connect_tls on bad options, and the direct send and receive (a close beside each included).
+ * TLS connect, and the direct send and receive (a close beside each included).
  * Under TSan too.
  */
 #include "../core.h"
@@ -917,28 +917,6 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_test_settle_loop(&vm);
 }
 
-/* An HttpWire.Client as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy
-   context. */
-static agc_value new_client(bool dropped) {
-  agc_http_client *c = agc_alloc(sizeof *c);
-  memset(c, 0, sizeof *c);
-  c->tls_dropped = dropped;
-  return agc_http_client_value(c);
-}
-
-/* HttpWire.upgrade_tls on a client that gave its context back (HttpWire.drop_tls) is an error before anything is
-   touched: the plain socket is still the program's, and a count taken for the call would be lost. */
-static void test_upgrade_tls_on_a_dropped_client(void) {
-  int fd = open_pair();
-  agc_value client = new_client(true);
-  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, agc_test_str("localhost"), agc_int(1000)));
-  assert(error_is(out, "network: the client is closed"));
-  assert(send(fd, "still\n", 6, 0) == 6);
-  agc_value line = ok_of(step(call("TCP.read_line", 2, socket_v, agc_int(2000), agc_void(), agc_void())));
-  assert(agc_as_string(&vm, line)->bytes == 5);
-  close_pair(fd);
-}
-
 /* HttpWire.upgrade_context with a server-role context fails at its context argument (span + 2: argument i is at span
    + 1 + i), not at `host`, and before anything is touched. The harness passes span 0, so the builtin is called here
    with a span of its own. */
@@ -995,64 +973,6 @@ static void test_context_with_a_path_that_is_not_a_string(void) {
     assert(mallinfo2().uordblks < before + (size_t)16 * 1000);
 #endif
   }
-}
-
-/* Hostile bytecode: HttpWire.service takes options of AGC_HTTP_OPTIONS_FIELDS fields: the timeouts are Ints and
-   connect_to at the end is a String. Fewer fields, or a field of another type, fail with RUNTIME-INTERNAL. */
-static void test_service_checks_the_shape_of_its_options(void) {
-  const char *name = "HttpWire.service";
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 3);
-  assert(b);
-  for (uint32_t n = AGC_HTTP_OPTIONS_FIELDS - 3; n <= AGC_HTTP_OPTIONS_FIELDS; n++) {
-    for (uint32_t bad = AGC_HTTP_OPTION_CONNECT; bad < AGC_HTTP_OPTIONS_FIELDS; bad++) {
-      agc_struct *o = agc_new_struct(0, n);
-      for (uint32_t k = 0; k < n; k++) o->fields[k] = agc_int(1);
-      o->fields[AGC_HTTP_OPTION_PROXY] = agc_test_str("");
-      o->fields[AGC_HTTP_OPTION_TLS] = agc_void();
-      if (n == AGC_HTTP_OPTIONS_FIELDS) {
-        o->fields[AGC_HTTP_OPTION_CONNECT_TO] = agc_test_str("");
-        o->fields[bad] = bad == AGC_HTTP_OPTION_CONNECT_TO ? agc_int(1) : agc_test_str("1");
-      } else if (bad != AGC_HTTP_OPTION_CONNECT) {
-        continue;
-      }
-      agc_value args[3] = {agc_void(), agc_struct_value(o), agc_void()};
-      if (AGC_CATCH(vm.fail) == 0) {
-        (void)b->fn(&vm, args, 0);
-        assert(!"the call did not fail");
-      }
-      assert(strcmp(vm.outcome->code, "RUNTIME-INTERNAL") == 0);
-    }
-  }
-}
-
-/* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
-   starts the handshake on the socket it was given: the peer reads a TLS record (0x16, the ClientHello) and closes, the
-   call fails, and the client keeps the context until HttpWire.drop_tls gives it back. The call's deadline covers the
-   build, which reads the keychain on macOS and can take seconds on a slow runner, so nothing here is timed: the
-   deadline is far off, the loop runs until the ClientHello comes, and the peer's close ends the call. A failed build
-   wakes the task with nothing sent and the socket open, so the loop checks the task is still parked; a passed
-   deadline closes the socket and fails at the recv below. */
-static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
-  int fd = open_pair();
-  agc_value client = new_client(false);
-  calling upgrading = call("HttpWire.upgrade_tls", 4, client, socket_v, agc_test_str("localhost"), agc_int(60000));
-  assert(start(&upgrading));
-  struct pollfd p = {fd, POLLIN, 0};
-  while (poll(&p, 1, 10) <= 0) {
-    assert(vm.task->state == AGC_TASK_PARKED);
-    (void)agc_io_poll(&vm, false);
-  }
-  unsigned char first = 0;
-  assert(recv(fd, &first, 1, 0) == 1 && first == 0x16);
-  close(fd);
-  wait_woken();
-  assert(!agc_as_result(&vm, take(&upgrading))->ok);
-  assert(agc_as_http_client(&vm, client)->tls);
-  step(call("HttpWire.drop_tls", 1, client, agc_void(), agc_void(), agc_void()));
-  assert(!agc_as_http_client(&vm, client)->tls);
-  step(call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void()));
-  agc_test_pump_until_idle(&vm);
-  agc_test_settle_loop(&vm);
 }
 
 static agc_vm aside;
@@ -1166,11 +1086,15 @@ static void test_a_read_receives_on_the_scheduler(void) {
   assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
   wait_for_receive(reader);
   agc_task *second = agc_new_task(&vm), *third = agc_new_task(&vm);
+  agc_tls_failure failure;
+  agc_tls_config *client = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &failure);
+  assert(client);
   locked_call waiting = {&aside, second, read_line_of(&aside, second)};
   on_thread(call_locked, &waiting);
   assert(second->lock_wait == reader && second->parked == NULL);
   locked_call upgrading = {&aside, third,
-                           agc_test_call_of(&aside, third, "HttpWire.upgrade_tls", 4, new_client(false), socket_v,
+                           agc_test_call_of(&aside, third, "TLS.upgrade", 4, socket_v,
+                                            agc_tls_context_value(client, release_config, false),
                                             agc_test_str("localhost"), agc_int(1000))};
   on_thread(call_locked, &upgrading);
   assert(error_is(upgrading.c.result, "network: a read on the socket is in progress"));
@@ -1583,11 +1507,8 @@ int main(void) {
   AGC_TEST_RUN(test_a_write_over_the_limit_waits());
   AGC_TEST_RUN(test_a_failed_buffered_write_is_reported());
   AGC_TEST_RUN(test_a_close_sends_the_write_buffer_first());
-  AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
   AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
   AGC_TEST_RUN(test_context_with_a_path_that_is_not_a_string());
-  AGC_TEST_RUN(test_service_checks_the_shape_of_its_options());
-  AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
   AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
   AGC_TEST_RUN(test_a_close_during_an_empty_receive());

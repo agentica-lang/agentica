@@ -200,18 +200,6 @@ Design and ends per system: `docs/vm/10-io-processes.md` §10.4. Error texts:
   (`vm/tests/http_wire_test.c`). `read_head` and `read_response` keep the head
   in the input until it is whole, with a scan hint so each line is parsed once;
   `read_head`'s `rest` goes back in front first (`agc_inbuf_unread`).
-- `vm/http_service.c`: `HttpWire.service`, `jobs` and `options` (§10.7.1). The
-  client's owner task is a root with no parent, so the client outlives a crash
-  or cancel of its maker. `Task.pending_count` and `Test.test` leave its tasks
-  out, and their timers are weak for the stall check (`rt->timers_weak`). The
-  pool itself is `stdlib/http.agc`. Worker sockets are tcp.c sockets, so the end
-  of the run sends their TLS close_notify. The client's TLS context
-  (`HttpWire.connect_tls`, `HttpWire.drop_tls`) is a reference-counted
-  `tls_shared` built once on a pool thread; each connection and the build hold a
-  reference, so `drop_tls` never frees it under a handshake.
-  `HttpWire.upgrade_tls` (a CONNECT tunnel, `TLS.upgrade` on that context) takes
-  one the same way and starts its handshake once the build is over
-  (`shared_ready`).
 - `vm/http_server.c`: the server task group. The I/O thread owns the listener,
   the open count and the queue of `accept` and `wait` jobs. Builtins change them
   only by posted steps; `closed` is atomic (§10.7.2). It runs at N > 1
@@ -226,9 +214,9 @@ Design and ends per system: `docs/vm/10-io-processes.md` §10.4. Error texts:
     handles it owns as it ends. Closes may nest, which is safe because each
     takes the head of its own task's list. Every wait is an `external` job with
     a `cancel` half.
-- `stdlib/http.agc` reads requests, writes responses and runs the client pool;
-  the order of checks, the lingering close, the response head rules, connection
-  reuse and retry, and the crash accounting of `hidden` server connections are
+- `stdlib/http.agc` reads requests, writes responses and runs the client calls,
+  each on a connection of its own; the order of checks, the lingering close, the
+  response head rules, and the crash accounting of `hidden` server connections are
   `docs/vm/10-io-http.md` (§10.6 to §10.7) and `docs/vm/10-io-scheduler.md`
   (`quiet_more`). The C side only gives `HttpWire` its bytes-in, string-out
   helpers. Handlers cannot reach their own `HttpWire.Server` (values are

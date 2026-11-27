@@ -117,7 +117,7 @@ Known exceptions (the mechanisms are in §10.2.2):
 
 No builtin starts its own timer for a timeout. A few timers are not
 job timeouts and stay: a captured child's grace period (§10.4), the
-`HttpWire.Client` pool's idle timer, the end-of-run flush deadline (§14.4), the
+end-of-run flush deadline (§14.4), the
 3-second stop grace timer (`STOP_GRACE_SECONDS` in `vm/loop.c`, §10.2.2, Stop
 signals), and
 the end-of-run wait for the children (`await_exits` in `vm/process.c`, §14.4). A
@@ -257,7 +257,7 @@ ownership][task-rules]), which gives a handle the caller owns to the task it
 spawns, in the same call. `HttpWire.spawn` (§10.7.2) is the same hand-off into
 the server's task group, through the one port function `agc_task_spawn_owning`.
 Ownership decides who closes a handle, not who may use it: other tasks still
-use a shared handle, and `HttpWire.Client` stays exempt. An `ATS` table is
+use a shared handle. An `ATS` table is
 exempt too: it is not an OS resource, so no task owns it.
 
 The owner is a field of the resource (`agc_own` in `vm/loop.c`), and each task

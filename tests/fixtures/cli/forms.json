@@ -913,9 +913,9 @@
   "stdout": "",
   "written": []
  },
- "[[\"help\", \"HttpWire.service\"], {}]": {
+ "[[\"help\", \"HttpWire.accept\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin HttpWire.service\n",
+  "stderr": "agentica: unknown builtin HttpWire.accept\n",
   "stdout": "",
   "written": []
  },
