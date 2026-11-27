@@ -110,7 +110,7 @@ def download(
   context: NativeArtifact.Context,
   allowed: Fn[String, Bool],
 ) -> Result[String]
-  pool = try open_pool(deadline, context)
+  client = try client_options(deadline, context)
   current = url
   consumed = 0
   redirects = 0
@@ -118,22 +118,17 @@ def download(
   seen = seen.put(url, true)
   while true
     left = deadline - Time.monotonic_ms()
-    if left <= 0
-      HTTP.close_client(pool)
-      return error(fail(context, "PKG-FETCH", "url", "the operation timed out", ""))
-    end
+    return error(fail(context, "PKG-FETCH", "url", "the operation timed out", "")) if left <= 0
 
     budgeted = NativeArtifact.hop_budget(consumed, limit)
     if !budgeted.ok?
-      HTTP.close_client(pool)
       return error(fail(context, "PKG-FETCH", "url", "the download is larger than #{limit / 1_048_576} MiB", ""))
     end
 
     dest = Paths.join(folder, ".dl-#{System.pid()}-#{Random.int(0, 999999999)}-#{redirects}")
     options = HTTP.DownloadOptions(timeout_ms: some(left), max_total_bytes: some(budgeted.unwrap!))
-    case HTTP.download(pool, current, dest, options)
+    case HTTP.download(current, dest, options, client)
       error(e) ->
-        HTTP.close_client(pool)
         if e.is_a?("http.too_large")
           return error(fail(context, "PKG-FETCH", "url", "the download is larger than #{limit / 1_048_576} MiB", ""))
         end
@@ -142,7 +137,6 @@ def download(
       ok(got) ->
         consumed = consumed + got.bytes_written
         if !NativeArtifact.redirect_status?(got.status)
-          HTTP.close_client(pool)
           return ok(dest) if got.status == 200
 
           return error(fail(context, "PKG-FETCH", "url", "the server answered with status #{got.status}", ""))
@@ -151,21 +145,17 @@ def download(
         case follow_redirect(current, got.headers, seen, redirects, context)
           ok(next_url) ->
             if !allowed.call(next_url)
-              HTTP.close_client(pool)
               return error(fail(context, "PKG-FETCH", "url", "the redirect target is not allowed", ""))
             end
 
             seen = seen.put(next_url, true)
             current = next_url
             redirects = redirects + 1
-          error(packed) ->
-            HTTP.close_client(pool)
-            return error(packed)
+          error(packed) -> return error(packed)
         end
     end
   end
 
-  HTTP.close_client(pool)
   error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
 end
 
@@ -331,13 +321,9 @@ def archive_state(archive: String, sha: String, deadline: Int, context: NativeAr
   end
 end
 
-def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HTTP.Client]
+def client_options(deadline: Int, context: NativeArtifact.Context) -> Result[HTTP.ClientOptions]
   left = try time_left(deadline, context)
-  options = HTTP.ClientOptions(timeout_ms: left, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 1048576)
-  case HTTP.client(options)
-    ok(pool) -> ok(pool)
-    error(_) -> error(fail(context, "PKG-FETCH", "url", "cannot open the download client", ""))
-  end
+  ok(HTTP.ClientOptions(timeout_ms: left, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 1048576))
 end
 
 # Downloads the archive at `url` (any redirect target that passes the rules of every URL), hashes the final bytes and

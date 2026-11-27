@@ -310,13 +310,10 @@ def main() -> Void
   # A download reads its body with the same limit.
   dir = System.args()[4]
   options = HTTP.ClientOptions(read_timeout_ms: limit)
-  client = HTTP.client(options).unwrap!
-  case HTTP.download(client, base + "/slow-body", dir + "/cut.bin", HTTP.DownloadOptions(timeout_ms: some(pause * 5)))
+  case HTTP.download(base + "/slow-body", dir + "/cut.bin", HTTP.DownloadOptions(timeout_ms: some(pause * 5)), options)
     ok(_) -> puts("download finished")
     error(e) -> puts("download #{e.kind}")
   end
-
-  HTTP.close_client(client)
 
   # A Connection reads each piece of the body within read_timeout_ms.
   conn = HTTP.start(base, HTTP.ClientOptions(read_timeout_ms: limit)).unwrap!

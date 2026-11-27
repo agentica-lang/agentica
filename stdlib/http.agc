@@ -315,8 +315,9 @@ end
 
 ## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
 ## and defaults to `DownloadOptions()`: no limit on the size of the body, and none on the time but a year. The
-## connect takes at most the client's `connect_timeout_ms` and each wait for the head or for body bytes its
-## `read_timeout_ms`.
+## connect takes at most `client.connect_timeout_ms` and each wait for the head or for body bytes
+## `client.read_timeout_ms`; `client` (default `ClientOptions()`) also gives the `proxy`, `tls` and `connect_to` of the
+## connection, and its options must be valid as for `start`.
 ##
 ## The body never sits in memory: at most 1 MiB is held at once. It goes to a new private file in the folder of
 ## `path`, named `.<name>.<8 hex digits>.agc-part`, which `Path.replace` puts at `path` in one step only when the body
@@ -326,27 +327,29 @@ end
 ## `"temp"` file of `File.open`); a program that ends by SIGKILL or a crash can leave it behind.
 ## Status codes such as 404 or 500 are normal responses, as with `get`: the body is still written and the status
 ## returned, so check `status` before using the file. There is no redirect follow, and the connection is not pooled:
-## it closes when the download ends. The pool gives the TLS context and its certificates for `https`, whose
-## verification stays on.
+## it closes when the download ends. `https` verifies the certificate with the context of `client.tls`, or with the
+## system trust, built for this download.
 def download(
-  pool: HttpWire.Client,
   url: String,
   path: String,
   options: DownloadOptions = DownloadOptions(),
+  client: HttpWire.ClientOptions = HttpWire.ClientOptions(),
 ) -> Result[Download]
   try check_download(options)
+  try check_client(client)
+
+  try check_proxy(client)
   where = try parse_url(url)
-  client_options = HttpWire.options(pool)
-  via = try connect_target(where, client_options)
+  via = try connect_target(where, client)
   head = try HttpWire.encode_request(
     where.scheme,
     where.host,
     where.port,
     "GET",
-    request_target(client_options, where),
-    with_login(client_options, where.scheme, []),
+    request_target(client, where),
+    with_login(client, where.scheme, []),
     NO_BYTES,
-    client_options.max_body_bytes,
+    client.max_body_bytes,
   )
 
   deadline = after(options.timeout_ms.unwrap_or(WATCH_MS))
@@ -354,13 +357,13 @@ def download(
   # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
   # server's own answer.
   denied = ""
-  if proxy_asked?(client_options, where.scheme, 407)
-    denied = client_denied(client_options)
+  if proxy_asked?(client, where.scheme, 407)
+    denied = client_denied(client)
   end
 
-  socket = try connect_download(pool, via, deadline)
+  socket = try connect_download(client, via, deadline)
   case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
-    ok(_) -> finish_download(socket, path, options, deadline, denied, read_ms(client_options))
+    ok(_) -> finish_download(socket, path, options, deadline, denied, read_ms(client))
     error(message) ->
       TCP.close(socket)
       error(message)
@@ -4345,15 +4348,12 @@ def read_until_close(answer: Pending) -> Result[Whole]
   error(TRUNCATED, kind: "http.protocol")
 end
 
-# One download connection: on a new socket, which closes when the download ends, since the pool only runs
-# whole-response calls. The pool gives the TLS context and its certificates for https.
-def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Result[TCP.Socket]
+# One download connection: on a new socket, which closes when the download ends. It is made as the one of `start` is,
+# within what is left of the download's time.
+def connect_download(options: HttpWire.ClientOptions, where: Target, deadline: Int) -> Result[TCP.Socket]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT, kind: "net.timeout") if left <= 0
-  options = HttpWire.options(pool)
-  wait = connect_ms(options, left)
-  return at_connect(connect_https(pool, where.host, where.port, wait)) if where.scheme == "https"
-  at_connect(reaching(TCP.connect(address_of(options, where.host), where.port, wait), options, where))
+  at_connect(open_socket(where, options.with(timeout_ms: left)))
 end
 
 # Opens a new temp file next to `path`, then streams the response into it. The file goes away when its handle closes

@@ -23,7 +23,7 @@ HTTP.get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions(
 HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 HTTP.text(body: Bytes, headers: List[HTTP.Header] = []) -> Result[String]
 HTTP.header_values(headers: List[HTTP.Header], name: String) -> List[String]
-HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
+HTTP.download(url: String, path: String, options: DownloadOptions = DownloadOptions(), client: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[Download]
 HTTP.start(origin: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Connection]
 HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.ResponseHead]
 HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
@@ -99,7 +99,8 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   responses. Errors are Results: protocol and limit errors start with `http: `,
   a timeout is `network: operation timed out`. `HTTP.get` has no
   streaming (see `HTTP.start`), redirect following or gzip decoding.
-- `download` streams a `GET` body to a hidden file
+- `download` takes `ClientOptions` (`proxy`, `tls`, timeouts), not a client, and
+  streams a `GET` body to a hidden file
   `.<name>.<hex>.agc-part` beside `path` and `Path.replace`s it over `path`
   (a file or link there is replaced, in one step) only after a clean end; a
   failure removes it and leaves `path` as it was, but a cancelled or killed

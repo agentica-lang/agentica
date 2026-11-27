@@ -107,7 +107,7 @@ def main() -> Void
   client = HTTP.client(pinned).unwrap!
   show("pooled", HTTP.get(client, "http://name.test:#{plain}/"))
   show("other host", HTTP.get(client, "http://other-host.test:#{plain}/"))
-  case HTTP.download(client, "http://name.test:#{plain}/", dir + "/saved.txt", HTTP.DownloadOptions())
+  case HTTP.download("http://name.test:#{plain}/", dir + "/saved.txt", HTTP.DownloadOptions(), pinned)
     ok(_) -> puts("download #{File.read_text(dir + "/saved.txt").unwrap!}")
     error(e) -> puts("download #{e.kind}")
   end
@@ -129,7 +129,7 @@ def main() -> Void
   tls_client = HTTP.client(safe).unwrap!
   show("tls pooled", HTTP.get(tls_client, "https://wrong.example:#{secure}/"))
   show("tls other", HTTP.get(tls_client, "https://other.example:#{secure}/"))
-  case HTTP.download(tls_client, "https://wrong.example:#{secure}/", dir + "/secure.txt", HTTP.DownloadOptions())
+  case HTTP.download("https://wrong.example:#{secure}/", dir + "/secure.txt", HTTP.DownloadOptions(), safe)
     ok(_) -> puts("tls download #{File.read_text(dir + "/secure.txt").unwrap!}")
     error(e) -> puts("tls download #{e.kind}")
   end
