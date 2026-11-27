@@ -10,12 +10,12 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
   else
     Task.sleep(300)
   end
-  return ok(HTTP.Response(status: 200, headers: [], body: "slow #{request.path}".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "slow #{request.path}".bytes))
 end
 
 def fetch(url: String) -> Result[HTTP.Response]
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
-  return HTTP.get(pool, url)
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  HTTP.get_response(url, pool)
 end
 
 def main() -> Void

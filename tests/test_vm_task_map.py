@@ -140,9 +140,9 @@ end
 HTTP_PRELUDE = """\
 import HTTP from "std/http"
 
-def client() -> HTTP.Client
+def client() -> HTTP.ClientOptions
   options = HTTP.ClientOptions(timeout_ms: 20000, idle_timeout_ms: 30000, max_connections: 16, max_body_bytes: 1000)
-  return HTTP.client(options).unwrap!
+  return options
 end
 
 def base() -> String
@@ -155,12 +155,12 @@ def main() -> Void
   pool = client()
   t0 = Time.monotonic_ms()
   bounded = Task.map(Range.to_a(0..8), 3, 20000) do |i|
-    response = try HTTP.get(pool, "#{base()}/a/#{i}")
+    response = try HTTP.get_response("#{base()}/a/#{i}", pool)
     HTTP.text(response.body, response.headers)
   end
   t1 = Time.monotonic_ms()
   everyone = Task.map(Range.to_a(0..7), 8, 20000) do |i|
-    response = try HTTP.get(pool, "#{base()}/b/#{i}")
+    response = try HTTP.get_response("#{base()}/b/#{i}", pool)
     HTTP.text(response.body, response.headers)
   end
   t2 = Time.monotonic_ms()
@@ -175,7 +175,7 @@ HTTP_TIMEOUT_PROGRAM = HTTP_PRELUDE + """
 def main() -> Void
   pool = client()
   results = Task.map(["/slow"], 1, @300@) do |path|
-    response = try HTTP.get(pool, base() + path)
+    response = try HTTP.get_response(base() + path, pool)
     HTTP.text(response.body, response.headers)
   end
   puts(results)

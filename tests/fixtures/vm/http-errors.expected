@@ -1,12 +1,12 @@
 {
-  "exit": 0,
-  "code": null,
-  "steps": 6796,
+  "exit": 1,
+  "code": "RUNTIME-TASK-CRASHED",
+  "steps": 6933,
   "stdout": [
     "error(\"http: every option must be positive\", kind: \"argument\")",
     "error(\"http: max_connections must be at most 65536\", kind: \"argument\")",
     "error(\"http: max_body_bytes must be at most 67108864\", kind: \"argument\")",
-    "<HTTP.Client>",
+    "HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16, proxy: \"\", tls: none, connect_timeout_ms: 10000, read_timeout_ms: 300000, connect_to: \"\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\", kind: \"argument\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\", kind: \"argument\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\", kind: \"argument\")",
@@ -19,9 +19,12 @@
     "error(\"http: Host, Content-Length, Transfer-Encoding and Connection are set by the client\", kind: \"http.protocol\")",
     "error(\"http: invalid method\", kind: \"http.protocol\")",
     "error(\"http: request body exceeds max_body_bytes\", kind: \"http.too_large\", code: 413)",
-    "error(\"http: body exceeds max_body_bytes\", kind: \"http.too_large\", code: 413)",
-    "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"1\")], body: <Bytes 1 ff>))",
+    "error(\"network: operation timed out\", kind: \"net.timeout\")",
+    "error(\"network: operation timed out\", kind: \"net.timeout\")",
     ""
   ],
-  "stderr": []
+  "stderr": [
+    "{\"code\":\"RUNTIME-UNWRAP-ERROR\",\"file\":\"@fixtures/vm/http-errors.agc\",\"message\":\"network: end of input (net.eof)\",\"range\":{\"end\":{\"column\":53,\"line\":29},\"start\":{\"column\":10,\"line\":29}},\"spawned_at\":{\"column\":12,\"file\":\"@fixtures/vm/http-errors.agc\",\"line\":58},\"stack\":[{\"column\":10,\"file\":\"@fixtures/vm/http-errors.agc\",\"function\":\"serve\",\"line\":29}],\"task\":true}",
+    ""
+  ]
 }

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 16009,
+  "steps": 14076,
   "stdout": [
     "missing file: io.not_found code=2 io=true",
     "directory as file: io.is_directory code=21 io=true",
@@ -42,7 +42,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":36},\"start\":{\"column\":16,\"line\":36}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":122},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":36}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":42,\"line\":54},\"start\":{\"column\":41,\"line\":54}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":139},\"stack\":[{\"column\":41,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":54}],\"task\":true}",
     ""
   ]
 }

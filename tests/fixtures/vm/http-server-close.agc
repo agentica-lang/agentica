@@ -14,7 +14,7 @@ end
 
 def side_of(request: HTTP.Request) -> Int
   at = request.target.index_of("?").unwrap!
-  return request.target.slice(at + 1, request.target.length - at - 1).to_i!
+  request.target.slice(at + 1, request.target.length - at - 1).to_i!
 end
 
 def handle(request: HTTP.Request) -> Result[HTTP.Response]
@@ -28,12 +28,12 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
   TCP.send(socket, "sleeping\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
 end
 
 def fetch(url: String) -> Result[HTTP.Response]
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
-  return HTTP.get(pool, url)
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  HTTP.get_response(url, pool)
 end
 
 def show(r: Result[HTTP.Response]) -> Void

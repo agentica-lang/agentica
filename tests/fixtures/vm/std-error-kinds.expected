@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 8988,
+  "steps": 8359,
   "stdout": [
     "regex syntax: regex.syntax code=none regex=true",
     "regex template: regex.syntax code=none regex=true",
@@ -22,7 +22,6 @@
     "uri utf-8: text.encoding code=none text=true",
     "http url: argument code=none argument=true",
     "http body text: text.encoding code=none text=true",
-    "http closed client: http.closed code=none http=true",
     "actor gone: channel.gone code=none channel=true",
     ""
   ],

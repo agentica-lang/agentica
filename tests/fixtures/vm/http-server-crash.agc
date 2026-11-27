@@ -5,16 +5,16 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
     zero = request.body.size
     return ok(HTTP.Response(status: 200, headers: [], body: "#{10 / zero}".bytes))
   end
-  return ok(HTTP.Response(status: 200, headers: [], body: "fine".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "fine".bytes))
 end
 
 def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   for path in ["/crash", "/ok", "/crash", "/crash", "/ok"]
-    case HTTP.post(pool, base + path, "".bytes)
+    case HTTP.post_response(base + path, "".bytes, [], pool)
       ok(response) -> puts("#{path}: #{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
       error(message) -> puts("#{path}: #{message}")
     end

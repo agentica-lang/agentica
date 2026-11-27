@@ -1,5 +1,25 @@
 import HTTP from "std/http"
 
+# The whole response of any method on a connection of its own, as the removed pooled `HTTP.request` gave it.
+def request(
+  options: HTTP.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HTTP.Header] = [],
+) -> Result[HTTP.Response]
+  stream = try HTTP.open(method, url, body, headers, options)
+  pieces: List[Bytes] = []
+  open = true
+  while open
+    case stream.body.recv(5000)
+      ok(piece) -> pieces = pieces.push(piece)
+      error(_) -> open = false
+    end
+  end
+  ok(HTTP.Response(status: stream.status, headers: stream.headers, body: Bytes.concat(pieces)))
+end
+
 # A server that sends bytes past the end of some responses: a body on a HEAD answer, a second response after a
 # Content-Length body, bytes after a chunked body that ends at the 512th byte, and a body on a 204. The client keeps
 # no such connection, so every call gets its own response.
@@ -10,13 +30,13 @@ def request_line(socket: TCP.Socket) -> Result[String]
   while line != ""
     line = try TCP.read_line(socket, 5000)
   end
-  return ok(first)
+  ok(first)
 end
 
 def chunked_to_512() -> String
   data = "cccccccccccccccccccccccccccccccccccccccccccccccccc"
   data = data + data + data + data + data + data + data + data + data + data
-  return "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1f4\r\n" + data + "\r\n0\r\n\r\n"
+  "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1f4\r\n" + data + "\r\n0\r\n\r\n"
 end
 
 def answer(line: String) -> String
@@ -29,7 +49,7 @@ def answer(line: String) -> String
   elsif line == "GET /204 HTTP/1.1"
     return "HTTP/1.1 204 No Content\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nevil"
   end
-  return "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nget"
+  "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nget"
 end
 
 # One connection at a time: the client never has two open (max_connections 1), and it closes each one it does not
@@ -51,13 +71,13 @@ def serve(listener: TCP.Listener) -> List[String]
     TCP.close(socket)
     id = id + 1
   end
-  return log
+  log
 end
 
 def show(r: Result[HTTP.Response]) -> String
   case r
-    ok(response) -> return "#{response.status} [#{response.body.size} bytes]"
-    error(e) -> return e.message
+    ok(response) -> "#{response.status} [#{response.body.size} bytes]"
+    error(e) -> e.message
   end
 end
 
@@ -65,12 +85,11 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   base = "http://127.0.0.1:#{TCP.local_port(listener)}"
   server = Task.spawn(&serve, listener)
-  pool = Result.unwrap!(HTTP.client(HTTP.ClientOptions(max_connections: 1, timeout_ms: 5000)))
-  puts("HEAD /head: #{show(HTTP.request(pool, "HEAD", base + "/head", "".bytes))}")
+  pool = HTTP.ClientOptions(max_connections: 1, timeout_ms: 5000)
+  puts("HEAD /head: #{show(request(pool, "HEAD", base + "/head", "".bytes))}")
   for path in ["/head", "/head", "/extra", "/extra", "/chunked", "/chunked", "/204", "/204"]
-    puts("#{path}: #{show(HTTP.get(pool, base + path))}")
+    puts("#{path}: #{show(HTTP.get_response(base + path, pool))}")
   end
-  HTTP.close_client(pool)
   for line in Task.await(server)
     puts(line)
   end

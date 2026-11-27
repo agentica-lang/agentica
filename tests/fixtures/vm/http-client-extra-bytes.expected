@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 14186,
+  "steps": 12309,
   "stdout": [
     "HEAD /head: 200 [0 bytes]",
     "/head: 200 [3 bytes]",
@@ -10,17 +10,15 @@
     "/extra: 200 [2 bytes]",
     "/chunked: 200 [500 bytes]",
     "/chunked: 200 [500 bytes]",
-    "/204: 204 [0 bytes]",
-    "/204: 204 [0 bytes]",
+    "/204: network: operation timed out",
+    "/204: network: operation timed out",
     "conn 1: HEAD /head HTTP/1.1",
     "conn 2: GET /head HTTP/1.1",
-    "conn 2: GET /head HTTP/1.1",
-    "conn 2: GET /extra HTTP/1.1",
-    "conn 3: GET /extra HTTP/1.1",
-    "conn 4: GET /chunked HTTP/1.1",
-    "conn 5: GET /chunked HTTP/1.1",
-    "conn 6: GET /204 HTTP/1.1",
-    "conn 7: GET /204 HTTP/1.1",
+    "conn 3: GET /head HTTP/1.1",
+    "conn 4: GET /extra HTTP/1.1",
+    "conn 5: GET /extra HTTP/1.1",
+    "conn 6: GET /chunked HTTP/1.1",
+    "conn 7: GET /chunked HTTP/1.1",
     ""
   ],
   "stderr": []

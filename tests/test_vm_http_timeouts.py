@@ -175,6 +175,14 @@ def failed(r: Result[HTTP.Response]) -> String
   end
 end
 
+# Whether the options pass their check: the unsupported URL is refused only after it.
+def passes?(options: HTTP.ClientOptions) -> Bool
+  case HTTP.get_response("ftp://x/", options)
+    ok(_) -> return true
+    error(e) -> return e.message.include?("URL")
+  end
+end
+
 def producer(feed: Feed) -> Void
   Task.sleep(feed.pause)
   piece = ("x" * feed.size).bytes
@@ -347,9 +355,9 @@ def main() -> Void
   puts("slow producer #{kind_of(late)}")
 
   # The options are checked: 0 is no limit for a read and not for the others.
-  puts("read -1 #{HTTP.client(HTTP.ClientOptions(read_timeout_ms: -1)).ok?}")
-  puts("read 0 #{HTTP.client(HTTP.ClientOptions(read_timeout_ms: 0)).ok?}")
-  puts("connect 0 #{HTTP.client(HTTP.ClientOptions(connect_timeout_ms: 0)).ok?}")
+  puts("read -1 #{passes?(HTTP.ClientOptions(read_timeout_ms: -1))}")
+  puts("read 0 #{passes?(HTTP.ClientOptions(read_timeout_ms: 0))}")
+  puts("connect 0 #{passes?(HTTP.ClientOptions(connect_timeout_ms: 0))}")
 end
 """
 )
@@ -381,10 +389,6 @@ def main() -> Void
 
   since = Time.monotonic_ms()
   puts("get_response #{failed(HTTP.get_response(url + "/", options))} #{within(since, limit - 100, limit * 6)}")
-  client = HTTP.client(options).unwrap!
-  since = Time.monotonic_ms()
-  puts("get #{failed(HTTP.get(client, url + "/"))} #{within(since, limit - 100, limit * 6)}")
-  HTTP.close_client(client)
   since = Time.monotonic_ms()
   case HTTP.open("GET", url + "/", "".bytes, [], options)
     ok(_) -> puts("open connected")
@@ -453,7 +457,6 @@ def test_read_timeout_ms_is_the_wait_for_each_piece_and_not_a_total(tmp_path, pe
 
 CONNECT_LINES = [
     "get_response net.timeout connect true",
-    "get net.timeout connect true",
     "open net.timeout connect true",
     "start net.timeout connect true",
     "total net.timeout true",

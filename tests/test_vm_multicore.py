@@ -50,8 +50,6 @@ HEAVY_RACE = pytest.mark.parametrize(
 # still pending),
 # which a run on several threads does not fix. channel-owner-ends counts on a yield (Task.sleep(0)) letting a task it
 # spawned send first; a spinning scheduler takes that task at once and runs it beside the yielder.
-# http-client-close-queued counts on the same yield: on another thread the new worker may connect before
-# close_client runs (the call still gets "http: client is closed", but the server sees a connection).
 # process-close-crash prints the crashes of two tasks; process-close-cancel, test-assertions and test-crash-observed
 # count on Task.sleep(0) letting another task run first (a close that ends before its owner crashes, the tasks of a
 # test that crash before it returns). process-channel-close counts on Task.sleep(100) being long enough for its tasks
@@ -61,7 +59,7 @@ HEAVY_RACE = pytest.mark.parametrize(
 # that wait on a line or a task's end instead (test_a_crash_cancels_a_task_inside_process_close..., ...channel_calls...,
 # ...observes_task_crashes...) keep that coverage at four schedulers.
 ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning",
-         "http-client-close-queued", "logger-tasks", "process-channel-close", "process-close-async",
+         "logger-tasks", "process-channel-close", "process-close-async",
          "process-close-cancel", "process-close-crash",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
          "task-file-close", "tcp-tasks", "test-assertions", "test-crash-observed", "test-run-task"}
@@ -3364,7 +3362,7 @@ def test_the_front_end_runs_a_source_file_on_several_schedulers(tmp_path):
 HTTP_LOAD = r"""import HTTP from "std/http"
 
 struct Load
-  pool: HTTP.Client
+  options: HTTP.ClientOptions
   base: String
   requests: Int
 end
@@ -3380,7 +3378,7 @@ def load(l: Load) -> Int
   same = 0
   i = 0
   while i < l.requests
-    r = HTTP.get(l.pool, "#{l.base}/#{i}")
+    r = HTTP.get_response("#{l.base}/#{i}", l.options)
     if r.ok? && r.unwrap!.body == "/#{i}".bytes
       same = same + 1
     end
@@ -3390,7 +3388,7 @@ def load(l: Load) -> Int
 end
 
 def slow(l: Load) -> Result[String]
-  response = try HTTP.get(l.pool, l.base + "/slow")
+  response = try HTTP.get_response(l.base + "/slow", l.options)
   return HTTP.text(response.body, response.headers)
 end
 
@@ -3398,7 +3396,7 @@ end
 def until_closed(l: Load) -> Int
   answers = 0
   while true
-    case HTTP.get(l.pool, "#{l.base}/#{answers}")
+    case HTTP.get_response("#{l.base}/#{answers}", l.options)
       ok(response) ->
         if response.body != "/#{answers}".bytes
           return -1000
@@ -3413,8 +3411,8 @@ end
 # CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
 # requests wait on the server; every request of the load tasks gets its own path back.
 def phase(base: String, clients: Int, requests: Int) -> Int
-  pool = HTTP.client(HTTP.ClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
-  l = Load(pool: pool, base: base, requests: requests)
+  options = HTTP.ClientOptions(timeout_ms: 20000)
+  l = Load(options: options, base: base, requests: requests)
   tasks = (1..clients).to_a.map do |_|
     Task.spawn(&load, l)
   end
@@ -3428,7 +3426,6 @@ def phase(base: String, clients: Int, requests: Int) -> Int
       same = same - 1000
     end
   end
-  HTTP.close_client(pool)
   return same
 end
 
@@ -3444,8 +3441,7 @@ def main() -> Void
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
   # during the load), every caller then gets an error (none hangs), and wait returns.
-  pool = HTTP.client(HTTP.ClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
-  l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
+  l = Load(options: HTTP.ClientOptions(timeout_ms: 20000), base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
   callers = (1..clients).to_a.map do |_|
     Task.spawn(&until_closed, l)
   end
@@ -3463,7 +3459,6 @@ def main() -> Void
   end
   puts("#{answers > 0} #{wrong}")
   IO.inspect(HTTP.wait(secure))
-  HTTP.close_client(pool)
   HTTP.close_server(plain)
   IO.inspect(HTTP.wait(plain))
 end
@@ -3474,21 +3469,16 @@ end
 @pytest.mark.parametrize("schedulers", ["4", "8"])
 def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_a_close(tmp_path, repeats, schedulers):
     # Many client tasks on one HTTP and one HTTPS server, with cancelled callers and the server closed under load.
-    # Each HTTPS client without a context builds its system-trust context once (SSL_CERT_FILE is the test CA),
-    # whichever schedulers its connections start on.
+    # Each HTTPS call builds its system-trust context (SSL_CERT_FILE is the test CA) on whichever scheduler it runs.
     bytecode = program(tmp_path, "http_load", HTTP_LOAD)
     clients, requests = 24, 10
-    for k in range(repeats):
-        trace = tmp_path / ("trace-%d" % k)
-        env = {"AGENTICA_VM_TRACE": "tls", "AGENTICA_VM_TRACE_FILE": str(trace),
-               "SSL_CERT_FILE": os.path.join(TLS_DIR, "ca.pem")}
+    for _ in range(repeats):
+        env = {"SSL_CERT_FILE": os.path.join(TLS_DIR, "ca.pem")}
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode, TLS_DIR, str(clients),
                       str(requests)], env=vm_environment(env), timeout=120)
         total = clients * requests
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\ntrue 0\nok()\nok()\n" % (
             total, total), "")
-        text = trace.read_text()
-        assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 2, text
 
 
 # A max_connections = 1 server whose one connection holds the room, with a second connection in the backlog: the

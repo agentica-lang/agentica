@@ -36,9 +36,9 @@ def show(r: Result[HTTP.Response]) -> Void
   end
 end
 
-def shown_error(r: Result[HTTP.Client]) -> Void
+def shown_error(r: Result[HTTP.Response]) -> Void
   case r
-    ok(_) -> puts("a client was made")
+    ok(_) -> puts("answered")
     error(message) -> puts(message)
   end
 end
@@ -79,20 +79,15 @@ def main() -> Void
   a = "http://127.0.0.1:#{args[1]}"
   b = "http://127.0.0.1:#{args[2]}"
   options = HTTP.ClientOptions(proxy: proxy)
-  pool = HTTP.client(options).unwrap!
-  show(HTTP.get(pool, "#{a}/hello"))
-  show(HTTP.get(pool, "#{b}/hello?x=1"))
-  show(HTTP.post(pool, "http://localhost:#{args[1]}/echo", "ping".bytes))
-  # A second client with another proxy shares nothing with the first; an IPv6 literal on the default port has neither
-  # the port in its Host nor in the absolute form.
-  pool_two = HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[4]}")).unwrap!
-  show(HTTP.get(pool_two, "#{a}/hello?two"))
-  show(HTTP.get(pool, "#{a}/hello?one"))
-  HTTP.close_client(pool_two)
-  puts(answered(HTTP.get(pool, "http://[::1]/hello")))
+  show(HTTP.get_response("#{a}/hello", options))
+  show(HTTP.get_response("#{b}/hello?x=1", options))
+  show(HTTP.post_response("http://localhost:#{args[1]}/echo", "ping".bytes, [], options))
+  # Another proxy; an IPv6 literal on the default port has neither the port in its Host nor in the absolute form.
+  show(HTTP.get_response("#{a}/hello?two", HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[4]}")))
+  show(HTTP.get_response("#{a}/hello?one", options))
+  puts(answered(HTTP.get_response("http://[::1]/hello", options)))
   puts(HTTP.download("#{a}/big", "#{args[3]}/big.bin", HTTP.DownloadOptions(), options).unwrap!.status)
   puts(File.stat("#{args[3]}/big.bin").unwrap!.size_bytes)
-  HTTP.close_client(pool)
   show(HTTP.get_response("#{b}/hello", options))
   show(HTTP.post_response("#{a}/echo", "abc".bytes, [], options))
   stream = HTTP.open("GET", "#{a}/big", "".bytes, [], options).unwrap!
@@ -123,18 +118,17 @@ def main() -> Void
     error(e) -> puts(names_proxy(e.message, down))
   end
 
-  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "ftp://127.0.0.1:1")))
-  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:1?x=1")))
-  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:1/path")))
+  shown_error(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "ftp://127.0.0.1:1")))
+  shown_error(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://127.0.0.1:1?x=1")))
+  shown_error(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://127.0.0.1:1/path")))
   show(HTTP.get_response("#{a}/hello?direct"))
 end
 """
 
 
-def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_path, adopt):
-    """Every call of the client reaches the proxy with the absolute-form target and the Host of the target: the pooled
-    calls share one proxy connection even for two origins, a request to another name keeps its Host, and a call with
-    no proxy does not touch it. A bad proxy is an error."""
+def test_requests_go_to_the_proxy_in_absolute_form(tmp_path, adopt):
+    """Every call reaches the proxy with the absolute-form target and the Host of the target, even for two origins, a
+    request to another name keeps its Host, and a call with no proxy does not touch it. A bad proxy is an error."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     proxy, first, second, proxy_two = peer.next_line().split()[:4]
     source = tmp_path / "proxy.agc"
@@ -181,12 +175,8 @@ def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_
         "PUT http://127.0.0.1:%s/echo HTTP/1.1 | 127.0.0.1:%s" % (second, second),
         "GET http://127.0.0.1:%s/hello?start HTTP/1.1 | 127.0.0.1:%s" % (second, second),
     ]
-    # The first three requests (two origins and a second name) used the pool's one connection to the proxy; the client
-    # of the other proxy has a connection of its own, and the first client went on with its connection after it.
-    connections = [line.split(" ")[1] for line in seen]
-    assert len(set(connections[:3])) == 1
-    assert connections[3] == "2:1" and connections[0].startswith("1:")
-    assert connections[4] == connections[5] == connections[0]
+    # The call of the other proxy came to that proxy, on a connection of its own.
+    assert seen[3].split(" ")[1] == "2:1"
 
 
 AUTH_PROGRAM = """\
@@ -199,9 +189,9 @@ def show(r: Result[HTTP.Response]) -> Void
   end
 end
 
-def shown(r: Result[HTTP.Client]) -> Void
+def shown(r: Result[HTTP.Response]) -> Void
   case r
-    ok(_) -> puts("a client was made")
+    ok(_) -> puts("answered")
     error(message) -> puts(message)
   end
 end
@@ -214,9 +204,7 @@ end
 # The same five calls, each ending in the one line it prints: a response or the error of the call.
 def calls(proxy: String, a: String, dir: String, tag: String) -> Void
   options = HTTP.ClientOptions(proxy: proxy)
-  pool = HTTP.client(options).unwrap!
-  show(HTTP.get(pool, "#{a}/hello?#{tag}"))
-  HTTP.close_client(pool)
+  show(HTTP.get_response("#{a}/hello?#{tag}", options))
   show(HTTP.post_response("#{a}/echo", "abc".bytes, [], options))
   case HTTP.download("#{a}/hello", "#{dir}/#{tag}.bin", HTTP.DownloadOptions(), options)
     ok(done) -> puts("download #{done.status}")
@@ -255,11 +243,9 @@ def main() -> Void
   calls("http://us%40er:hunter2@#{locked}", a, dir, "wrong")
   puts("-- no user info")
   calls("http://#{locked}", a, dir, "none")
-  puts("-- a 407 ends the pooled connection")
-  pool = HTTP.client(HTTP.ClientOptions(proxy: "http://#{locked}")).unwrap!
-  show(HTTP.get(pool, "#{a}/hello?first"))
-  show(HTTP.get(pool, "#{a}/hello?second"))
-  HTTP.close_client(pool)
+  puts("-- a 407 ends the connection")
+  show(HTTP.get_response("#{a}/hello?first", HTTP.ClientOptions(proxy: "http://#{locked}")))
+  show(HTTP.get_response("#{a}/hello?second", HTTP.ClientOptions(proxy: "http://#{locked}")))
   puts("-- the caller's own header wins")
   mine = [HTTP.Header(name: "Proxy-Authorization", value: args[3])]
   show(HTTP.post_response("#{a}/echo", "mine".bytes, mine, HTTP.ClientOptions(proxy: "http://#{locked}")))
@@ -269,12 +255,12 @@ def main() -> Void
   HTTP.finish(conn)
   show(HTTP.get_response("#{a}/seen"))
   puts("-- a bad login or a bad proxy never quotes the user info")
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://%zz:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://a%3Ab:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://@127.0.0.1:1")))
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:1/path")))
-  shown(HTTP.client(HTTP.ClientOptions(proxy: "ftp://us:hunter2@127.0.0.1:1")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://%zz:hunter2@127.0.0.1:1")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://a%3Ab:hunter2@127.0.0.1:1")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://@127.0.0.1:1")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://:hunter2@127.0.0.1:1")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:1/path")))
+  shown(HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "ftp://us:hunter2@127.0.0.1:1")))
   puts("-- a proxy that is down")
   case HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:#{args[4]}"))
     ok(_) -> puts("answered")
@@ -329,7 +315,7 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
         *denied,
         "-- no user info",
         *asked,
-        "-- a 407 ends the pooled connection",
+        "-- a 407 ends the connection",
         asked[0],
         asked[0],
         "-- the caller's own header wins",
@@ -355,7 +341,7 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     assert all(" | Basic " in line and not line.endswith(LOGIN) for line in seen[7:13]), seen
     assert all(line.endswith(" | -") for line in seen[13:19]), seen
     assert all(line.endswith(" | -") for line in seen[19:21]), seen
-    # The 407 closed the pooled connection, so the second call came on a new one.
+    # The 407 closed the connection, so the second call came on a new one.
     assert raw[19].split(" ")[1] != raw[20].split(" ")[1], raw
     assert seen[21].endswith(" | " + LOGIN)
     assert all(" HTTP/1.1 | 127.0.0.1:%s | " % first in line for line in seen if "http://127.0.0.1:%s/" % first in line)
@@ -579,13 +565,11 @@ def started(origin: String, options: HTTP.ClientOptions, path: String) -> Void
   end
 end
 
-# Every call of the client over a tunnel to C or D, and the line it prints.
+# Every call over a tunnel to C or D, and the line it prints.
 def calls(options: HTTP.ClientOptions, c: String, d: String, dir: String, tag: String) -> Void
-  pool = HTTP.client(options).unwrap!
-  show(HTTP.get(pool, "#{c}/hello?#{tag}"))
-  show(HTTP.get(pool, "#{c}/hello?#{tag}2"))
-  show(HTTP.get(pool, "#{d}/hello?#{tag}"))
-  HTTP.close_client(pool)
+  show(HTTP.get_response("#{c}/hello?#{tag}", options))
+  show(HTTP.get_response("#{c}/hello?#{tag}2", options))
+  show(HTTP.get_response("#{d}/hello?#{tag}", options))
   show(HTTP.post_response("#{c}/echo", "abc".bytes, [], options))
   case HTTP.download("#{c}/big", "#{dir}/#{tag}.bin", HTTP.DownloadOptions(), options)
     ok(done) -> puts("download #{done.status} #{File.stat("#{dir}/#{tag}.bin").unwrap!.size_bytes}")
@@ -654,7 +638,7 @@ end
 
 def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
     """An https request through a proxy is a CONNECT to the target's host:port, then TLS inside the tunnel against the
-    target (on the context of tls, or the system trust), for every call: the pooled tunnel is one per target, the
+    target (on the context of tls, or the system trust), for every call: a tunnel of its own, the
     login goes with the CONNECT only and never to the target, a non-2xx answer is an error that names the proxy, and
     a 407 of the target itself is its response."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
@@ -711,18 +695,17 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
         junk,
         junk,
     ], lines
-    # The CONNECT lines the peer saw, in order: the pooled client (one tunnel for the two gets of C, one for D), then a
-    # tunnel for each of the other calls; and the same again on the system trust.
-    seen = [peer.next_line().split(" ", 2)[2] for _ in range(14 + 7 + 1 + 2 + 3)]
+    # The CONNECT lines the peer saw, in order: a tunnel for each call, and the same again on the system trust.
+    seen = [peer.next_line().split(" ", 2)[2] for _ in range(16 + 7 + 1 + 2 + 3)]
     connect = "CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s"
     on_c, on_d = connect % (tls_c, tls_c), connect % (tls_d, tls_d)
-    assert seen[:14] == [on_c, on_d, on_c, on_c, on_c, on_c, on_c] * 2, seen
+    assert seen[:16] == [on_c, on_c, on_d, on_c, on_c, on_c, on_c, on_c] * 2, seen
     # The locked proxy: the login with the CONNECT of the good calls, none or a wrong one in the others.
-    assert [line.rsplit(" | ", 1)[1] for line in seen[14:21]] == [LOGIN, LOGIN, LOGIN, "-", "-"] + [
-        seen[19].rsplit(" | ", 1)[1], LOGIN], seen
-    assert seen[19].rsplit(" | ", 1)[1].startswith("Basic ") and seen[19].rsplit(" | ", 1)[1] != LOGIN
-    assert seen[21] == on_c, seen
-    assert seen[22:] == [connect % ("9", "9")] * 2 + [connect % ("7", "7")] + [connect % ("8", "8")] * 2, seen
+    assert [line.rsplit(" | ", 1)[1] for line in seen[16:23]] == [LOGIN, LOGIN, LOGIN, "-", "-"] + [
+        seen[21].rsplit(" | ", 1)[1], LOGIN], seen
+    assert seen[21].rsplit(" | ", 1)[1].startswith("Basic ") and seen[21].rsplit(" | ", 1)[1] != LOGIN
+    assert seen[23] == on_c, seen
+    assert seen[24:] == [connect % ("9", "9")] * 2 + [connect % ("7", "7")] + [connect % ("8", "8")] * 2, seen
     everything = result.stdout + result.stderr
     for secret in ("hunter2", "p:ss", "p%3Ass", "ss/w", "us@er", "us%40er"):
         assert secret not in everything, secret
@@ -742,15 +725,14 @@ def main() -> Void
   args = System.args()
   context = TLS.client_context(TLS.ClientOptions(ca_file: args[2])).unwrap!
   options = HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[0]}", tls: some(context))
-  pool = HTTP.client(options).unwrap!
-  show(HTTP.get(pool, "https://127.0.0.1:#{args[1]}/hello?old"))
-  show(HTTP.get(pool, "https://127.0.0.1:#{args[1]}/hello?old2"))
+  show(HTTP.get_response("https://127.0.0.1:#{args[1]}/hello?old", options))
+  show(HTTP.get_response("https://127.0.0.1:#{args[1]}/hello?old2", options))
 end
 """
 
 
 def test_https_goes_through_a_proxy_that_answers_the_connect_in_http10(tmp_path, adopt):
-    """A classic Squid answers `HTTP/1.0 200 Connection established`: the tunnel opens, and the pooled tunnel is reused."""
+    """A classic Squid answers `HTTP/1.0 200 Connection established`: the tunnel opens, for each call."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     ports = peer.next_line().split()
     old, tls_c = ports[7], ports[5]
@@ -764,4 +746,4 @@ def test_https_goes_through_a_proxy_that_answers_the_connect_in_http10(tmp_path,
     peer.close_stdin()
     peer.wait()
     seen = [line.split(" ", 2)[2] for line in output_lines(peer.stdout_text())]
-    assert seen == ["CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s" % (tls_c, tls_c)], seen
+    assert seen == ["CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s" % (tls_c, tls_c)] * 2, seen

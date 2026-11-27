@@ -1,23 +1,21 @@
 import HTTP from "std/http"
 
 def handle(request: HTTP.Request) -> Result[HTTP.Response]
-  return ok(HTTP.Response(status: 200, headers: [], body: "served".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "served".bytes))
 end
 
-def keep(server: HTTP.Server) -> Result[Void]
-  return HTTP.wait(server)
-end
+def keep(server: HTTP.Server) -> Result[Void] = HTTP.wait(server)
 
 def start(servers: Channel[HTTP.Server]) -> Task[Result[Void]]
   options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   _ = servers.send(server, 5000)
-  return Task.spawn_owning(&keep, server)
+  Task.spawn_owning(&keep, server)
 end
 
 def fetch(url: String) -> Result[HTTP.Response]
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
-  return HTTP.get(pool, url)
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  HTTP.get_response(url, pool)
 end
 
 def show(label: String, outcome: Result[HTTP.Response]) -> Void

@@ -9,9 +9,27 @@ struct Row
   name: String
 end
 
-def at(dir: String, name: String) -> String
-  return Result.unwrap!(Path.join([dir, name]))
+# The whole response of any method on a connection of its own, as the removed pooled `HTTP.request` gave it.
+def request(
+  options: HTTP.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HTTP.Header] = [],
+) -> Result[HTTP.Response]
+  stream = try HTTP.open(method, url, body, headers, options)
+  pieces: List[Bytes] = []
+  open = true
+  while open
+    case stream.body.recv(5000)
+      ok(piece) -> pieces = pieces.push(piece)
+      error(_) -> open = false
+    end
+  end
+  ok(HTTP.Response(status: stream.status, headers: stream.headers, body: Bytes.concat(pieces)))
 end
+
+def at(dir: String, name: String) -> String = Result.unwrap!(Path.join([dir, name]))
 
 def show[T](label: String, family: String, result: Result[T]) -> Void
   case result
@@ -21,6 +39,7 @@ def show[T](label: String, family: String, result: Result[T]) -> Void
         some(n) -> n.to_s
         none -> "none"
       end
+
       puts("#{label}: #{e.kind} code=#{code} #{family}=#{e.is_a?(family)}")
   end
 end
@@ -32,15 +51,13 @@ def coded[T](label: String, result: Result[T]) -> Void
   end
 end
 
-def boom(n: Int) -> Result[Int]
-  return ok(10 / n)
-end
+def boom(n: Int) -> Result[Int] = ok(10 / n)
 
 # Two sends of 600000 bytes and no newline: the reader's line goes over its limit of 1048576 bytes.
 def send_long(socket: TCP.Socket) -> Result[Void]
   chunk = "x" * 600000
   try TCP.send(socket, chunk, 5000)
-  return TCP.send(socket, chunk, 5000)
+  TCP.send(socket, chunk, 5000)
 end
 
 # Answers each request with the next reply, one connection each.
@@ -58,7 +75,7 @@ end
 
 def http_rows() -> Void
   options = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)
-  pool = Result.unwrap!(HTTP.client(options))
+  pool = options
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   url = "http://127.0.0.1:#{TCP.local_port(listener)}/"
   replies = [
@@ -70,25 +87,25 @@ def http_rows() -> Void
     "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n#{"c" * 40}",
     "HTTP/1.1 2x0 OK\r\nContent-Length: 0\r\n\r\n",
   ]
+
   server = Task.spawn(-> { answer(listener, replies) })
-  show("response line too large", "http", HTTP.get(pool, url))
-  show("response headers too many", "http", HTTP.get(pool, url))
-  show("chunk line too large", "http", HTTP.get(pool, url))
-  show("response body too large", "http", HTTP.get(pool, url))
-  show("chunked body too large", "http", HTTP.get(pool, url))
-  show("close-delimited body too large", "http", HTTP.get(pool, url))
-  show("response head malformed", "http", HTTP.get(pool, url))
+  show("response line too large", "http", HTTP.get_response(url, pool))
+  show("response headers too many", "http", HTTP.get_response(url, pool))
+  show("chunk line too large", "http", HTTP.get_response(url, pool))
+  show("response body too large", "http", HTTP.get_response(url, pool))
+  show("chunked body too large", "http", HTTP.get_response(url, pool))
+  show("close-delimited body too large", "http", HTTP.get_response(url, pool))
+  show("response head malformed", "http", HTTP.get_response(url, pool))
   long = [HTTP.Header(name: "X-Long", value: "a" * 9000)]
-  show("request header line too large", "http", HTTP.post(pool, url, "".bytes, long))
+  show("request header line too large", "http", HTTP.post_response(url, "".bytes, long, pool))
   many: List[HTTP.Header] = []
   while List.size(many) < 101
     many = List.append(many, HTTP.Header(name: "X-Many", value: "1"))
   end
-  show("request headers too many", "http", HTTP.post(pool, url, "".bytes, many))
-  show("request body too large", "http", HTTP.post(pool, url, "this body is over the limit".bytes))
-  show("request method malformed", "http", HTTP.request(pool, "BAD METHOD", url, "".bytes))
+  show("request headers too many", "http", HTTP.post_response(url, "".bytes, many, pool))
+  show("request body too large", "http", HTTP.post_response(url, "this body is over the limit".bytes, [], pool))
+  show("request method malformed", "http", request(pool, "BAD METHOD", url, "".bytes))
   Task.await(server)
-  HTTP.close_client(pool)
   TCP.close_listener(listener)
 end
 

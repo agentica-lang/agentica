@@ -410,7 +410,7 @@ class TestModuleRules:
                  ("lib.agc", 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'),
                  ("libs/wire.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n  Wire.go()\nend\n\n')]
         bodies = [("  x = HttpWir.client(1)\n", "CHECK-UNKNOWN-NAME"),
-                  ("  x = close_clien(1)\n", "CHECK-UNKNOWN-NAME"),
+                  ("  x = get_respons(1)\n", "CHECK-UNKNOWN-NAME"),
                   ("  x = HTTP.exchang(1)\n", "CHECK-IMPORT-NAME")]
         # The family name and the old HTTP type names reserve nothing: a user struct may take them.
         names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpClient", "HttpServer", "HttpClientOptions",
@@ -420,7 +420,7 @@ class TestModuleRules:
             [({"root.agc": text, "lib.agc": call, "libs/wire.agc": call},
               "root.agc", {"AGENTICA_PATH": "{dir}/libs"}) for _name, text in roots]
             + [({"root.agc": 'import HTTP from "std/http"\ndef main() -> Void\n'
-                             '  HTTP.close_client(Result.unwrap!(HTTP.client()))\nend\n\n'},
+                             '  _ = HTTP.get_response("http://127.0.0.1:1/")\nend\n\n'},
                 "root.agc", None)]
             + [({"root.agc": http + body + "end\n\n"}, "root.agc", None) for body, _code in bodies]
             + [({"root.agc": "struct %s\n  n: Int\nend\n\n" % name + MAIN}, "root.agc", None) for name in names])
@@ -467,7 +467,7 @@ class TestModuleRules:
         type is an unknown type whose help names HTTP.Client."""
         http = 'import HTTP from "std/http"\n\n'
         mismatches = [
-            (http + "def main() -> Void\n  c = HTTP.client().unwrap!\n  x: Int = c\nend\n\n", "Int", "HTTP.Client"),
+            (http + "def f(c: HTTP.Client) -> Void\n  x: Int = c\nend\n\n", "Int", "HTTP.Client"),
             ('import Logger from "std/logger"\n\ndef main() -> Void\n  x: Int = Logger.level()\nend\n\n', "Int",
              "Logger.Level"),
             (http + "struct HttpWire\n  name: String\nend\n\ndef main() -> Void\n"
@@ -488,7 +488,7 @@ class TestModuleRules:
         builtin name, as it does when a user type has the written name too. The type of a user file stays bare, and a user type that the file does not see
         (a private one of a module it never imports) changes nothing."""
         mine = "struct Request\n  n: Int\nend\n\ndef make() -> Request\n  return Request(n: 1)\nend\n"
-        through = 'import H from "std/http"\n\ndef client() -> H.Client\n  return H.client().unwrap!\nend\n'
+        through = 'import H from "std/http"\n\ndef client() -> Result[H.Response]\n  return H.get_response("http://127.0.0.1:1/")\nend\n'
         take = "\ndef take(r: %s) -> Void\nend\n\ndef main() -> Void\n  take(%s)\nend\n"
         clash = 'import HTTP from "mine"\nimport W from "std/http"\n' + take % ("W.Request", "HTTP.make()")
         shadow = 'import HTTP from "mine"\nimport {Request} from "std/http"\n' + take % ("Request", "HTTP.make()")
@@ -504,7 +504,7 @@ class TestModuleRules:
             ({"root.agc": builtin, "through.agc": through}, "root.agc", None)])
         expected = [("W.Request", "Request", ((8, 8), (8, 19))), ("HttpWire.Request", "Request", ((8, 8), (8, 19))),
                     ("Request", "Int", ((7, 8), (7, 9))), ("Request", "Int", ((8, 8), (8, 17))),
-                    ("Int", "HttpWire.Client", ((4, 12), (4, 25)))]
+                    ("Int", "Result[HttpWire.Response]", ((4, 12), (4, 25)))]
         for checked, (want, found, span) in zip(results, expected):
             problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
             assert (problem["expected"], problem["actual"]) == (want, found)
@@ -631,7 +631,7 @@ class TestModuleRules:
         assert start(problem) == (9, 1)
 
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
-        names = {"std/http": "client", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
+        names = {"std/http": "get_response", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
                  "std/queue": "new"}
         results = self.checks([({"root.agc": 'import M from "%s"\n\ndef main() -> Void\n  _f = &M.%s\nend\n' % (name, member)},
                                 "root.agc", None) for name, member in names.items()])

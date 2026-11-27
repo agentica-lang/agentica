@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **Breaking:** the `std/http` connection pool is removed: `HTTP.client`, `HTTP.close_client`, `HTTP.get`, `HTTP.post` and `HTTP.request`. Use `HTTP.get_response` and `HTTP.post_response` (a connection of their own per call), or the `http-client` package for a pool. `idle_timeout_ms` and `max_connections` of `HTTP.ClientOptions` are no longer used (#1772).
 - **Breaking:** `std/utc` is removed; use the builtin `Time` (#2027).
 
 ### Fixed

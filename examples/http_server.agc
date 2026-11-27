@@ -34,13 +34,11 @@ def main() -> Void
     serve_until_stopped(server)
     return
   end
-  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  response = HTTP.get(client, base + "/").unwrap!
+  response = HTTP.get_response(base + "/").unwrap!
   puts(response.status)
   puts(HTTP.text(response.body, response.headers).unwrap!)
-  puts(HTTP.get(client, base + "/missing").unwrap!.status)
-  HTTP.close_client(client)
+  puts(HTTP.get_response(base + "/missing").unwrap!.status)
   HTTP.close_server(server)
   IO.inspect(HTTP.wait(server))
 end

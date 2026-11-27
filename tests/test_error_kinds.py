@@ -71,7 +71,6 @@ DEFAULT_KIND = {
     ("prelude/list.agc", "not found"): "List.find, a builtin row of the `error` kind",
     ("prelude/range.agc", "not found"): "Range.find, a builtin row of the `error` kind",
     ("prelude/optional.agc", "unwrap! on none"): "the text of a halt, never returned",
-    ("http.agc", ""): "the seed of a Result variable, always replaced before it is read",
     ("bdd.agc", "start a program before using its streams"): "the text of a halt, never returned",
     ("bdd.agc", '#{code}: #{JSON.string(fields["message"]).unwrap_or("")}'): "the text of a halt, never returned",
     ("queue.agc", "queue is empty"): "outside the std/ modules of #671",

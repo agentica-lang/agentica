@@ -240,7 +240,7 @@ A `TLS.Context` is the TLS setup of one role, built once and shared by every soc
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
 - A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
-- `alpn` lists the protocols that ALPN negotiates in the handshake (`["h2", "http/1.1"]`), for a library that speaks HTTP/2 or gRPC on a TLS socket. A client offers them; a server picks the first of its own that the client offers too, and refuses the handshake when none is in common (a client that offers none gets none). `TLS.alpn(socket)` returns the protocol picked, or `""`. Each name is 1 to 255 bytes and the list at most 65535 bytes (each name takes one byte more), checked when the context is built. `HTTP.client`, `HTTP.start` and `HTTP.serve_tls` speak HTTP/1.1 only: a context whose `alpn` is not `[]` or `["http/1.1"]` stops the program with `RUNTIME-TLS-CONTEXT-ALPN`.
+- `alpn` lists the protocols that ALPN negotiates in the handshake (`["h2", "http/1.1"]`), for a library that speaks HTTP/2 or gRPC on a TLS socket. A client offers them; a server picks the first of its own that the client offers too, and refuses the handshake when none is in common (a client that offers none gets none). `TLS.alpn(socket)` returns the protocol picked, or `""`. Each name is 1 to 255 bytes and the list at most 65535 bytes (each name takes one byte more), checked when the context is built. `HTTP.get_response`, `HTTP.start` and `HTTP.serve_tls` speak HTTP/1.1 only: a context whose `alpn` is not `[]` or `["http/1.1"]` stops the program with `RUNTIME-TLS-CONTEXT-ALPN`.
 - A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
@@ -305,79 +305,64 @@ HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http
 
 - Every call of the client is whole: it returns after the whole response arrived (for a body read piece by piece, see [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish), and for a body on a channel, [`HTTP.open`](#httpopen-and-httpupload)). The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it in its charset.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
-- `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
+- Each call opens a connection of its own and closes it when the call ends, so a request is never retried and a connection is never reused: a program that wants a pool (reuse, a limit per host, retries) uses the `http-client` package.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
 - `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and `HTTP.Server` are builtin types that `std/http` re-exports, so `import {Request, Response} from "std/http"` binds them by name. A diagnostic, `help` and a printed value show the `HTTP.` names: a response prints as `HTTP.Response(status: ...)` and a client as `<HTTP.Client>`. They reserve no name: a program may declare its own `Header` or `HttpRequest`.
 
-### HTTP.client
+### HTTP.ClientOptions
 
 ```signature
-HTTP.client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]
-HTTP.close_client(client: HTTP.Client) -> Void
 HTTP.proxy_from_env(url: String) -> String
 ```
 
-A client reuses open connections for the same scheme, host and port. Every field of `HTTP.ClientOptions` has the default below, so `HTTP.ClientOptions(timeout_ms: 5000)` changes one and keeps the others, and `HTTP.client()` uses them all.
+Every call of the client takes an `HTTP.ClientOptions` (`options`, or `client` in `HTTP.download`). Every field has the default below, so `HTTP.ClientOptions(timeout_ms: 5000)` changes one and keeps the others, and a call without options uses them all.
 
 | Option | Default | Limit |
 |---|---|---|
 | `timeout_ms` | 30 s, for each whole call | positive |
 | `connect_timeout_ms` | 10 s, for the connect | positive |
 | `read_timeout_ms` | 300 s, for each wait for body bytes | 0 (no limit) or positive |
-| `idle_timeout_ms` | 30 s, for kept connections | positive |
-| `max_connections` | 4, per host | positive, at most 65536 |
+| `idle_timeout_ms` | 30 s; not used by the client | positive |
+| `max_connections` | 4; not used by the client | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB, for the bodies held in memory | positive, at most 64 MiB; a bigger body goes through `download`, `read_body` or `open`, which have no limit |
 | `proxy` | `""`: no proxy | an `http://host:port` origin, see below |
 | `tls` | `none`: the system's CA certificates | a client `TLS.Context` |
 | `connect_to` | `""`: resolve the host of the URL | an IP address, not with `proxy` |
 
 - The three timeouts, in a call:
-  - `timeout_ms` is the whole call of `get`, `post` and `request`: the wait for a slot, the connect, the request and the response, the head included. For `open`, `start` and `upload` it is the time to the head of the response (the connect included for `open`).
+  - `timeout_ms` is the whole call of `get_response` and `post_response`: the connect, the request and the response, the head included. For `open`, `start` and `upload` it is the time to the head of the response (the connect included for `open`).
   - `connect_timeout_ms` bounds the connect inside it: DNS, TCP, the TLS handshake and a proxy `CONNECT`. A server that does not take the connection ends the call after `connect_timeout_ms`, whatever `timeout_ms` is; it never takes longer than `timeout_ms`. A timeout of the connect has `details["phase"]` `"connect"`, so a program tells it from a timeout of a read, which has the same kind (`net.timeout`).
   - `read_timeout_ms` is the longest wait for the next bytes of a body (and for each piece of an `upload`, and for the head of a `download`), also inside `timeout_ms` for whole calls. `0` is no limit, for a stream that may stay quiet: it ends with the body, with `Task.cancel` or when the server closes it.
   - A head that comes late is waited for up to `timeout_ms`, not `read_timeout_ms`, so a server that thinks for a minute before it answers needs only `timeout_ms: 60000`.
-- `connect_to` connects to that IP address (IPv4, or IPv6 without brackets) instead of resolving the host of the URL, for every call and every client connection. `Host`, the TLS server name and the certificate check keep the host of the URL, and the port is the URL's. It applies to every URL that the options or the client reach, not to one host: use one client per host, and after a redirect to another host resolve and check again with new options. The address must be in its strict form (IPv4 as four decimal numbers with no leading zero, IPv6 with at most 8 groups and one `::`, and not an IPv4-mapped address, so pass the IPv4 address itself), because the system resolver would read `012.0.0.1` as an octal number; a host name, another spelling, `0.0.0.0`, `::`, or `connect_to` together with `proxy`, is an `argument` error. The resolver, the cache and the address filter live in the `http-client` package, not in `std/http`. It is the low-level part of two jobs. A request that must not reach a private address (SSRF): resolve with `DNS.lookup`, refuse the private, loopback, link-local and reserved addresses, then pass a checked address (your filter must also classify the IPv4-compatible (`::a.b.c.d`), NAT64 (`64:ff9b::/96`) and other translated IPv6 forms, which carry an IPv4 address that the network may reach; `0.0.0.0` and `::` are refused by `connect_to` itself), so a DNS answer that changes in between (rebinding) is never used. A resolver of your own, a DNS cache or one fixed address for a host (curl's `--resolve`): resolve any way you like, then pass the address.
-- Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
-- `proxy` is an `http://host:port` origin with no path or query, else the call is an `error`. `http://` requests go to it in absolute form and share its connections; an `https://` request opens a `CONNECT` tunnel (one per target host and port) and speaks TLS to the target inside it, verified as without a proxy. This holds for `HTTP.client` and every call that takes a client or options.
+- `connect_to` connects to that IP address (IPv4, or IPv6 without brackets) instead of resolving the host of the URL, for every call. `Host`, the TLS server name and the certificate check keep the host of the URL, and the port is the URL's. It applies to every URL that the options reach, not to one host: use options per host, and after a redirect to another host resolve and check again with new options. The address must be in its strict form (IPv4 as four decimal numbers with no leading zero, IPv6 with at most 8 groups and one `::`, and not an IPv4-mapped address, so pass the IPv4 address itself), because the system resolver would read `012.0.0.1` as an octal number; a host name, another spelling, `0.0.0.0`, `::`, or `connect_to` together with `proxy`, is an `argument` error. The resolver, the cache and the address filter live in the `http-client` package, not in `std/http`. It is the low-level part of two jobs. A request that must not reach a private address (SSRF): resolve with `DNS.lookup`, refuse the private, loopback, link-local and reserved addresses, then pass a checked address (your filter must also classify the IPv4-compatible (`::a.b.c.d`), NAT64 (`64:ff9b::/96`) and other translated IPv6 forms, which carry an IPv4 address that the network may reach; `0.0.0.0` and `::` are refused by `connect_to` itself), so a DNS answer that changes in between (rebinding) is never used. A resolver of your own, a DNS cache or one fixed address for a host (curl's `--resolve`): resolve any way you like, then pass the address.
+- `proxy` is an `http://host:port` origin with no path or query, else the call is an `error`. `http://` requests go to it in absolute form; an `https://` request opens a `CONNECT` tunnel (one per call) and speaks TLS to the target inside it, verified as without a proxy. This holds for every call that takes options.
 - User info in the URL (`http://user:password@proxy:8080`, percent-decoded) is sent as `Proxy-Authorization: Basic` to the proxy only, unless the call sets that header; in an `https` call your own header goes to the target. No error shows the user info, and a `Connection` from `HTTP.start` prints its proxy without it, but the options you built still hold it, so keep them out of logs.
 - A `407` is `http: the proxy HOST:PORT refused the credentials (407)` (or `requires credentials` when the URL has none); another status to a `CONNECT` is `http: the proxy HOST:PORT refused the tunnel to HOST:PORT (STATUS)`. Inside the tunnel, any status of the target is a normal response.
 - A client never reads the environment: pass `HTTP.proxy_from_env(url)`, which returns the proxy the environment names for `url`, or `""` for none. It follows curl: `http_proxy` or `https_proxy` by the scheme, the lower-case name winning even when set and empty; `HTTP_PROXY` ignored when `REQUEST_METHOD` is set (httpoxy); `ALL_PROXY` not read; `no_proxy` (or `NO_PROXY`) a comma or space list of `*`, domains, optional `:port`, IP literals and IPv4 CIDR ranges (IPv6 ranges are not read; empty and invalid entries are ignored; a trailing dot of a host or an entry does not count). A value without `://` is read as `http://`; an invalid `url` gives `""`.
-- The client runs as Agentica code in its own tasks, so it spends the run's `--max-steps` budget.
+- The client runs as Agentica code in the calling task, so it spends the run's `--max-steps` budget.
 
-```agentica {mode="check"}
-import HTTP from "std/http"
-
-def main() -> Void
-  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, max_connections: 2)).unwrap!
-  HTTP.close_client(client)
-end
-```
-
-Clients that trust the same CA file share one context: build it once and pass it to each.
+A context is built once and passed to each call, so the CA file is read once.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
 
 def main() -> Void
   tls = TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem")).unwrap!
-  client = HTTP.client(HTTP.ClientOptions(tls: some(tls))).unwrap!
-  HTTP.close_client(client)
+  options = HTTP.ClientOptions(timeout_ms: 5000, tls: some(tls))
+  puts(HTTP.get_response("https://localhost:8443/", options).ok?)
 end
 ```
 
-### HTTP.get, HTTP.post and HTTP.request
+### HTTP.get_response and HTTP.post_response
 
 ```signature
-HTTP.get(client: HTTP.Client, url: String) -> Result[HTTP.Response]
-HTTP.post(client: HTTP.Client, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
-HTTP.request(client: HTTP.Client, method: String, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
 HTTP.get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 ```
 
-- `HTTP.Response` has `status`, `headers` (names in lowercase) and `body`, which is `Bytes`. `post` sends a `Bytes` body, as Ruby's `Net::HTTP.post(uri, data, header)` does, and `request` takes any method. Send text as `"text".bytes`, and no body as `"".bytes`. The body is at most `max_body_bytes`, and `headers` default to `[]`.
-- For one request use `get_response` and `post_response`, like Ruby's `Net::HTTP.get_response` and `Net::HTTP.post`: each opens one connection with `options`, makes the call in the calling task and closes the connection before it returns, so it needs no `client` and no `close_client`. For many requests use one `HTTP.client()` with `get`, `post` and `request`, which reuses connections; calling `get_response` in a loop opens a connection each time, and over HTTPS also builds a new TLS context and loads the CA bundle each time.
-- When a task is cancelled while one of these calls waits for its answer, the call's connection closes, plain or TLS: the server sees the close, and a client's connection does not go back to the pool.
+- `HTTP.Response` has `status`, `headers` (names in lowercase) and `body`, which is `Bytes`. `post_response` sends a `Bytes` body, as Ruby's `Net::HTTP.post(uri, data, header)` does. Another method (`PUT`, `DELETE`) goes through [`HTTP.open`](#httpopen-and-httpupload) or `HTTP.upload`. Send text as `"text".bytes`, and no body as `"".bytes`. The body is at most `max_body_bytes`, and `headers` default to `[]`.
+- Like Ruby's `Net::HTTP.get_response` and `Net::HTTP.post`, each opens one connection with `options`, makes the call in the calling task and closes the connection before it returns. Calling them in a loop opens a connection each time, and over HTTPS also builds a new TLS context and loads the CA bundle each time unless `options.tls` has one; for many requests that should share connections use the `http-client` package.
+- When a task is cancelled while one of these calls waits for its answer, the call's connection closes, plain or TLS: the server sees the close.
 - URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result. The client does not check the length of the request line (method, target and version): a long target is sent as it is, and a server with a lower limit, such as `HTTP.serve` (8192 bytes), may refuse it.
 - The client adds `Host` and `Content-Length`; a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
@@ -385,20 +370,15 @@ HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], op
 import HTTP from "std/http"
 
 def main() -> Void
-  client = HTTP.client().unwrap!
   headers = [HTTP.Header(name: "Content-Type", value: "application/json")]
-  case HTTP.post(client, "http://localhost:8080/items", "{\"name\":\"tea\"}".bytes, headers)
+  case HTTP.post_response("http://localhost:8080/items", "{\"name\":\"tea\"}".bytes, headers)
     ok(created) -> puts("#{created.status} #{HTTP.text(created.body, created.headers).unwrap!}")
     error(e) -> IO.warn(e.message)
   end
-
-  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", "".bytes)
-  puts(deleted.ok?)
-  HTTP.close_client(client)
 end
 ```
 
-One request, with no client to open or close:
+A `GET` with its own options:
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
@@ -472,7 +452,7 @@ HTTP.download(url: String, path: String, options: DownloadOptions = DownloadOpti
 - The download sends a `GET` and streams the body, at most 1 MiB in memory at a time, to a new hidden file in the folder of `path`, named `.<name>.<8 hex digits>.agc-part` (at most 32 characters of the name). The file never grows past `max_total_bytes`.
 - Only a body that ended cleanly and has the `sha256` digest takes `path`, through [`Path.replace`](/library/io-and-system/files/#pathreplace): in one step, so `path` always names the old file or the new one. An existing file at `path` is replaced, and so is a symbolic link, which is not followed (unlike `File.replace`). The new file is private to the user (`0600`) and does not keep the old file's mode. A directory at `path` is an error and stays as it was.
 - A failure (a cut connection, a timeout, a body over `max_total_bytes`, a wrong digest, which is `http.digest`) removes the new file and leaves `path` as it was. The one exception is a timeout during the last step: the replace may still finish, so `path` is then the old file or the whole new one. A task that is cancelled during the download, or stopped by a timeout, removes the new file too: it is a [`"temp"` file](/library/io-and-system/files/#fileopen-and-fileclose) that goes away when its handle closes. A program that ends by SIGKILL or a crash can leave the `.agc-part` file behind. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
-- The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
+- The connection closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
 - With `sha256`, the body of an error status (a `404` page, a `503`) fails as `http.digest`, which hides the status: to retry a `5xx`, download without `sha256`, check `status`, then the digest (`File.sha256`) and `Path.replace` the file into place. To follow a redirect (GitHub and Hugging Face downloads answer `302`), send `HEAD` requests first and follow `Location` to the final URL.
 
 ```agentica {mode="check"}
@@ -496,10 +476,10 @@ HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
 HTTP.finish(conn: HTTP.Connection) -> Void
 ```
 
-One connection that the program drives itself, outside the pool, as Ruby's `Net::HTTP.start`, `send_request`, `read_body` and `finish` do (and Python's `http.client.HTTPConnection`). Use it to read a body piece by piece, as it arrives (a big file, a log that never ends, lines of a stream), or to control the connection: which requests go on one socket, and when it closes. For whole responses use `get` and the pooled client, which are simpler.
+One connection that the program drives itself, as Ruby's `Net::HTTP.start`, `send_request`, `read_body` and `finish` do (and Python's `http.client.HTTPConnection`). Use it to read a body piece by piece, as it arrives (a big file, a log that never ends, lines of a stream), or to control the connection: which requests go on one socket, and when it closes. For whole responses use `get_response` and `post_response`, which are simpler.
 
 - `start` takes an origin (`http://host`, `https://host:8443`) with no path or query, and connects now. `https` verifies the certificate with `options.tls` (the system trust when `none`, built again for each `start`, so a program that opens many connections passes `tls: some(context)`). Only `connect_timeout_ms`, `timeout_ms`, `read_timeout_ms`, `max_body_bytes`, `tls` and `proxy` of the options apply: `connect_timeout_ms` bounds the connect (inside `timeout_ms`), `timeout_ms` each `send_request` (the write and the head) and `read_timeout_ms` each `read_body`; `max_body_bytes` is the largest request body.
-- `send_request` sends the request and returns when the head of the response has been read: `HTTP.ResponseHead` has `status` and `headers` (names in lowercase). `target` is the path and query (`/items?page=2`). `Host` and `Content-Length` are added; the rules for headers are those of `HTTP.request`. An interim `1xx` head is read past.
+- `send_request` sends the request and returns when the head of the response has been read: `HTTP.ResponseHead` has `status` and `headers` (names in lowercase). `target` is the path and query (`/items?page=2`). `Host` and `Content-Length` are added; the rules for headers are those of `HTTP.get_response`. An interim `1xx` head is read past.
 - `read_body` waits for at least one byte and gives at most `max_bytes` (1 to 1 MiB) of the body, decoded (a chunked body has no framing in it). An empty `Bytes` is the end of the body. A `Content-Length` body is held to its length, a chunked one to its framing, and a body that runs to the close of the connection must end with a clean close (over TLS, the peer's `close_notify`). A response body has no size limit, whatever its framing: the program reads it piece by piece and stops when it likes. A response to `HEAD`, a `204`, a `304` and one with `Content-Length: 0` have no body: the connection is ready at once, with no `read_body` needed (a `read_body` gives the empty end piece).
 - After a body has been read to its end, the connection is ready for the next `send_request`, unless the server closed it (`Connection: close`, an HTTP/1.0 response without `Connection: keep-alive`, or a body that ran to the close): then `send_request` is `error("http: the connection is closed")`. The end comes with the last byte, so a program that knows the length may stop reading before the empty piece. The connection is also closed when input is left after the body (a server that sent a second response in the same write, or bytes after the last chunk): reading its answer for the next request would be wrong. A request while the last body is still being read is an `error`, and the connection stays as it was.
 - A failure of the connection (a cut body, a bad chunk, a timeout, a write that fails) is an `error` and ends it. A request that is refused before anything is written (a bad method, header or target, a body over `max_body_bytes`) is an `error` too, and the connection stays as it was. A server that closed an idle connection shows as an `error` of the next `send_request`: `start` a new one; nothing is retried.
@@ -535,13 +515,13 @@ HTTP.open(method: String, url: String, body: Bytes, headers: List[HTTP.Header] =
 HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 ```
 
-The two forms for a body that goes through a channel, so that another task can use it as it comes: a download that is too big to hold, an endless one (events, the lines of a log), or an upload that is produced as it goes. Each call uses a connection of its own, outside the pool, built on [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish). A call whose whole body fits in memory is simpler with `get`, `post` and `request`.
+The two forms for a body that goes through a channel, so that another task can use it as it comes: a download that is too big to hold, an endless one (events, the lines of a log), or an upload that is produced as it goes. Each call uses a connection of its own, built on [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish). A call whose whole body fits in memory is simpler with `get_response` and `post_response`.
 
-- `open` sends the request and returns at the head of the response: `HTTP.Stream` has `status`, `headers`, `body` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task feeds `body` with the pieces of the response (at most 64 KiB, never empty, a chunked body already decoded) and closes it on every path. `url` has a path and a query; `method`, `body` and `headers` are those of `request`.
+- `open` sends the request and returns at the head of the response: `HTTP.Stream` has `status`, `headers`, `body` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task feeds `body` with the pieces of the response (at most 64 KiB, never empty, a chunked body already decoded) and closes it on every path. `url` has a path and a query; `method`, `body` and `headers` are those of the request, as in `post_response`.
 - The reader runs the usual receive loop until the closed error, then awaits `done`: `ok` means the body ended cleanly, and an `error` says why it did not (a cut body, a timeout, a bad chunk). The body has no size limit. A channel can only end, so `done` is the only way to tell a complete body from a cut one: always await it.
 - To stop early, close `body`: the feeding task's next `send` fails, it closes the connection and `done` is `error("channel: closed")`. That works only while data flows. On a quiet stream (a server that has nothing to say) the task waits in its read until `read_timeout_ms` (for ever when it is 0), so the prompt stop is `Task.cancel(stream.done)`: it closes the connection at once and `done` is an error.
 - `options.timeout_ms` is the time of `open` until the head arrives, the connect included (the connect itself takes at most `connect_timeout_ms`), so a server that does not answer is reported after `timeout_ms`, and one that does not take the connection after `connect_timeout_ms`. After the head, `read_timeout_ms` is the time of each wait: each read of the body and each `send` to the channel. A reader that takes longer than that to ask for the next piece ends the stream, and so does a server that is silent for that long. For events that come rarely, raise `read_timeout_ms`, or set it to `0` for no limit (`HTTP.ClientOptions(timeout_ms: 5000, read_timeout_ms: 0)`) and stop the stream with `Task.cancel(stream.done)`. The channel holds 8 pieces, so a slow reader makes the task wait and the server's data wait in the socket.
-- `upload` sends the pieces that another task puts in `body`, until it closes the channel, and returns the whole response (as `request`: up to `max_body_bytes`). `method` is `POST`, `PUT` or `PATCH`. `length` is the exact number of bytes, said as `Content-Length`: the body ends when that many bytes were sent, and the producer need not close the channel. `-1` is a chunked body, whose pieces become chunks (a piece over 512 KiB is several, and pieces that wait in the channel together share one, under 64 KiB plus one piece) and which ends when the channel closes. A body that is longer than `length`, or a channel that closes short of it, is an `error`, and so is a channel that is silent for longer than `read_timeout_ms`.
+- `upload` sends the pieces that another task puts in `body`, until it closes the channel, and returns the whole response (up to `max_body_bytes`, as `get_response`). `method` is `POST`, `PUT` or `PATCH`. `length` is the exact number of bytes, said as `Content-Length`: the body ends when that many bytes were sent, and the producer need not close the channel. `-1` is a chunked body, whose pieces become chunks (a piece over 512 KiB is several, and pieces that wait in the channel together share one, under 64 KiB plus one piece) and which ends when the channel closes. A body that is longer than `length`, or a channel that closes short of it, is an `error`, and so is a channel that is silent for longer than `read_timeout_ms`.
 - A channel that closes ends the body, also when its producer died: a producer that can fail should set `length`, so that a short body is an `error`. `upload` closes the channel when it returns, so a producer that is still sending finds the closed error and stops.
 - A server that answers and closes before the upload ends (a `413`) does not hide its answer: when a write fails, `upload` reads the head of the response that is waiting (for at most `timeout_ms`) and returns that response, as Python's `http.client` and Go do. Only when there is none is the write failure the `error` (`http: ` and the reason): on Windows a reset connection can drop the server's early answer, so `upload` returns the write error there. Nothing is retried, and neither call follows redirects.
 
@@ -613,12 +593,10 @@ end
 
 def main() -> Void
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
-  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  response = HTTP.get(client, base + "/").unwrap!
+  response = HTTP.get_response(base + "/").unwrap!
   puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
-  puts(HTTP.get(client, base + "/missing").unwrap!.status)
-  HTTP.close_client(client)
+  puts(HTTP.get_response(base + "/missing").unwrap!.status)
   HTTP.close_server(server)
 end
 ```
@@ -915,13 +893,11 @@ end
 
 def main() -> Void
   server = HTTP.serve("127.0.0.1", 0, &handle).unwrap!
-  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  response = HTTP.get(client, base + "/events").unwrap!
+  response = HTTP.get_response(base + "/events").unwrap!
   puts(HTTP.header_values(response.headers, "transfer-encoding"))
   puts(HTTP.text(response.body, response.headers).unwrap!)
-  puts(HTTP.get(client, base + "/missing").unwrap!.status)
-  HTTP.close_client(client)
+  puts(HTTP.get_response(base + "/missing").unwrap!.status)
   HTTP.close_server(server)
 end
 ```
@@ -938,7 +914,7 @@ data: tick 3
 404
 ```
 
-`HTTP.get` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
+`HTTP.get_response` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
 
 ### WebSockets
 

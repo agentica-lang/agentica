@@ -6,7 +6,7 @@ struct Wiring
 end
 
 def handle(request: HTTP.Request) -> Result[HTTP.Response]
-  return ok(HTTP.Response(status: 200, headers: [], body: "served".bytes))
+  ok(HTTP.Response(status: 200, headers: [], body: "served".bytes))
 end
 
 def host(ports: Channel[Int]) -> Void
@@ -21,12 +21,12 @@ def supervisor(wiring: Wiring) -> Result[Int]
   Task.spawn(&host, wiring.ports)
   _ = wiring.go.recv(5000)
   zero = 0
-  return ok(1 / zero)
+  ok(1 / zero)
 end
 
 def fetch(url: String) -> Result[HTTP.Response]
-  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
-  return HTTP.get(pool, url)
+  pool = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  HTTP.get_response(url, pool)
 end
 
 def show(label: String, outcome: Result[HTTP.Response]) -> Void

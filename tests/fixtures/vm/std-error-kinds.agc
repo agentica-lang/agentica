@@ -20,6 +20,7 @@ def show[T](label: String, family: String, result: Result[T]) -> Void
         some(n) -> n.to_s
         none -> "none"
       end
+
       puts("#{label}: #{e.kind} code=#{code} #{family}=#{e.is_a?(family)}")
   end
 end
@@ -47,16 +48,15 @@ def main() -> Void
   show("cookie name", "argument", Cookie.set_header(Cookie.Cookie(name: "a b", value: "c")))
   show("uri escape", "argument", URI.decode_uri_component("%zz"))
   show("uri utf-8", "text", URI.decode_uri_component("%ff"))
-  pool = HTTP.client().unwrap!
-  show("http url", "argument", HTTP.get(pool, "ftp://x/"))
+  pool = HTTP.ClientOptions()
+  show("http url", "argument", HTTP.get_response("ftp://x/", pool))
   show("http body text", "text", HTTP.text(Bytes.from_list([255]).unwrap!))
-  HTTP.close_client(pool)
-  show("http closed client", "http", HTTP.get(pool, "http://127.0.0.1:9/"))
   behaviour: Actor.Behaviour[Int, Int] = Actor.Behaviour(
     init: -> { 0 },
     handle: ->(count, n) { Actor.continue(count + n) },
     terminate: none,
   )
+
   actor = Actor.start(behaviour)
   _ = Actor.stop(actor, 5000)
   show("actor gone", "channel", Actor.cast(actor.address, 1))

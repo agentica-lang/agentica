@@ -327,8 +327,7 @@ GATED = (
     ("TLS.client_context.system", "TLS.client_context(TLS.ClientOptions())", "--deny-net"),
     ("TLS.server_context", 'TLS.server_context(TLS.ServerOptions(cert_file: "cert.pem", key_file: "key.pem"))',
      "files"),
-    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HTTP.ClientOptions())), "https://127.0.0.1:1/")',
-     "--deny-net"),
+    ("HttpWire.connect_context", 'HTTP.get_response("https://127.0.0.1:1/")', "--deny-net"),
     ("System.env", 'System.env("PATH")', "--deny-env"),
     ("Process.spawn_captured", SPAWN_CALL, "--deny-run"),
 )

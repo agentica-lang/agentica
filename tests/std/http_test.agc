@@ -52,8 +52,9 @@ def main() -> Void
       Test.assert(given.tls.none?, "tls is none")
     end,
     Test.test("client options are checked") do
-      try Test.eq(HTTP.client(options(0, 4)).message, "http: every option must be positive")
-      Test.eq(HTTP.client(options(1000, 65537)).message, "http: max_connections must be at most 65536")
+      url = "http://127.0.0.1:1/"
+      try Test.eq(HTTP.get_response(url, options(0, 4)).message, "http: every option must be positive")
+      Test.eq(HTTP.get_response(url, options(1000, 65537)).message, "http: max_connections must be at most 65536")
     end,
     Test.test("default server options") do
       Test.eq(
@@ -83,9 +84,7 @@ def main() -> Void
     end,
     Test.test("a live server answers and closes inside a test") do
       server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&answer))
-      pool = try HTTP.client()
-      response = HTTP.get(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/inside")
-      HTTP.close_client(pool)
+      response = HTTP.get_response("http://127.0.0.1:#{HTTP.local_port(server)}/inside")
       HTTP.close_server(server)
       try Test.eq(HTTP.wait(server).ok?, true)
       Test.eq(response.unwrap!.body, "/inside".bytes)
@@ -166,10 +165,8 @@ def main() -> Void
       Test.eq(HTTP.text("e".bytes, long).message.length < 150, true)
     end,
     Test.test("bad URLs fail before any connection") do
-      pool = try HTTP.client()
-      scheme = HTTP.get(pool, "ftp://example.com/")
-      port = HTTP.get(pool, "http://example.com:0/")
-      HTTP.close_client(pool)
+      scheme = HTTP.get_response("ftp://example.com/")
+      port = HTTP.get_response("http://example.com:0/")
       try Test.eq(scheme.message, "http: the URL must be http:// or https:// with a host, and without user info")
       Test.eq(port.message, "http: the port must be 1..65535")
     end,

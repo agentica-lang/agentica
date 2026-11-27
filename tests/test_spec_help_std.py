@@ -84,8 +84,9 @@ def test_std_http_lists_its_builtin_records_and_handles(tmp_path):
         ("status", "Int"), ("headers", "List[HTTP.Header]"), ("body", "Bytes")]
     client = json.loads(help_std(["std/http.Client"], "--json", cwd=tmp_path).stdout)
     assert client["kind"] == "resource"
-    made = json.loads(help_std(["std/http.client"], "--json", cwd=tmp_path).stdout)
-    assert made["signature"] == "client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]"
+    made = json.loads(help_std(["std/http.get_response"], "--json", cwd=tmp_path).stdout)
+    assert made["signature"] == (
+        "get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]")
     # The types that std/http declares itself are written through the module name too, so the signature has one style.
     served = json.loads(help_std(["std/http.serve"], "--json", cwd=tmp_path).stdout)
     assert served["signature"] == (
