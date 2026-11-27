@@ -1097,6 +1097,18 @@ def request_once(
 
   try check_proxy(options)
   where = try parse_url(url)
+  # A request that cannot be written fails before a socket is opened.
+  _ = try HttpWire.encode_request(
+    where.scheme,
+    where.host,
+    where.port,
+    method,
+    request_target(options, where),
+    with_login(options, where.scheme, headers),
+    body,
+    options.max_body_bytes,
+  )
+
   by = after(options.timeout_ms)
   conn = try open_connection(where, options)
   answer = whole_response(conn, where.target, method, body, headers, by)
@@ -1104,7 +1116,8 @@ def request_once(
   answer
 end
 
-# The response of `request_once`, whole, or the error of a `407` from the proxy.
+# The response of `request_once`, whole. `sent_by` returns the error of a `407` from the proxy, so it is not looked for
+# here (`upload_answer` has its own check, since it reads the head itself).
 def whole_response(
   conn: Connection,
   target: String,
@@ -1114,10 +1127,6 @@ def whole_response(
   by: Int,
 ) -> Result[HttpWire.Response]
   head = try sent_by(conn, method, target, body, headers, by)
-  if proxy_asked?(conn.options, conn.scheme, head.status)
-    return denied_error(proxy_denied(conn.options, offered?(conn)))
-  end
-
   whole = try read_whole(conn, conn.options.max_body_bytes, by)
   ok(HttpWire.Response(status: head.status, headers: head.headers, body: whole))
 end
