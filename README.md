@@ -6,7 +6,7 @@ several cores, and it comes with HTTP, TLS and WebSockets, packages and C native
 modules. A front end written in Agentica compiles each program to bytecode, and
 a C VM runs it. Both are one binary, `agentica`.
 
-```agentica
+```ruby
 def main() -> Void
   for text in ["4", "8", "x"]
     case text.to_i
